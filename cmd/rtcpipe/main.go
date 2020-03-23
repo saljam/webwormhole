@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -38,7 +38,10 @@ func newPeerConn() (*webrtc.PeerConnection, *webrtc.DataChannel, error) {
 		close(opened)
 	})
 	d.OnMessage(func(msg webrtc.DataChannelMessage) {
-		fmt.Printf(string(msg.Data))
+		_, err := os.Stdout.Write(msg.Data)
+		if err != nil {
+			log.Printf("Couldn't write message to standard out: %v", err)
+		}
 	})
 	return pc, d, nil
 }
@@ -114,20 +117,29 @@ func main() {
 		if res.StatusCode != http.StatusOK {
 			log.Fatal("not okay")
 		}
-
-		<-opened
-		err = d.SendText("hello from loser")
 	case webrtc.SDPTypeAnswer:
 		err = pc.SetRemoteDescription(remote)
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		<-opened
-		err = d.SendText("hello from winner")
 	default:
 		log.Fatalf("unknown type: %v", remote.Type)
 	}
 
-	select {}
+	// TODO think about SendText buffer sizes.
+	<-opened
+	buf := make([]byte, 16<<10)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if err == io.EOF {
+			return
+		}
+		if err != nil {
+			log.Printf("Couldn't read from standard input: %v", err)
+		}
+		err = d.Send(buf[:n])
+		if err != nil {
+			log.Printf("Couldn't send message on datachannel: %v", err)
+		}
+	}
 }
