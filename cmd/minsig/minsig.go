@@ -1,11 +1,11 @@
 package main
 
 //rollback test
-//http://wpt.live/webrtc/RTCPeerConnection-setLocalDescription-rollback.html
+// http://wpt.live/webrtc/RTCPeerConnection-setLocalDescription-rollback.html
 //
-//https://w3c.github.io/webrtc-pc/#rtcsignalingstate-enum
+// https://w3c.github.io/webrtc-pc/#rtcsignalingstate-enum
 //
-//https://webrtc.github.io/adapter/adapter-latest.js
+// https://webrtc.github.io/adapter/adapter-latest.js
 
 import (
 	"context"
@@ -268,8 +268,9 @@ let dial = async (slot, config) => {
 		// the party we're trying to reach) beat us to this slot.
 
 		// Throw away our offer and accept this one, creating an answer.
-		let pc = new RTCPeerConnection(config);
+		pc = new RTCPeerConnection(config);
 		initconn(pc);
+		// await pc.setLocalDescription({"type":"rollback"});
 		await pc.setRemoteDescription(new RTCSessionDescription(remote));
 		await pc.setLocalDescription(await pc.createAnswer());
 
