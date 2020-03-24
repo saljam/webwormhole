@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/pion/webrtc/v2"
 )
@@ -22,6 +23,8 @@ var (
 )
 
 // conn is a wrapper around webrtc.DataChannel that implements blocked Read/Write.
+//
+// TODO handle hata channel and peer connection close events.
 type conn struct {
 	rwc io.ReadWriteCloser
 	d   *webrtc.DataChannel
@@ -48,14 +51,13 @@ func (c *conn) open() {
 }
 
 func (c *conn) error(err error) {
-	log.Printf("debug: %v", err)
+	//log.Printf("debug: %v", err)
 	c.err <- err
 }
 
 func (c *conn) flushed() {
-	log.Printf("debug: flush")
 	c.flushc.L.Lock()
-	c.flushc.Broadcast()
+	c.flushc.Signal()
 	c.flushc.L.Unlock()
 }
 
@@ -90,6 +92,10 @@ func dial(slot string) (*conn, error) {
 	c.d.OnOpen(c.open)
 	c.d.OnError(c.error)
 	c.d.OnBufferedAmountLow(c.flushed)
+	// Any threshold amount >= 1MiB seems to occasionally lock up pion.
+	// Choose 512 KiB as a safe default.
+	// TODO look into why.
+	c.d.SetBufferedAmountLowThreshold(512 << 10)
 
 	offer, err := c.pc.CreateOffer(nil)
 	if err != nil {
@@ -109,7 +115,7 @@ func dial(slot string) (*conn, error) {
 		return nil, err
 	}
 	if res.StatusCode != http.StatusOK {
-		log.Fatal("not okay")
+		return nil, fmt.Errorf("signalling server returned status %v", res.Status)
 	}
 	var remote webrtc.SessionDescription
 	err = json.NewDecoder(res.Body).Decode(&remote)
@@ -131,6 +137,7 @@ func dial(slot string) (*conn, error) {
 		c.d.OnOpen(c.open)
 		c.d.OnError(c.error)
 		c.d.OnBufferedAmountLow(c.flushed)
+		c.d.SetBufferedAmountLowThreshold(512 << 10)
 
 		err = c.pc.SetRemoteDescription(remote)
 		if err != nil {
@@ -192,11 +199,11 @@ func main() {
 
 	// The recieve end of the pipe.
 	go func() {
-		n, err := io.Copy(os.Stdout, c.rwc)
+		_, err := io.Copy(os.Stdout, c.rwc)
 		if err != nil {
 			log.Printf("could not write to stdout: %v", err)
 		}
-		log.Printf("debug: rx %v", n)
+		//log.Printf("debug: rx %v", n)
 		done <- struct{}{}
 	}()
 
@@ -209,19 +216,13 @@ func main() {
 		// n, err := io.Copy(c.rwc, os.Stdin)
 		buf := make([]byte, 32<<10) // 32 KiB buffer.
 		var err error
-		n, count := 0, 0
+		n := 0
 		for {
-			// Block to empty buffer every X MiB.
-			// There's probably a less janky way.
-			count++
-			if (count % 160) == 0 {
-				log.Println(count)
-				c.flushc.L.Lock()
-				for c.d.BufferedAmount() != 0 {
-					c.flushc.Wait()
-				}
-				c.flushc.L.Unlock()
+			c.flushc.L.Lock()
+			for c.d.BufferedAmount() > c.d.BufferedAmountLowThreshold() {
+				c.flushc.Wait()
 			}
+			c.flushc.L.Unlock()
 			nr, er := os.Stdin.Read(buf)
 			if nr > 0 {
 				nw, ew := c.rwc.Write(buf[0:nr])
@@ -245,16 +246,15 @@ func main() {
 		if err != nil {
 			log.Printf("could not write to channel: %v", err)
 		}
-		log.Printf("debug: tx %v", n)
+		//log.Printf("debug: tx %v", n)
 		done <- struct{}{}
 	}()
 
 	<-done
-	c.flushc.L.Lock()
 	for c.d.BufferedAmount() != 0 {
-		c.flushc.Wait()
+		//log.Printf("debug: buffer has %v", c.d.BufferedAmount())
+		time.Sleep(time.Second)
 	}
-	c.flushc.L.Unlock()
 	c.rwc.Close()
 	c.d.Close()
 	c.pc.Close()
