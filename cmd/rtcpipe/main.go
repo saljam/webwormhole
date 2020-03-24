@@ -3,143 +3,259 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/pion/webrtc/v2"
 )
 
-var opened = make(chan struct{})
-
-func newPeerConn() (*webrtc.PeerConnection, *webrtc.DataChannel, error) {
-	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: []string{"stun:stun.l.google.com:19302"},
-			},
-		},
-	})
-	if err != nil {
-		return nil, nil, err
+var (
+	webRTCConfig = webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{{URLs: []string{"stun:stun.l.google.com:19302"}}},
 	}
+	signallingServer = "https://minimumsignal.0f.io/"
+)
 
-	negotiated := true
-	d, err := pc.CreateDataChannel("data", &webrtc.DataChannelInit{
-		Negotiated: &negotiated,
-		ID:         new(uint16),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
+// conn is a wrapper around webrtc.DataChannel that implements blocked Read/Write.
+type conn struct {
+	rwc io.ReadWriteCloser
+	d   *webrtc.DataChannel
+	pc  *webrtc.PeerConnection
 
-	d.OnOpen(func() {
-		close(opened)
-	})
-	d.OnMessage(func(msg webrtc.DataChannelMessage) {
-		_, err := os.Stdout.Write(msg.Data)
-		if err != nil {
-			log.Printf("Couldn't write message to standard out: %v", err)
-		}
-	})
-	return pc, d, nil
+	// opened signals that the underlying DataChannel is open and ready
+	// to handle data.
+	opened chan struct{}
+	// err forwards errors from the OnError callback.
+	err chan error
+
+	// flushc is a condition variable to coordinate flushed state of the
+	// underlying channel.
+	flushc *sync.Cond
 }
 
-func main() {
-	var slot = os.Args[1]
-
-	pc, d, err := newPeerConn()
+func (c *conn) open() {
+	var err error
+	c.rwc, err = c.d.Detach()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("could not detatch data channel: %v", err)
+	}
+	close(c.opened)
+}
+
+func (c *conn) error(err error) {
+	log.Printf("debug: %v", err)
+	c.err <- err
+}
+
+func (c *conn) flushed() {
+	log.Printf("debug: flush")
+	c.flushc.L.Lock()
+	c.flushc.Broadcast()
+	c.flushc.L.Unlock()
+}
+
+// dial connects to a the WebRTC peer on slot, and returns WebRTC data channel to it.
+func dial(slot string) (*conn, error) {
+	// Accessing APIs like DataChannel.Detach() requires that we do this voodoo.
+	s := webrtc.SettingEngine{}
+	s.DetachDataChannels()
+	rtcapi := webrtc.NewAPI(webrtc.WithSettingEngine(s))
+
+	c := &conn{
+		opened: make(chan struct{}),
+		err:    make(chan error),
+		flushc: sync.NewCond(&sync.Mutex{}),
 	}
 
-	offer, err := pc.CreateOffer(nil)
-	if err != nil {
-		log.Fatal(err)
+	dataChannelConfig := &webrtc.DataChannelInit{
+		Negotiated: new(bool),
+		ID:         new(uint16),
 	}
+	*dataChannelConfig.Negotiated = true
 
-	err = pc.SetLocalDescription(offer)
+	var err error
+	c.pc, err = rtcapi.NewPeerConnection(webRTCConfig)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+	c.d, err = c.pc.CreateDataChannel("data", dataChannelConfig)
+	if err != nil {
+		return nil, err
+	}
+	c.d.OnOpen(c.open)
+	c.d.OnError(c.error)
+	c.d.OnBufferedAmountLow(c.flushed)
 
+	offer, err := c.pc.CreateOffer(nil)
+	if err != nil {
+		return nil, err
+	}
+	err = c.pc.SetLocalDescription(offer)
+	if err != nil {
+		return nil, err
+	}
 	o, err := json.Marshal(offer)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	res, err := http.Post("https://minimumsignal.0f.io/"+slot, "application/json", bytes.NewReader(o))
+	log.Printf("sending offer")
+	res, err := http.Post(signallingServer+slot, "application/json", bytes.NewReader(o))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	if res.StatusCode != http.StatusOK {
 		log.Fatal("not okay")
 	}
-
 	var remote webrtc.SessionDescription
 	err = json.NewDecoder(res.Body).Decode(&remote)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-
 	switch remote.Type {
 	case webrtc.SDPTypeOffer:
 		// The webrtc package does not support rollback. Make a new PeerConnection object.
 		//err := pc.SetLocalDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeRollback})
+		c.pc, err = rtcapi.NewPeerConnection(webRTCConfig)
+		if err != nil {
+			return nil, err
+		}
+		c.d, err = c.pc.CreateDataChannel("data", dataChannelConfig)
+		if err != nil {
+			return nil, err
+		}
+		c.d.OnOpen(c.open)
+		c.d.OnError(c.error)
+		c.d.OnBufferedAmountLow(c.flushed)
 
-		pc, d, err = newPeerConn()
+		err = c.pc.SetRemoteDescription(remote)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
-
-		err = pc.SetRemoteDescription(remote)
+		answer, err := c.pc.CreateAnswer(nil)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
-		answer, err := pc.CreateAnswer(nil)
+		err = c.pc.SetLocalDescription(answer)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
-		err = pc.SetLocalDescription(answer)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Send back the answer
 		a, err := json.Marshal(answer)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
-		res, err := http.Post("https://minimumsignal.0f.io/"+slot, "application/json", bytes.NewReader(a))
+		res, err := http.Post(signallingServer+slot, "application/json", bytes.NewReader(a))
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 		if res.StatusCode != http.StatusOK {
-			log.Fatal("not okay")
+			return nil, fmt.Errorf("signalling server returned status %v", res.Status)
 		}
+
+		log.Printf("got counter offer, accepted")
 	case webrtc.SDPTypeAnswer:
-		err = pc.SetRemoteDescription(remote)
+		err = c.pc.SetRemoteDescription(remote)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
+		log.Printf("got answer, accepted")
 	default:
-		log.Fatalf("unknown type: %v", remote.Type)
+		return nil, fmt.Errorf("unknown sdp type: %v", remote.Type)
 	}
 
-	// TODO think about SendText buffer sizes.
-	<-opened
-	buf := make([]byte, 16<<10)
-	for {
-		n, err := os.Stdin.Read(buf)
-		if err == io.EOF {
-			return
-		}
-		if err != nil {
-			log.Printf("Couldn't read from standard input: %v", err)
-		}
-		err = d.Send(buf[:n])
-		if err != nil {
-			log.Printf("Couldn't send message on datachannel: %v", err)
-		}
+	select {
+	case <-c.opened:
+		return c, nil
+	case err := <-c.err:
+		return nil, err
 	}
+}
+
+func main() {
+	flag.Parse()
+	if flag.NArg() != 1 {
+		flag.PrintDefaults()
+		os.Exit(-1)
+	}
+	slot := flag.Arg(0)
+
+	c, err := dial(slot)
+	if err != nil {
+		log.Fatalf("could not dial: %v", err)
+	}
+
+	done := make(chan struct{})
+
+	// The recieve end of the pipe.
+	go func() {
+		n, err := io.Copy(os.Stdout, c.rwc)
+		if err != nil {
+			log.Printf("could not write to stdout: %v", err)
+		}
+		log.Printf("debug: rx %v", n)
+		done <- struct{}{}
+	}()
+
+	// The send end of the pipe.
+	go func() {
+		// The webrtc package's channel does not have a blocking Write, so
+		// we can't just use io.Copy until the issue is fixed upsteam.
+		// Work around this by buffering here and waiting for flushes.
+		// https://github.com/pion/sctp/issues/77
+		// n, err := io.Copy(c.rwc, os.Stdin)
+		buf := make([]byte, 32<<10) // 32 KiB buffer.
+		var err error
+		n, count := 0, 0
+		for {
+			// Block to empty buffer every X MiB.
+			// There's probably a less janky way.
+			count++
+			if (count % 160) == 0 {
+				log.Println(count)
+				c.flushc.L.Lock()
+				for c.d.BufferedAmount() != 0 {
+					c.flushc.Wait()
+				}
+				c.flushc.L.Unlock()
+			}
+			nr, er := os.Stdin.Read(buf)
+			if nr > 0 {
+				nw, ew := c.rwc.Write(buf[0:nr])
+				n += nw
+				if ew != nil {
+					err = ew
+					break
+				}
+				if nr != nw {
+					err = io.ErrShortWrite
+					break
+				}
+			}
+			if er != nil {
+				if er != io.EOF {
+					err = er
+				}
+				break
+			}
+		}
+		if err != nil {
+			log.Printf("could not write to channel: %v", err)
+		}
+		log.Printf("debug: tx %v", n)
+		done <- struct{}{}
+	}()
+
+	<-done
+	c.flushc.L.Lock()
+	for c.d.BufferedAmount() != 0 {
+		c.flushc.Wait()
+	}
+	c.flushc.L.Unlock()
+	c.rwc.Close()
+	c.d.Close()
+	c.pc.Close()
 }
