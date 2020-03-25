@@ -1,3 +1,4 @@
+// Command rtcpipe is a netcat-like pipe over WebRTC.
 package main
 
 import (
@@ -9,22 +10,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/pion/webrtc/v2"
 )
 
-var (
-	webRTCConfig = webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{{URLs: []string{"stun:stun.l.google.com:19302"}}},
-	}
-	signallingServer = "https://minimumsignal.0f.io/"
-)
-
-// conn is a wrapper around webrtc.DataChannel that implements blocked Read/Write.
+// conn is a wrapper around webrtc.DataChannel.
 //
-// TODO handle hata channel and peer connection close events.
+// TODO handle data channel and peer connection close events.
 type conn struct {
 	rwc io.ReadWriteCloser
 	d   *webrtc.DataChannel
@@ -50,8 +45,9 @@ func (c *conn) open() {
 	close(c.opened)
 }
 
+// It's not really clear to me when this will be invoked.
 func (c *conn) error(err error) {
-	//log.Printf("debug: %v", err)
+	log.Printf("debug: %v", err)
 	c.err <- err
 }
 
@@ -62,7 +58,7 @@ func (c *conn) flushed() {
 }
 
 // dial connects to a the WebRTC peer on slot, and returns WebRTC data channel to it.
-func dial(slot string) (*conn, error) {
+func dial(slot string, sigserv string, webRTCConfig webrtc.Configuration) (*conn, error) {
 	// Accessing APIs like DataChannel.Detach() requires that we do this voodoo.
 	s := webrtc.SettingEngine{}
 	s.DetachDataChannels()
@@ -110,7 +106,7 @@ func dial(slot string) (*conn, error) {
 		return nil, err
 	}
 	log.Printf("sending offer")
-	res, err := http.Post(signallingServer+slot, "application/json", bytes.NewReader(o))
+	res, err := http.Post(sigserv+slot, "application/json", bytes.NewReader(o))
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +122,8 @@ func dial(slot string) (*conn, error) {
 	case webrtc.SDPTypeOffer:
 		// The webrtc package does not support rollback. Make a new PeerConnection object.
 		//err := pc.SetLocalDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeRollback})
+		// http://wpt.live/webrtc/RTCPeerConnection-setLocalDescription-rollback.html
+		// https://w3c.github.io/webrtc-pc/#rtcsignalingstate-enum
 		c.pc, err = rtcapi.NewPeerConnection(webRTCConfig)
 		if err != nil {
 			return nil, err
@@ -155,7 +153,7 @@ func dial(slot string) (*conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		res, err := http.Post(signallingServer+slot, "application/json", bytes.NewReader(a))
+		res, err := http.Post(sigserv+slot, "application/json", bytes.NewReader(a))
 		if err != nil {
 			return nil, err
 		}
@@ -183,6 +181,8 @@ func dial(slot string) (*conn, error) {
 }
 
 func main() {
+	iceserv := flag.String("ice", "stun:stun.l.google.com:19302", "stun or turn servers to use")
+	sigserv := flag.String("minsig", "https://minimumsignal.0f.io/", "signalling server to use")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		flag.PrintDefaults()
@@ -190,7 +190,16 @@ func main() {
 	}
 	slot := flag.Arg(0)
 
-	c, err := dial(slot)
+	rtccfg := webrtc.Configuration{}
+	if *iceserv != "" {
+		srvs := strings.Split(*iceserv, ",")
+		// TODO parse creds for turn servers
+		for i := range srvs {
+			rtccfg.ICEServers = append(rtccfg.ICEServers, webrtc.ICEServer{URLs: []string{srvs[i]}})
+		}
+	}
+
+	c, err := dial(slot, *sigserv, rtccfg)
 	if err != nil {
 		log.Fatalf("could not dial: %v", err)
 	}
