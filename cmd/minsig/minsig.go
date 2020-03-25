@@ -1,11 +1,8 @@
+// Server minsig is a WebRTC signalling server.
+//
+// It facilitates establishing WebRTC connections between peer using ephemeral
+// slots to hold WebRTC offers and answers.
 package main
-
-//rollback test
-// http://wpt.live/webrtc/RTCPeerConnection-setLocalDescription-rollback.html
-//
-// https://w3c.github.io/webrtc-pc/#rtcsignalingstate-enum
-//
-// https://webrtc.github.io/adapter/adapter-latest.js
 
 import (
 	"context"
@@ -17,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -26,16 +24,16 @@ type sessiondesc struct {
 	SDP  string `json:"sdp"`
 }
 
-type session struct {
+type slot struct {
 	offer  *sessiondesc
 	answer *sessiondesc
 	c      *sync.Cond
 }
 
 var slots = struct {
-	m map[string]*session
+	m map[string]*slot
 	sync.RWMutex
-}{m: make(map[string]*session)}
+}{m: make(map[string]*slot)}
 
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	slotkey := r.URL.Path
@@ -72,23 +70,31 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// New offer (probably)
-		slot = &session{
+		s = &slot{
 			offer: &msg,
 			c:     sync.NewCond(&sync.Mutex{}),
 		}
-		slot.c.L.Lock()
+		s.c.L.Lock()
 		slots.m[slotkey] = slot
 		slots.Unlock()
 
-		for slot.answer == nil {
-			slot.c.Wait()
-		}
+		answered := make(chan struct{})
+		go func() {
+			for s.answer == nil {
+				s.c.Wait()
+			}
+			err := enc.Encode(slot.answer)
+			s.c.L.Unlock()
+			if err != nil {
+				log.Printf("%v", err)
+			}
+			answered <- struct{}{}
+		}()
 
-		err := enc.Encode(slot.answer)
-		slot.c.L.Unlock()
-		if err != nil {
-			log.Printf("%v", err)
-			return
+		// TODO refactor this mess. (ctx is done when this func returns)
+		select {
+		case <-answered:
+		case <-r.Context().Done():
 		}
 
 		slots.Lock()
@@ -129,20 +135,26 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:    *httpaddr,
-		Handler: m.HTTPHandler(http.HandlerFunc(serveHTTP)),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  20 * time.Second,
+		Addr:         *httpaddr,
+		Handler:      m.HTTPHandler(http.HandlerFunc(serveHTTP)),
 	}
 	go func() { log.Fatal(srv.ListenAndServe()) }()
 
 	ssrv := &http.Server{
-		Addr:      *httpsaddr,
-		Handler:   http.HandlerFunc(serveHTTP),
-		TLSConfig: &tls.Config{GetCertificate: m.GetCertificate},
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  20 * time.Second,
+		Addr:         *httpsaddr,
+		Handler:      http.HandlerFunc(serveHTTP),
+		TLSConfig:    &tls.Config{GetCertificate: m.GetCertificate},
 	}
 	log.Fatal(ssrv.ListenAndServeTLS("", ""))
 }
 
-var indexpage=`
+var indexpage = `
 <!DOCTYPE html>
 <meta charset=utf-8>
 <link rel="canonical" href="https://minimimsignal.0f.io/">
@@ -240,45 +252,41 @@ footer {
 <p>Here's some example JavaScript to demostrate the usage of the API. The dial() function returns an RTCPeerConnection object.</p>
 
 <pre>
-// initconn initialises a peer connection by adding streams or data channels.
-// Modify as needed.
-let initconn = pc => {
-}
-
 let dial = async (slot, config) => {
+	let initconn = pc => {
+		// Initialise a PeerConnection as you need, e.g. by adding streams
+		// or data channels. Here we add a data channel and assign it to
+		// the global variable dc.
+		dc = pc.createDataChannel("data", {negotiated: true, id: 0});
+		dc.onmessage = (e) => {
+			console.log(e.data);
+		}
+	}
 	let pc = new RTCPeerConnection(config);
-
-	initconn(pc);
-
-	// Create an offer.
-	await pc.setLocalDescription(await pc.createOffer())
-
+	initconn();
+	await pc.setLocalDescription(await pc.createOffer()) // Create an offer.
 	// Wait for ICE candidates.
 	await new Promise(r=>{pc.onicecandidate=e=>{if(e.candidate === null){r()}}})
-
 	// Upload offer.
-	let response = await fetch(`+"`https://minimumsignal.0f.io/${slot}`"+`, {
+	let response = await fetch("https://minimumsignal.0f.io/"+slot, {
 		method: 'POST',
 		body: JSON.stringify(pc.localDescription)
 	})
 	let remote = await response.json();
-
 	if (remote["type"] === "offer") {
 		// We got back another offer, which means someone else (possibly
 		// the party we're trying to reach) beat us to this slot.
-
 		// Throw away our offer and accept this one, creating an answer.
 		pc = new RTCPeerConnection(config);
 		initconn(pc);
 		// await pc.setLocalDescription({"type":"rollback"});
 		await pc.setRemoteDescription(new RTCSessionDescription(remote));
 		await pc.setLocalDescription(await pc.createAnswer());
-
 		// Wait for ICE candidates.
 		await new Promise(r=>{pc.onicecandidate=e=>{if(e.candidate === null){r()}}})
 
 		// Upload answer.
-		await fetch(`+"`https://minimumsignal.0f.io/${slot}`"+`, {
+		await fetch("https://minimumsignal.0f.io/"+slot, {
 			method: 'POST',
 			body: JSON.stringify(pc.localDescription)
 		})
@@ -286,11 +294,13 @@ let dial = async (slot, config) => {
 		// We got back an answer to our offer. Accept it.
 		await pc.setRemoteDescription(new RTCSessionDescription(remote));
 	}
-
-	// We're done.
 	return pc
 }
 </pre>
+
+<h2>LIMITATIONS</h2>
+
+There is no support for <a href="https://tools.ietf.org/html/draft-ietf-ice-trickle-21">Trickle ICE</a>. The offer and answer must have all candidates to be considered.
 
 <h2>DISCLAIMER</h2>
 
