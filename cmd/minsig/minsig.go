@@ -181,12 +181,13 @@ let dial = async (slot, config) => {
 		// or data channels. Here we add a data channel and assign it to
 		// the global variable dc.
 		dc = pc.createDataChannel("data", {negotiated: true, id: 0});
+		let decoder = new TextDecoder(); // default utf8
 		dc.onmessage = (e) => {
-			console.log(e.data);
+			console.log(decoder.decode(new Uint8Array(e.data)));
 		}
 	}
 	let pc = new RTCPeerConnection(config);
-	initconn();
+	initconn(pc);
 	await pc.setLocalDescription(await pc.createOffer()) // Create an offer.
 	// Wait for ICE candidates.
 	await new Promise(r=>{pc.onicecandidate=e=>{if(e.candidate === null){r()}}})
@@ -202,7 +203,7 @@ let dial = async (slot, config) => {
 		// Throw away our offer and accept this one, creating an answer.
 		pc = new RTCPeerConnection(config);
 		initconn(pc);
-		// await pc.setLocalDescription({"type":"rollback"});
+		// await pc.setLocalDescription({"type":"rollback"}); // Firefox only
 		await pc.setRemoteDescription(new RTCSessionDescription(remote));
 		await pc.setLocalDescription(await pc.createAnswer());
 		// Wait for ICE candidates.
