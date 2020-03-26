@@ -32,39 +32,71 @@ type tunnel struct {
 	wcounter uint64
 	key      [32]byte
 
-	rbuf []byte
-	wbuf []byte
+	ravail int
+	roff   int
+	rbuf   []byte
+	rcrypt []byte
+	wcrypt []byte
 
 	rw io.ReadWriter
 }
 
-// Assume p is big enough for message.
-func (t *tunnel) Read(p []byte) (n int, err error) {
+func (t *tunnel) Read(p []byte) (int, error) {
+	n := t.ravail - t.roff
+	if n > len(p) {
+		n = len(p)
+	}
+
+	copy(p[:n], t.rbuf[t.roff:t.roff+n])
+	p = p[n:]
+	t.roff += n
+
+	if t.ravail-t.roff > 0 {
+		return n, nil
+	}
+	t.roff = 0
+	nr, err := t.rw.Read(t.rcrypt)
+	if err != nil {
+		return n, err
+	}
 	nonce := [24]byte{}
 	binary.LittleEndian.PutUint64(nonce[:8], t.rcounter)
 	t.rcounter++
 
-	n, err = t.rw.Read(t.rbuf)
-	if err != nil {
-		return
-	}
-
-	buf, ok := secretbox.Open(p[:0], t.rbuf[:n], &nonce, &t.key)
+	buf, ok := secretbox.Open(t.rbuf[:0], t.rcrypt[:nr], &nonce, &t.key)
 	if !ok {
-		return 0, errors.New("could not open secretbox")
+		return n, errors.New("could not open secretbox")
 	}
-	return len(buf), nil
+	t.ravail = len(buf)
+	nb := len(buf)
+	if nb > len(p) {
+		nb = len(p)
+	}
+	copy(p[:nb], t.rbuf[t.roff:t.roff+nb])
+	t.roff += nb
+	return n + nb, nil
 }
 
 func (t *tunnel) Write(p []byte) (n int, err error) {
-	nonce := [24]byte{}
-	binary.LittleEndian.PutUint64(nonce[:8], t.wcounter)
-	t.wcounter++
+	chunksize := 16<<10 - secretbox.Overhead
+	buf := p
+	for len(buf) > 0 {
+		nonce := [24]byte{}
+		binary.LittleEndian.PutUint64(nonce[:8], t.wcounter)
+		t.wcounter++
 
-	t.wbuf = secretbox.Seal(t.wbuf[:0], p, &nonce, &t.key)
-	_, err = t.rw.Write(t.wbuf)
-	if err != nil {
-		return 0, err
+		n := chunksize
+		if len(buf) < chunksize {
+			n = len(buf)
+		}
+
+		t.wcrypt = secretbox.Seal(t.wcrypt[:0], buf[:n], &nonce, &t.key)
+		_, err = t.rw.Write(t.wcrypt)
+		if err != nil {
+			return len(p) - len(buf), err
+		}
+
+		buf = buf[n:]
 	}
 	return len(p), nil
 }
@@ -78,7 +110,7 @@ func NewTunnel(password, id string, rw io.ReadWriter) (io.ReadWriter, error) {
 		return nil, err
 	}
 
-	buf := make([]byte, 16<<10+secretbox.Overhead)
+	buf := make([]byte, 16<<10-secretbox.Overhead)
 	_, err = rw.Read(buf)
 	if err != nil {
 		return nil, err
@@ -100,18 +132,26 @@ func NewTunnel(password, id string, rw io.ReadWriter) (io.ReadWriter, error) {
 	// We have a key.
 
 	t := tunnel{
-		rbuf: buf,
-		wbuf: make([]byte, 16<<10+secretbox.Overhead),
-		rw:   rw,
+		rbuf:   buf,
+		rcrypt: make([]byte, 16<<10),
+		wcrypt: make([]byte, 16<<10),
+		rw:     rw,
 	}
 	copy(t.key[:], key)
 
-	n, err := t.Write([]byte("hello\n"))
-	fmt.Printf("sent, %v %v", n, err)
+	_, err = t.Write([]byte("hello\n"))
+	if err != nil {
+		return nil, err
+	}
 	b := make([]byte, 200)
-	n, err = t.Read(b)
-	fmt.Printf("received, %v %v", n, err)
-	fmt.Println(string(b))
+	n, err := t.Read(b)
+	if err != nil {
+		return nil, err
+	}
+
+	if string(b[:n]) != "hello\n" {
+		return nil, errors.New("handshake failed")
+	}
 
 	return &t, nil
 }
