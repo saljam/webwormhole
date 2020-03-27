@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	Ctsize = 16<<10,
+	Ctsize = 16<<10
 	Ptsize = Ctsize - secretbox.Overhead
 )
 	
