@@ -11,6 +11,11 @@ import (
 	"salsa.debian.org/vasudev/gospake2"
 )
 
+const (
+	Ctsize = 16<<10,
+	Ptsize = Ctsize - secretbox.Overhead
+)
+	
 /*
 metadata
 	?filetype
@@ -42,19 +47,38 @@ type tunnel struct {
 }
 
 func (t *tunnel) Read(p []byte) (int, error) {
+	/*
+	 * Structure of buffer:
+	 *  [   |-------|    ]
+	 *      ^       ^    
+	 *    roff     ravail
+	 *
+	 * Roff tracks to the number of bytes 
+	 * consumed since the last read. Ravail
+	 * is the number of bytes left to read.
+	 * When roff meets ravail, we refill the
+	 * buffer.
+	 *
+	 * Message boundaries are lost using this
+	 * method.
+	 */
 	n := t.ravail - t.roff
 	if n > len(p) {
 		n = len(p)
 	}
-
 	copy(p[:n], t.rbuf[t.roff:t.roff+n])
 	p = p[n:]
 	t.roff += n
 
+	/* 
+	 * if we have things left in the buffer,
+	 * that implies p was already filled, so
+	 * we can just return.
+	 */
 	if t.ravail-t.roff > 0 {
 		return n, nil
 	}
-	t.roff = 0
+
 	nr, err := t.rw.Read(t.rcrypt)
 	if err != nil {
 		return n, err
@@ -67,6 +91,8 @@ func (t *tunnel) Read(p []byte) (int, error) {
 	if !ok {
 		return n, errors.New("could not open secretbox")
 	}
+
+	t.roff = 0
 	t.ravail = len(buf)
 	nb := len(buf)
 	if nb > len(p) {
@@ -78,15 +104,14 @@ func (t *tunnel) Read(p []byte) (int, error) {
 }
 
 func (t *tunnel) Write(p []byte) (n int, err error) {
-	chunksize := 16<<10 - secretbox.Overhead
 	buf := p
 	for len(buf) > 0 {
 		nonce := [24]byte{}
 		binary.LittleEndian.PutUint64(nonce[:8], t.wcounter)
 		t.wcounter++
 
-		n := chunksize
-		if len(buf) < chunksize {
+		n := Ptsize
+		if len(buf) < n {
 			n = len(buf)
 		}
 
@@ -110,7 +135,7 @@ func NewTunnel(password, id string, rw io.ReadWriter) (io.ReadWriter, error) {
 		return nil, err
 	}
 
-	buf := make([]byte, 16<<10-secretbox.Overhead)
+	buf := make([]byte, Ptsize)
 	_, err = rw.Read(buf)
 	if err != nil {
 		return nil, err
@@ -133,8 +158,8 @@ func NewTunnel(password, id string, rw io.ReadWriter) (io.ReadWriter, error) {
 
 	t := tunnel{
 		rbuf:   buf,
-		rcrypt: make([]byte, 16<<10),
-		wcrypt: make([]byte, 16<<10),
+		rcrypt: make([]byte, Ctsize),
+		wcrypt: make([]byte, Ctsize),
 		rw:     rw,
 	}
 	copy(t.key[:], key)
