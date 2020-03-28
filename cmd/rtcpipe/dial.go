@@ -21,6 +21,9 @@ type conn struct {
 	d  *webrtc.DataChannel
 	pc *webrtc.PeerConnection
 
+	// offer is the Session Description Protocol string that initiated this connection.
+	offer string
+
 	// opened signals that the underlying DataChannel is open and ready
 	// to handle data.
 	opened chan struct{}
@@ -32,10 +35,14 @@ type conn struct {
 	flushc *sync.Cond
 }
 
+func (c *conn) ID() string {
+	return c.offer
+}
+
 func (c *conn) Write(p []byte) (n int, err error) {
 	// The webrtc package's channel does not have a blocking Write, so
 	// we can't just use io.Copy until the issue is fixed upsteam.
-	// Work around this by buffering here and waiting for flushes.
+	// Work around this by blocking here and waiting for flushes.
 	// https://github.com/pion/sctp/issues/77
 	c.flushc.L.Lock()
 	for c.d.BufferedAmount() > c.d.BufferedAmountLowThreshold() {
@@ -43,6 +50,12 @@ func (c *conn) Write(p []byte) (n int, err error) {
 	}
 	c.flushc.L.Unlock()
 	return c.ReadWriteCloser.Write(p)
+}
+
+func (c *conn) flushed() {
+	c.flushc.L.Lock()
+	c.flushc.Signal()
+	c.flushc.L.Unlock()
 }
 
 func (c *conn) Close() error {
@@ -74,12 +87,6 @@ func (c *conn) open() {
 func (c *conn) error(err error) {
 	log.Printf("debug: %v", err)
 	c.err <- err
-}
-
-func (c *conn) flushed() {
-	c.flushc.L.Lock()
-	c.flushc.Signal()
-	c.flushc.L.Unlock()
 }
 
 // Dial connects to a the WebRTC peer on slot, and returns WebRTC data channel to it.
@@ -122,6 +129,7 @@ func Dial(slot string, sigserv string, webRTCConfig webrtc.Configuration) (*conn
 	if err != nil {
 		return nil, err
 	}
+	c.offer = offer.SDP
 	err = c.pc.SetLocalDescription(offer)
 	if err != nil {
 		return nil, err
@@ -166,6 +174,7 @@ func Dial(slot string, sigserv string, webRTCConfig webrtc.Configuration) (*conn
 		if err != nil {
 			return nil, err
 		}
+		c.offer = remote.SDP
 		answer, err := c.pc.CreateAnswer(nil)
 		if err != nil {
 			return nil, err
