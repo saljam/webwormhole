@@ -7,26 +7,31 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"flag"
+	"io"
+	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/crypto/acme/autocert"
 )
 
-type sdp struct {
-	Type string `json:"type"`
-	SDP  string `json:"sdp"`
-}
+const (
+	maxSlotLength    = 125
+	maxMessageLength = 10 << 10
+)
 
 type slot struct {
-	offer  sdp
-	answer chan sdp
+	msg    []byte
+	answer chan []byte
+	id     string
 }
 
 var slots = struct {
@@ -35,59 +40,106 @@ var slots = struct {
 }{m: make(map[string]*slot)}
 
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
-	slotkey := r.URL.Path
-	if r.Method == http.MethodGet && slotkey == "/" {
-		w.Write([]byte(indexpage))
-		return
-	}
+	slotkey := strings.TrimPrefix(r.URL.Path, "/")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost {
-		http.Error(w, "invalid method", 400)
-	}
-
-	var msg sdp
-	err := json.NewDecoder(r.Body).Decode(&msg)
+	msg, err := ioutil.ReadAll(&io.LimitedReader{
+		R: r.Body,
+		N: maxMessageLength,
+	})
 	if err != nil {
-		http.Error(w, "could not decode body", 400)
+		http.Error(w, "could not read body", http.StatusBadRequest)
+		return
+	}
+	if len(slotkey) > maxSlotLength || strings.Contains(slotkey, "/") {
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
-	log.Printf("%v: %v", slotkey, msg.Type)
+	log.Printf("%v: %v", slotkey, r.Method)
 
-	slots.Lock()
-	s := slots.m[slotkey]
-	switch {
-	case s != nil && msg.Type == "offer":
-		// Already have offer, pass that down
-		slots.Unlock()
-		err := json.NewEncoder(w).Encode(s.offer)
-		if err != nil {
-			log.Printf("%v", err)
+	switch r.Method {
+	case http.MethodGet:
+		if slotkey != "" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
 		}
-	case s != nil && msg.Type == "answer":
-		// This is an answer to an offer, wake the other go routines up.
-		slots.Unlock()
-		s.answer <- msg
-	case s == nil && msg.Type == "offer":
-		// This is a new offer.
-		s = &slot{offer: msg, answer: make(chan sdp)}
-		slots.m[slotkey] = s
-		slots.Unlock()
-		select {
-		case a := <-s.answer:
-			err := json.NewEncoder(w).Encode(a)
+		w.Write([]byte(indexpage))
+	case http.MethodOptions:
+	case http.MethodPost:
+		if slotkey != "" {
+			http.Error(w, "not found", http.StatusMethodNotAllowed)
+			return
+		}
+		fallthrough
+	case http.MethodPut, http.MethodDelete:
+		slots.Lock()
+		// TODO if slotkey=="" set location header to a free slot, flush.
+		s := slots.m[slotkey]
+		switch {
+		case s == nil && r.Header.Get("If-Match") == "":
+			// This is a new conversation.
+			s = &slot{msg: msg, answer: make(chan []byte), id: strconv.Itoa(rand.Int())}
+			slots.m[slotkey] = s
+			slots.Unlock()
+			select {
+			case a := <-s.answer:
+				w.Header().Set("ETag", s.id)
+				_, err := w.Write(a)
+				if err != nil {
+					log.Printf("%v", err)
+				}
+			case <-r.Context().Done():
+				slots.Lock()
+				delete(slots.m, slotkey)
+				slots.Unlock()
+			}
+		case s != nil && r.Header.Get("If-Match") == "":
+			// Already have something in the slot, pass that down.
+			slots.Unlock()
+			w.Header().Set("ETag", s.id)
+			w.WriteHeader(http.StatusPreconditionRequired)
+			_, err := w.Write(s.msg)
 			if err != nil {
 				log.Printf("%v", err)
 			}
-		case <-r.Context().Done():
+		case s != nil && r.Header.Get("If-Match") == s.id:
+			// This is an answer, wake the other go routines up.
+			// TODO optimisation: after receiving the first of these, we can use s.id
+			// to match the messages and free the slot early. Would need another index
+			// to map ids to "sessions".
+			slots.Unlock()
+			w.Header().Set("ETag", s.id)
+			select {
+			case s.answer <- msg:
+			case <-r.Context().Done():
+				slots.Lock()
+				delete(slots.m, slotkey)
+				slots.Unlock()
+			}
+			if r.Method == http.MethodDelete {
+				slots.Lock()
+				delete(slots.m, slotkey)
+				slots.Unlock()
+				return
+			}
+			select {
+			case a := <-s.answer:
+				_, err := w.Write(a)
+				if err != nil {
+					log.Printf("%v", err)
+				}
+			case <-r.Context().Done():
+				slots.Lock()
+				delete(slots.m, slotkey)
+				slots.Unlock()
+			}
+		default:
+			// Empty slot + some If-Match. Bad request If-Match or slot timed out.
+			slots.Unlock()
+			http.Error(w, "nothing at this slot", http.StatusConflict)
 		}
-		slots.Lock()
-		delete(slots.m, slotkey)
-		slots.Unlock()
 	default:
-		// Any other state is invalid.
-		slots.Unlock()
-		http.Error(w, "invalid offer description", 400)
+		http.Error(w, "invalid method", http.StatusMethodNotAllowed)
 	}
 }
 
