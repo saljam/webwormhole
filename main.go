@@ -65,7 +65,7 @@ func usage() {
 
 usage:
 
-  %#[1]s [code]
+  %s [code]
 
 flags:
 `, os.Args[0])
@@ -78,6 +78,7 @@ func main() {
 	sigserv := flag.String("minsig", "https://minimumsignal.0f.io/", "signalling server to use")
 	slot := flag.String("slot", "", "explicitly choose a slot")
 	pass := flag.String("password", "", "explicitly choose a password")
+	len := flag.Int("length", 2, "lenfth of generated secret")
 	flag.Parse()
 	code := strings.Join(flag.Args(), " ")
 
@@ -88,15 +89,16 @@ func main() {
 	switch {
 	case *slot == "" && *pass == "" && code == "":
 		// New wormhole.
-		p := make([]byte, 2)
-		if _, err := io.ReadFull(crand.Reader, p); err != nil {
+		passbytes := make([]byte, *len)
+		if _, err := io.ReadFull(crand.Reader, passbytes); err != nil {
 			log.Fatalf("could not generate password: %v", err)
 		}
-		s, r, err := Wormhole(string(p), *sigserv, strings.Split(*iceserv, ","))
+		passwords := strings.Join(EncodeWords(passbytes), " ")
+		s, r, err := Wormhole(passwords, *sigserv, strings.Split(*iceserv, ","))
 		if err != nil {
 			log.Fatalf("could not create wormhole: %v", err)
 		}
-		fmt.Fprintf(flag.CommandLine.Output(), "%s %s", s, p)
+		fmt.Fprintf(flag.CommandLine.Output(), "%s %s\n", s, passwords)
 		c, err = r()
 		if err != nil {
 			log.Fatalf("could not dial: %v", err)
