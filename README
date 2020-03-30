@@ -1,0 +1,29 @@
+CPACE-MACHINE
+
+WARNING:
+
+THIS PROJECT IS STILL IN EARLY DEVELOPMENT, USES EXPERIMENTAL
+CRYPTOGRAPHIC LIBRARIES, AND HAS NOT HAD ANY KIND OF SECURITY OR
+CRYPTOGRAPHY REVIEWS. IT MIGHT BE BROKEN AND UNSAFE.
+
+Cpace Machine creates secure ephemeral pipes between computers.
+
+It is inspired by and uses a model very similar to that of Magic
+Wormhole. (Thanks Brian Warner!)
+
+https://github.com/warner/magic-wormhole
+
+Cpace Machine differs from Magic Wormhole in that it uses WebRTC
+to make the direct peer connections. The exchange of WebRTC session
+descriptions (offers and answers) is protected by PAKE and a generated
+random password, but DTLS takes care of securing the direct channel
+once both ends have the WebRTC session descriptions.
+
+Unless otherwise noted, the source files are distributed under the
+BSD-style license found in the LICENSE file.
+
+WARNING:
+
+THIS PROJECT IS STILL IN EARLY DEVELOPMENT, USES EXPERIMENTAL
+CRYPTOGRAPHIC LIBRARIES, AND HAS NOT HAD ANY KIND OF SECURITY OR
+CRYPTOGRAPHY REVIEWS. IT MIGHT BE BROKEN AND UNSAFE.
