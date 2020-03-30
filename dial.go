@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -150,9 +151,19 @@ func (c *conn) a(pass string) error {
 	if err != nil {
 		return err
 	}
-	nonce := [24]byte{1}
-	jsonoffer, ok := secretbox.Open(nil, soffer, &nonce, &k)
+	var nonce [24]byte
+	copy(nonce[:], soffer[:24])
+	jsonoffer, ok := secretbox.Open(nil, soffer[24:], &nonce, &k)
 	if !ok {
+		// Bad key. Send an answer anyway so the other side knows.
+		if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
+			return err
+		}
+		c.del(exchange{
+			Secret: base64.URLEncoding.EncodeToString(
+				secretbox.Seal(nonce[:], []byte("bad key"), &nonce, &k),
+			),
+		})
 		return errors.New("bad key")
 	}
 	var offer webrtc.SessionDescription
@@ -178,15 +189,12 @@ func (c *conn) a(pass string) error {
 	}
 
 	log.Printf("sending answer")
-	nonce = [24]byte{2}
+	if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
+		return err
+	}
 	return c.del(exchange{
 		Secret: base64.URLEncoding.EncodeToString(
-			secretbox.Seal(nil, jsonanswer, &nonce, &k),
-		),
-	})
-	return c.del(exchange{
-		Secret: base64.URLEncoding.EncodeToString(
-			secretbox.Seal(nil, jsonanswer, &nonce, &k),
+			secretbox.Seal(nonce[:], jsonanswer, &nonce, &k),
 		),
 	})
 }
@@ -216,13 +224,15 @@ func (c *conn) b(pass string, resp exchange) error {
 	if err != nil {
 		return err
 	}
-	nonce := [24]byte{1}
-
+	var nonce [24]byte
+	if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
+		return err
+	}
 	log.Printf("sending msg b + offer")
 	resp, status, err := c.put(exchange{
 		Msg: base64.URLEncoding.EncodeToString(msgB),
 		Secret: base64.URLEncoding.EncodeToString(
-			secretbox.Seal(nil, jsonoffer, &nonce, &k),
+			secretbox.Seal(nonce[:], jsonoffer, &nonce, &k),
 		),
 	})
 	if status != http.StatusOK {
@@ -233,8 +243,8 @@ func (c *conn) b(pass string, resp exchange) error {
 	if err != nil {
 		return err
 	}
-	nonce = [24]byte{2}
-	jsonanswer, ok := secretbox.Open(nil, sanswer, &nonce, &k)
+	copy(nonce[:], sanswer[:24])
+	jsonanswer, ok := secretbox.Open(nil, sanswer[24:], &nonce, &k)
 	if !ok {
 		return errors.New("bad key")
 	}
