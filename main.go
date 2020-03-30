@@ -16,21 +16,21 @@
 //
 // Rough sketch of the handshake:
 //
-//	A								S								B
-//	  ----PUT /slot if-match:0--->
-//			pake_msg_a(A)
-//										<---PUT /slot if-match:0---
-//												pake_msg_a(B)
-//										--status:Conflict etag:X-->
-//												pake_msg_a(A)
-//										<---PUT /slot if-match:X---
-//											pake_msg_b(B)+sbox(offer sdp)
-//	  <-----status:OK etag:X------
-//			pake_msg_b+sbox(off)
-//	  --DELETE /slot if-match:X-->
-//			sbox(answer sdp)
-//										---status:OK etag:X------->
-//												sbox(answer sdp)
+//	Peer A             Signalling Server              Peer B
+//	----PUT /slot if-match:0--->
+//	    pake_msg_a
+//	                             <---PUT /slot if-match:0---
+//	                                 pake_msg_a
+//	                             --status:Conflict etag:X-->
+//	                                 pake_msg_a
+//	                             <---PUT /slot if-match:X---
+//	                                 pake_msg_b+sbox(offer)
+//	<-----status:OK etag:X------
+//	    pake_msg_b+sbox(offer)
+//	--DELETE /slot if-match:X-->
+//	    sbox(answer)
+//	                             ---status:OK etag:X------->
+//	                                 sbox(answer)
 package main
 
 import (

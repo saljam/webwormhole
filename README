@@ -1,28 +1,48 @@
-CPACE-MACHINE
-
-WARNING:
+WARNING
 
 THIS PROJECT IS STILL IN EARLY DEVELOPMENT, USES EXPERIMENTAL
 CRYPTOGRAPHIC LIBRARIES, AND HAS NOT HAD ANY KIND OF SECURITY OR
 CRYPTOGRAPHY REVIEWS. IT MIGHT BE BROKEN AND UNSAFE.
 
+CPACE-MACHINE
+
 Cpace Machine creates secure ephemeral pipes between computers.
 
+On one computer:
+
+	$ cpace-machine <file.zip
+	8 enlist decadence
+	$ shasum file.zip
+	71f2727ffa77002b8e48de6555c6ea810950c1c0  file.zip
+
+On another:
+
+	$ cpace-machine 8 enlist decadence >file.zip
+	$ shasum file.zip
+	71f2727ffa77002b8e48de6555c6ea810950c1c0  file.zip
+
 It is inspired by and uses a model very similar to that of Magic
-Wormhole. (Thanks Brian Warner!)
+Wormhole. Thanks Brian Warner!
 
 https://github.com/warner/magic-wormhole
 
 Cpace Machine differs from Magic Wormhole in that it uses WebRTC
-to make the direct peer connections. The exchange of WebRTC session
-descriptions (offers and answers) is protected by PAKE and a generated
-random password, but DTLS takes care of securing the direct channel
-once both ends have the WebRTC session descriptions.
+to make the direct peer connections. This allows us to make use of
+WebRTC's NAT traversal tricks, as well as the fact that it can be
+used in browsers. The exchange of session descriptions (offers and
+answers) is protected by PAKE and a generated random password,
+similar to Magic Wormhole. The session descriptions include the
+fingerprints of the DTLS certificates that WebRTC uses to secure
+its communications.
+
+To install:
+
+	$ go get -u github.com/saljam/cpace-machine
 
 Unless otherwise noted, the source files are distributed under the
 BSD-style license found in the LICENSE file.
 
-WARNING:
+WARNING
 
 THIS PROJECT IS STILL IN EARLY DEVELOPMENT, USES EXPERIMENTAL
 CRYPTOGRAPHIC LIBRARIES, AND HAS NOT HAD ANY KIND OF SECURITY OR
