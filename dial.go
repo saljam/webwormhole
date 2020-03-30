@@ -10,6 +10,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,15 +31,16 @@ func init() {
 	rtcapi = webrtc.NewAPI(webrtc.WithSettingEngine(s))
 }
 
-// conn is a wrapper around webrtc.DataChannel.
-type conn struct {
+// Conn is a WebRTC data channel connection. It is wraps webrtc.DataChannel.
+type Conn struct {
 	io.ReadWriteCloser
 	d  *webrtc.DataChannel
 	pc *webrtc.PeerConnection
 
-	slot    string
-	sigserv string
-	etag    string
+	slot      string
+	slotnamec chan string // optional to return server-chosen slots
+	sigserv   string
+	etag      string
 
 	// opened signals that the underlying DataChannel is open and ready
 	// to handle data.
@@ -49,7 +52,7 @@ type conn struct {
 	flushc *sync.Cond
 }
 
-func (c *conn) Write(p []byte) (n int, err error) {
+func (c *Conn) Write(p []byte) (n int, err error) {
 	// The webrtc package's channel does not have a blocking Write, so
 	// we can't just use io.Copy until the issue is fixed upsteam.
 	// Work around this by blocking here and waiting for flushes.
@@ -63,13 +66,13 @@ func (c *conn) Write(p []byte) (n int, err error) {
 }
 
 // TODO benchmark this buffer madness.
-func (c *conn) flushed() {
+func (c *Conn) flushed() {
 	c.flushc.L.Lock()
 	c.flushc.Signal()
 	c.flushc.L.Unlock()
 }
 
-func (c *conn) Close() (err error) {
+func (c *Conn) Close() (err error) {
 	for c.d.BufferedAmount() != 0 {
 		// SetBufferedAmountLowThreshold does not seem to take effect
 		// when after the last Write().
@@ -87,17 +90,18 @@ func (c *conn) Close() (err error) {
 	return nil
 }
 
-func (c *conn) open() {
+func (c *Conn) open() {
 	var err error
 	c.ReadWriteCloser, err = c.d.Detach()
 	if err != nil {
-		log.Printf("could not detatch data channel: %v", err)
+		c.err <- err
+		return
 	}
 	close(c.opened)
 }
 
 // It's not really clear to me when this will be invoked.
-func (c *conn) error(err error) {
+func (c *Conn) error(err error) {
 	log.Printf("debug: %v", err)
 	c.err <- err
 }
@@ -108,18 +112,19 @@ type exchange struct {
 	Secret string `json:"secret"`
 }
 
-func (c *conn) a(pass string) error {
+func (c *Conn) a(pass string) error {
 	// The identity arguments are to bind endpoint identities in PAKE. Cf. Unknown
 	// Key-Share Attack. https://tools.ietf.org/html/draft-ietf-mmusic-sdp-uks-03
 	//
 	// In the context of a program like magic-wormhole we do not have ahead of time
-	// information on the identity of the remote party. We only have the slot name.
-	// But that's okay, since:
+	// information on the identity of the remote party. We only have the slot name,
+	// and sometimes even that at this stage. But that's okay, since:
 	//   a) The password is randomly generated and ephemeral.
 	//   b) A peer only gets one guess.
 	// An unintended destination is likely going to fail PAKE.
-	msgA, pake, err := cpace.Start(pass, cpace.NewContextInfo("", "", []byte(c.slot)))
-	log.Printf("sending msg a")
+	// TODO consider adding extra round trip to signalling server to "book" a slot
+	// and use that + signalling server generated nonce in the context info?
+	msgA, pake, err := cpace.Start(pass, cpace.NewContextInfo("", "", nil))
 	resp, status, err := c.put(exchange{
 		Msg: base64.URLEncoding.EncodeToString(msgA),
 	})
@@ -188,7 +193,6 @@ func (c *conn) a(pass string) error {
 		return err
 	}
 
-	log.Printf("sending answer")
 	if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
 		return err
 	}
@@ -199,7 +203,7 @@ func (c *conn) a(pass string) error {
 	})
 }
 
-func (c *conn) b(pass string, resp exchange) error {
+func (c *Conn) b(pass string, resp exchange) error {
 	msgA, err := base64.URLEncoding.DecodeString(resp.Msg)
 	if err != nil {
 		return err
@@ -217,7 +221,7 @@ func (c *conn) b(pass string, resp exchange) error {
 		return err
 	}
 
-	msgB, mk, err := cpace.Exchange(pass, cpace.NewContextInfo("", "", []byte(c.slot)), msgA)
+	msgB, mk, err := cpace.Exchange(pass, cpace.NewContextInfo("", "", nil), msgA)
 	hkdf := hkdf.New(sha256.New, mk, nil, nil)
 	k := [32]byte{}
 	_, err = io.ReadFull(hkdf, k[:])
@@ -228,7 +232,6 @@ func (c *conn) b(pass string, resp exchange) error {
 	if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
 		return err
 	}
-	log.Printf("sending msg b + offer")
 	resp, status, err := c.put(exchange{
 		Msg: base64.URLEncoding.EncodeToString(msgB),
 		Secret: base64.URLEncoding.EncodeToString(
@@ -256,7 +259,7 @@ func (c *conn) b(pass string, resp exchange) error {
 	return c.pc.SetRemoteDescription(answer)
 }
 
-func (c *conn) del(e exchange) error {
+func (c *Conn) del(e exchange) error {
 	body, err := json.Marshal(e)
 	if err != nil {
 		return err
@@ -276,12 +279,16 @@ func (c *conn) del(e exchange) error {
 	return nil
 }
 
-func (c *conn) put(e exchange) (ans exchange, status int, err error) {
+func (c *Conn) put(e exchange) (ans exchange, status int, err error) {
 	body, err := json.Marshal(e)
 	if err != nil {
 		return ans, 0, err
 	}
-	req, err := http.NewRequest(http.MethodPut, c.sigserv+c.slot, bytes.NewReader(body))
+	method := http.MethodPost
+	if c.slot != "" {
+		method = http.MethodPut
+	}
+	req, err := http.NewRequest(method, c.sigserv+c.slot, bytes.NewReader(body))
 	if c.etag != "" {
 		req.Header.Add("If-Match", c.etag)
 	}
@@ -291,24 +298,28 @@ func (c *conn) put(e exchange) (ans exchange, status int, err error) {
 		return ans, 0, err
 	}
 	c.etag = r.Header.Get("ETag")
+	if r.Header.Get("Location") != "" && c.slot == "" {
+		u, err := url.Parse(r.Header.Get("Location"))
+		if err != nil {
+			return ans, 0, err
+		}
+		c.slot = strings.TrimPrefix(u.Path, "/")
+		if c.slotnamec != nil {
+			c.slotnamec <- c.slot
+		}
+	}
 	err = json.NewDecoder(r.Body).Decode(&ans)
 	return ans, r.StatusCode, err
 }
 
-// Dial returns an established WebRTC data channel to a peer.
-//
-// slot is used to synchronise with the remote peer on signalling server
-// sigserv, and pass is used as the PAKE password authenticate the WebRTC
-// offer and answer.
-//
-// iceserv is an optional list of STUN and TURN URLs to use for NAT traversal.
-func Dial(slot, pass string, sigserv string, iceserv []string) (*conn, error) {
-	c := &conn{
-		slot:    slot,
-		sigserv: sigserv,
-		opened:  make(chan struct{}),
-		err:     make(chan error),
-		flushc:  sync.NewCond(&sync.Mutex{}),
+func dial(slot, pass string, sigserv string, iceserv []string, slotnamec chan string) (*Conn, error) {
+	c := &Conn{
+		slot:      slot,
+		slotnamec: slotnamec,
+		sigserv:   sigserv,
+		opened:    make(chan struct{}),
+		err:       make(chan error),
+		flushc:    sync.NewCond(&sync.Mutex{}),
 	}
 
 	rtccfg := webrtc.Configuration{}
@@ -353,4 +364,37 @@ func Dial(slot, pass string, sigserv string, iceserv []string) (*conn, error) {
 	}
 
 	return c, nil
+}
+
+// Wormhole is like Dial, but asks the signalling server to assign it a slot.
+//
+// On success it returns a slot name and a function to resume dialling.
+func Wormhole(pass string, sigserv string, iceserv []string) (slot string, resume func() (*Conn, error), err error) {
+	slotnamec := make(chan string)
+	done := make(chan struct{})
+	var c *Conn
+	go func() {
+		c, err = dial("", pass, sigserv, iceserv, slotnamec)
+		close(done)
+	}()
+	resume = func() (*Conn, error) {
+		<-done
+		return c, err
+	}
+	select {
+	case slot = <-slotnamec:
+	case <-done:
+	}
+	return
+}
+
+// Dial returns an established WebRTC data channel to a peer.
+//
+// slot is used to synchronise with the remote peer on signalling server
+// sigserv, and pass is used as the PAKE password authenticate the WebRTC
+// offer and answer.
+//
+// iceserv is an optional list of STUN and TURN URLs to use for NAT traversal.
+func Dial(slot, pass string, sigserv string, iceserv []string) (*Conn, error) {
+	return dial(slot, pass, sigserv, iceserv, nil)
 }

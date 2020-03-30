@@ -39,6 +39,34 @@ var slots = struct {
 	sync.RWMutex
 }{m: make(map[string]*slot)}
 
+// freeslot tries to find an available numeric slot, favouring smaller numbers.
+// This assume slots is locked.
+func freeslot() (slot string, ok bool) {
+	// Try a single decimal digit number.
+	for i := 0; i < 3; i++ {
+		s := strconv.Itoa(rand.Intn(10))
+		if _, ok := slots.m[s]; !ok {
+			return s, true
+		}
+	}
+	// Try a single byte number.
+	for i := 0; i < 64; i++ {
+		s := strconv.Itoa(rand.Intn(1 << 8))
+		if _, ok := slots.m[s]; !ok {
+			return s, true
+		}
+	}
+	// Try a 2-byte number.
+	for i := 0; i < 1024; i++ {
+		s := strconv.Itoa(rand.Intn(1 << 16))
+		if _, ok := slots.m[s]; !ok {
+			return s, true
+		}
+	}
+	// Give up.
+	return "", false
+}
+
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	slotkey := strings.TrimPrefix(r.URL.Path, "/")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -73,7 +101,18 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		fallthrough
 	case http.MethodPut, http.MethodDelete:
 		slots.Lock()
-		// TODO if slotkey=="" set location header to a free slot, flush.
+		if slotkey == "" && r.Method == http.MethodPost {
+			var ok bool
+			slotkey, ok = freeslot()
+			if !ok {
+				slots.Unlock()
+				http.Error(w, "couldn't find an available slot", http.StatusServiceUnavailable)
+				return
+			}
+			r.URL.Path = "/" + slotkey
+			// TODO remember uploaded content-type and set it here.
+			w.Header().Set("Location", r.URL.String())
+		}
 		s := slots.m[slotkey]
 		switch {
 		case s == nil && r.Header.Get("If-Match") == "":
@@ -81,9 +120,10 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 			s = &slot{msg: msg, answer: make(chan []byte), id: strconv.Itoa(rand.Int())}
 			slots.m[slotkey] = s
 			slots.Unlock()
+			w.Header().Set("ETag", s.id)
+			w.(http.Flusher).Flush()
 			select {
 			case a := <-s.answer:
-				w.Header().Set("ETag", s.id)
 				_, err := w.Write(a)
 				if err != nil {
 					log.Printf("%v", err)
@@ -144,6 +184,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	httpaddr := flag.String("http", ":http", "http listen address")
 	httpsaddr := flag.String("https", ":https", "https listen address")
 	secretpath := flag.String("secrets", os.Getenv("HOME")+"/keys", "path to put let's encrypt cache")

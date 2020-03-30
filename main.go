@@ -34,6 +34,7 @@
 package main
 
 import (
+	crand "crypto/rand"
 	"flag"
 	"fmt"
 	"io"
@@ -60,11 +61,11 @@ simple header, stream secretboxes
 */
 
 func usage() {
-	fmt.Fprintf(flag.CommandLine.Output(), `usage: %#[1]s <public slot> <secret password>
+	fmt.Fprintf(flag.CommandLine.Output(), `cpace-machine creates secure ephemeral pipes between computers.
 
-cpace-machine creates secure ephemeral pipes between computers. if
-the slot and password are the same in two invocations, they will
-be connected.
+usage:
+
+  %#[1]s [code]
 
 flags:
 `, os.Args[0])
@@ -75,21 +76,50 @@ func main() {
 	flag.Usage = usage
 	iceserv := flag.String("ice", "stun:stun.l.google.com:19302", "stun or turn servers to use")
 	sigserv := flag.String("minsig", "https://minimumsignal.0f.io/", "signalling server to use")
+	slot := flag.String("slot", "", "explicitly choose a slot")
+	pass := flag.String("password", "", "explicitly choose a password")
 	flag.Parse()
-	if flag.NArg() != 2 {
+	code := strings.Join(flag.Args(), " ")
+
+	// TODO use pgp words for code
+
+	var c *Conn
+	var err error
+	switch {
+	case *slot == "" && *pass == "" && code == "":
+		// New wormhole.
+		p := make([]byte, 2)
+		if _, err := io.ReadFull(crand.Reader, p); err != nil {
+			log.Fatalf("could not generate password: %v", err)
+		}
+		s, r, err := Wormhole(string(p), *sigserv, strings.Split(*iceserv, ","))
+		if err != nil {
+			log.Fatalf("could not create wormhole: %v", err)
+		}
+		fmt.Fprintf(flag.CommandLine.Output(), "%s %s", s, p)
+		c, err = r()
+		if err != nil {
+			log.Fatalf("could not dial: %v", err)
+		}
+	case *slot == "" && *pass == "" && code != "":
+		// Join wormhole.
+		parts := strings.Split(code, " ")
+		c, err = Dial(parts[0], strings.Join(parts[1:], " "), *sigserv, strings.Split(*iceserv, ","))
+		if err != nil {
+			log.Fatalf("could not dial: %v", err)
+		}
+	case *slot != "" && *pass != "" && code == "":
+		// Explicit slot and password.
+		c, err = Dial(*slot, *pass, *sigserv, strings.Split(*iceserv, ","))
+		if err != nil {
+			log.Fatalf("could not dial: %v", err)
+		}
+	default:
 		flag.Usage()
 		os.Exit(-1)
 	}
-	slot := flag.Arg(0)
-	pass := flag.Arg(1)
 
-	// TODO generate and print slots and passwords
-	// TODO use pgp words for code
 	// TODO (optionally) ask for confirmation before moving data
-	c, err := Dial(slot, pass, *sigserv, strings.Split(*iceserv, ","))
-	if err != nil {
-		log.Fatalf("could not dial: %v", err)
-	}
 
 	done := make(chan struct{})
 	// The recieve end of the pipe.
