@@ -1,9 +1,15 @@
-module github.com/saljam/minsig
+module github.com/saljam/cpace-machine
 
 go 1.13
 
 require (
-	github.com/pion/webrtc/v2 v2.2.3
-	golang.org/x/crypto v0.0.0-20200128174031-69ecbb4d6d5d
-	salsa.debian.org/vasudev/gospake2 v0.0.0-20180813171123-adcc69dd31d5
+	filippo.io/cpace v0.0.0-20200329174001-6ff507385bae
+	github.com/golang/protobuf v1.3.5 // indirect
+	github.com/lucas-clemente/quic-go v0.15.2 // indirect
+	github.com/pion/rtp v1.4.0 // indirect
+	github.com/pion/sdp/v2 v2.3.5 // indirect
+	github.com/pion/webrtc/v2 v2.2.4
+	golang.org/x/crypto v0.0.0-20200323165209-0ec3e9974c59
+	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
+	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 // indirect
 )
