@@ -2,12 +2,15 @@ package main
 
 import (
 	"crypto/sha256"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"syscall/js"
+	"encoding/base64"
 
 	"filippo.io/cpace"
 	"golang.org/x/crypto/hkdf"
+	"golang.org/x/crypto/nacl/secretbox"
 )
 
 // Side A
@@ -78,10 +81,57 @@ func exchange(_ js.Value, args []js.Value) interface{} {
 	return nil
 }
 
+
+func open(_ js.Value, args []js.Value) interface{} {
+	encrypted64 := args[0].String()
+	jsKey := args[1]
+
+	var key [32]byte
+	js.CopyBytesToGo(key[:], jsKey)
+
+	encrypted, err := base64.URLEncoding.DecodeString(encrypted64)
+	if err != nil {
+		panic(err)
+	}
+
+	var nonce [24]byte
+	copy(nonce[:], encrypted[:24])
+	clear, ok := secretbox.Open(nil, encrypted[24:], &nonce, &key)
+
+	if !ok {
+		panic("secretbox cannot be opened")
+	}
+
+	return js.ValueOf(string(clear))
+}
+
+
+func seal(_ js.Value, args []js.Value) interface{} {
+	clear := args[0].String()
+	jsKey := args[1]
+
+	var key [32]byte
+	js.CopyBytesToGo(key[:], jsKey)
+
+	var nonce [24]byte
+	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
+		panic(err)
+	}
+
+	result := secretbox.Seal(nonce[:], []byte(clear), &nonce, &key)
+
+	return base64.URLEncoding.EncodeToString(result)
+}
+
+
 func main() {
 	js.Global().Set("cpaceStart", js.FuncOf(start))
 	js.Global().Set("cpaceFinish", js.FuncOf(finish))
 	js.Global().Set("cpaceExchange", js.FuncOf(exchange))
+
+	js.Global().Set("secretboxOpen", js.FuncOf(open))
+	js.Global().Set("secretboxSeal", js.FuncOf(seal))
+
 	fmt.Println("Hello, WebAssembly!")
 	select {}
 }
