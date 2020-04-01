@@ -6,16 +6,16 @@ CRYPTOGRAPHY REVIEWS. IT MIGHT BE BROKEN AND UNSAFE.
 
 CPACE-MACHINE
 
-Cpace Machine creates secure ephemeral pipes between computers.
+Cpace Machine creates ephemeral pipes between computers.
 
-On one computer:
+On one computer the tool generates a one-time code for us:
 
-	$ cpace-machine <file.zip
-	8 enlist decadence
 	$ shasum file.zip
 	71f2727ffa77002b8e48de6555c6ea810950c1c0  file.zip
+	$ cpace-machine <file.zip
+	8 enlist decadence
 
-On another:
+On another we use the code to establish a connection:
 
 	$ cpace-machine 8 enlist decadence >file.zip
 	$ shasum file.zip
