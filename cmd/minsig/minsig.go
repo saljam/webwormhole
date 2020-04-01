@@ -70,6 +70,9 @@ func freeslot() (slot string, ok bool) {
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	slotkey := strings.TrimPrefix(r.URL.Path, "/")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "PUT, POST, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, If-Match")
+	w.Header().Set("Access-Control-Expose-Headers", "Etag")
 	msg, err := ioutil.ReadAll(&io.LimitedReader{
 		R: r.Body,
 		N: maxMessageLength,
