@@ -313,6 +313,7 @@ func (c *Conn) put(e exchange) (ans exchange, status int, err error) {
 }
 
 func dial(slot, pass string, sigserv string, iceserv []string, slotnamec chan string) (*Conn, error) {
+	// TODO refactor this to take in a webrtc.PeerConnection object instead of making one?
 	c := &Conn{
 		slot:      slot,
 		slotnamec: slotnamec,
