@@ -1,53 +1,162 @@
 <!doctype html>
 <meta charset=utf-8>
 <script src="wasm_exec.js"></script>
-<script src="wasm_exec.js"></script>
+<script src="cm.js"></script>
 <script>
-let dial = async (slot, config) => {
-	let pc = new RTCPeerConnection(config);
+let dialling = () => {
+	document.body.classList.add("dialling");
+	document.body.classList.remove("drop");
+	document.body.classList.remove("connected");
+	document.getElementById("magiccode").readOnly = true;
+	document.getElementById("dial").disabled = true;
+}
+let connected = () => {
+	document.body.classList.add("connected");
+	document.body.classList.add("drop");
+	document.body.classList.remove("dialling");
+	document.body.addEventListener('drop', drop);
+	document.body.addEventListener('dragenter', highlight);
+	document.body.addEventListener('dragover', highlight);
+	document.body.addEventListener('drop', unhighlight);
+	document.body.addEventListener('dragleave', unhighlight);
+}
+let disconnected = () => {
+	document.body.classList.remove("connected");
+	document.body.classList.remove("drop");
+	document.body.classList.remove("dialling");
+	document.getElementById("magiccode").readOnly = false;
+	document.getElementById("dial").disabled = false;
+	document.body.removeEventListener('drop', drop);
+	document.body.removeEventListener('dragenter', highlight);
+	document.body.removeEventListener('dragover', highlight);
+	document.body.removeEventListener('drop', unhighlight);
+	document.body.removeEventListener('dragleave', unhighlight);	
+}
 
-	dc = pc.createDataChannel("game", {negotiated: true, id: 1});
-	dc.onmessage = handlemsg;
-	dc.onopen = handleconnect;
-	dc.onclose = handleclose;
+let ignoredrop = async e => {
+	e.preventDefault()
+	e.stopPropagation()
+}
 
-	await pc.setLocalDescription(await pc.createOffer())
-	await new Promise(r=>{pc.onicecandidate=e=>{if(e.candidate === null){r()}}})
-	let response = await fetch(`https://minimumsignal.0f.io/${slot}`, {
-		method: 'PUT',
-		body: JSON.stringify(pc.localDescription)
-	})
-	if (response.status === 200) {
-		await pc.setRemoteDescription(new RTCSessionDescription(await response.json()));
-	} else if (response.status === 428) {
-		// precondition failed
-		pc = new RTCPeerConnection(config);
-		dc = pc.createDataChannel("game", {negotiated: true, id: 1});
-		dc.onmessage = handlemsg;
-		dc.onopen = handleconnect;
-		dc.onclose = handleclose;
-		//await pc.setLocalDescription({type: "rollback"});
-		await pc.setRemoteDescription(new RTCSessionDescription(await response.json()));
-		await pc.setLocalDescription(await pc.createAnswer());
-		await new Promise(r=>{pc.onicecandidate=e=>{if(e.candidate === null){r()}}})
-		await fetch(`https://minimumsignal.0f.io/${slot}`, {
-			method: 'DELETE',
-			body: JSON.stringify(pc.localDescription),
-			headers: {
-				'If-Match': response.headers.get('ETag')
-			}
-		});
+let highlight = async e => {
+	e.preventDefault()
+	e.stopPropagation()
+	document.body.classList.add("highlight");
+}
+
+let unhighlight = async e => {
+	e.preventDefault()
+	e.stopPropagation()
+	document.body.classList.remove("highlight");
+}
+
+let drop = async e => {
+	e.preventDefault()
+	e.stopPropagation()
+	let files = e.dataTransfer.files;
+	for (let i = 0; i < files.length; i++) {
+		send(files[i]);
 	}
-	return dc
 }
 
-main = async () => {
-	window.cm = {};
-	const go = new Go();
-	let wasm = await WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject);
-	go.run(wasm.instance);
+let send = async f => {
+	console.log("sending", f.name)
+	dc.send(JSON.stringify({
+		name: f.name,
+		size: f.size,
+		type: f.type,
+	}));
+	// TODO maybe wait for an ok message?
+	// TODO progress bar. https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress
+	dc.send(await f.arrayBuffer());
 }
 
-main();
+// TODO multiple streams.
+// TODO have less of a global mess here. Maybe a "transfers" object for
+// transfers in progress? Each could be mapped to a different datachannel
+// there too, new object instantiated by ondatachannel callback.
+let receiving;
+
+let receive = e => {
+	// TODO stream data. https://github.com/maxogden/filereader-stream/blob/master/index.js
+	// plan b: service worker to reflect stream back?
+	if (receiving) {
+		console.log("parsing body", e.data);
+		let blob = e.data
+		if (blob instanceof ArrayBuffer) {
+			blob = new Blob([e.data])
+		}
+		let a = document.createElement('a');
+		a.href = window.URL.createObjectURL(blob);
+		a.download = receiving.name;
+		a.style.display = 'none';
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		receiving = null;
+		return;
+	}
+	receiving = JSON.parse(e.data);
+	console.log("got header", receiving);
+}
+
+let connect = async e => {
+	dialling();
+	let [slot, ...passparts] = magiccode.value.split("-");
+	let pass = passparts.join("-");
+	let pc = new RTCPeerConnection();
+	dc = pc.createDataChannel("data", {negotiated: true, id: 0});
+	dc.onopen = connected;
+	dc.onclose = disconnected;
+	dc.onmessage = receive
+	await cm.dial(slot, pass, pc);
+}
 </script>
+<style>
+html {
+    height: 100%;
+	display: flex;
+}
+body {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	padding: 0;
+	margin: 20px;
+	flex-grow: 1;
+	font-family: helvetica, sans-serif;
+	color: #2f6b6c;
+	background: #ff978c;
+	transition: background-color 0.3s;
+}
+#connect {
+	display: flex;
+}
+.dialling {
+	background: #fff6ab;
+}
+.connected {
+	background: #c1ffab;
+}
+.drop {
+	border: 4px dashed #ccc;
+	border-radius: 20px;
+}
+.highlight {
+	border: 4px dashed #fcabff;
+	background: #e6ffde;
+}
+</style>
+<title>salmans webrtc clone of magic wormhole</title>
 <body>
+<form id="connect" onsubmit="connect()" action="javascript:void(0);">
+<input type="text" id="magiccode" />
+<input type="submit" id="dial" value="DIAL" />
+</form>
+<script>
+document.body.addEventListener('drop', ignoredrop);
+document.body.addEventListener('dragenter', ignoredrop);
+document.body.addEventListener('dragover', ignoredrop);
+document.body.addEventListener('drop', ignoredrop);
+document.body.addEventListener('dragleave', ignoredrop);
+</script>

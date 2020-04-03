@@ -1,5 +1,10 @@
 // Package jscm is a set of wrapper functions for cpace-machine to be invoked
 // from via Web Assembly.
+//
+//	msgA = cm.start("some pass")
+//	[keyB, msgB] = cm.exchange("some pass", msgA)
+//	keyA = cm.finish(msgB)
+//	cm.open(keyA, cm.seal(keyB, "hello"))
 package main
 
 import (
