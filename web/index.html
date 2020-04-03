@@ -2,6 +2,7 @@
 <meta charset=utf-8>
 <script src="wasm_exec.js"></script>
 <script src="cm.js"></script>
+<script src="words.js"></script>
 <script>
 let dialling = () => {
 	document.body.classList.add("dialling");
@@ -81,7 +82,6 @@ let receive = e => {
 	// TODO stream data. https://github.com/maxogden/filereader-stream/blob/master/index.js
 	// plan b: service worker to reflect stream back?
 	if (receiving) {
-		console.log("parsing body", e.data);
 		let blob = e.data
 		if (blob instanceof ArrayBuffer) {
 			blob = new Blob([e.data])
@@ -97,13 +97,13 @@ let receive = e => {
 		return;
 	}
 	receiving = JSON.parse(e.data);
-	console.log("got header", receiving);
 }
 
 let connect = async e => {
 	dialling();
 	let [slot, ...passparts] = magiccode.value.split("-");
 	let pass = passparts.join("-");
+	console.log("dialling slot:", slot, "pass:", pass)
 	let pc = new RTCPeerConnection();
 	dc = pc.createDataChannel("data", {negotiated: true, id: 0});
 	dc.onopen = connected;
@@ -154,6 +154,8 @@ body {
 <input type="submit" id="dial" value="DIAL" />
 </form>
 <script>
+// TODO use server supplied slots.
+magiccode.value = Math.floor(Math.random() * 255).toString() + "-" + cm.genwords(2)
 document.body.addEventListener('drop', ignoredrop);
 document.body.addEventListener('dragenter', ignoredrop);
 document.body.addEventListener('dragover', ignoredrop);
