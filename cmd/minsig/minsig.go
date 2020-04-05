@@ -72,7 +72,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "PUT, POST, DELETE")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, If-Match")
-	w.Header().Set("Access-Control-Expose-Headers", "Etag")
+	w.Header().Set("Access-Control-Expose-Headers", "Etag, Location")
 	msg, err := ioutil.ReadAll(&io.LimitedReader{
 		R: r.Body,
 		N: maxMessageLength,
@@ -123,7 +123,12 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 			s = &slot{msg: msg, answer: make(chan []byte), id: strconv.Itoa(rand.Int())}
 			slots.m[slotkey] = s
 			slots.Unlock()
+			// Set tag and flush, so the client can get the headers including the assigned slot.
 			w.Header().Set("ETag", s.id)
+			w.WriteHeader(http.StatusOK)
+			// Firefox fetch() promise does not resolve unless one byte of the body has been written.
+			// Is there a header to contol this? Chrome does not need this.
+			w.Write([]byte("\n"))
 			w.(http.Flusher).Flush()
 			select {
 			case a := <-s.answer:
