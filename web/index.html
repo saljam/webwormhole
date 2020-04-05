@@ -1,13 +1,13 @@
 <!doctype html>
 <meta charset=utf-8>
-<script src="wasm_exec.js"></script>
-<script type="module" src="main.js"></script>
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>📠</text></svg>">
+<script src="wasm_exec.js"></script>
+<script type="module" src="main.js"></script>
 <title>CPACE-MACHINE</title>
 <body>
-<form id="connect" action="javascript:void(0);">
-<p id="info">TYPE WORMHOLE CODE OR LEAVE EMPTY TO GENERATE A NEW ONE</p>
-<input type="text" id="magiccode" placeholder="CODE" />
-<input type="submit" id="dial" value="CONNECT" />
+<form id="dialog">
+<div><label id="filepicker-wrap" class="button"><input type="file" id="filepicker">OPEN</label><p id="info">TYPE WORMHOLE CODE OR LEAVE EMPTY TO GENERATE A NEW ONE</p></div>
+<input type="text" id="magiccode" placeholder="CODE">
+<input type="submit" id="dial" value="CONNECT" autocomplete="off" disabled>
 </form>
