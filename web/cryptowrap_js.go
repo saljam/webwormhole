@@ -1,10 +1,14 @@
-// Package jscm is a set of wrapper functions for cpace-machine to be invoked
-// from via Web Assembly.
+// +build js,wasm
+
+// Package cryptowrap is a set of wrappers for crypto functions to be invoked
+// via Web Assembly.
 //
-//	msgA = cm.start("some pass")
-//	[keyB, msgB] = cm.exchange("some pass", msgA)
-//	keyA = cm.finish(msgB)
-//	cm.open(keyA, cm.seal(keyB, "hello"))
+// All functions return nil/null on error.
+//
+//	msgA = cryptowrap.start("some pass")
+//	[keyB, msgB] = cryptowrap.exchange("some pass", msgA)
+//	keyA = cryptowrap.finish(msgB)
+//	cryptowrap.open(keyA, cryptowrap.seal(keyB, "hello"))
 package main
 
 import (
@@ -19,7 +23,13 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
-// Globals mean this can only be used once at a time. Ah well.
+// state is the PAKE state so far.
+//
+// We can't pass Go pointers to JavaScript, but we need to keep
+// the PAKE state (at least for the A side) between invocations.
+// We keep it as a single instance variable here, which means an
+// instance of this program can only do one A handshake at a time.
+// If more is needed this can be changed into a map[something]*cpace.State.
 var state *cpace.State
 
 // start(pass string) (base64msgA string)
@@ -28,7 +38,7 @@ func start(_ js.Value, args []js.Value) interface{} {
 
 	msgA, s, err := cpace.Start(pass, cpace.NewContextInfo("", "", nil))
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	state = s
 
@@ -39,18 +49,18 @@ func start(_ js.Value, args []js.Value) interface{} {
 func finish(_ js.Value, args []js.Value) interface{} {
 	msgB, err := base64.URLEncoding.DecodeString(args[0].String())
 	if err != nil {
-		panic(err)
+		return nil
 	}
 
 	mk, err := state.Finish(msgB)
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	hkdf := hkdf.New(sha256.New, mk, nil, nil)
 	key := [32]byte{}
 	_, err = io.ReadFull(hkdf, key[:])
 	if err != nil {
-		panic(err)
+		return nil
 	}
 
 	dst := js.Global().Get("Uint8Array").New(32)
@@ -64,18 +74,18 @@ func exchange(_ js.Value, args []js.Value) interface{} {
 	pass := args[0].String()
 	msgA, err := base64.URLEncoding.DecodeString(args[1].String())
 	if err != nil {
-		panic(err)
+		return []interface{}{nil, nil}
 	}
 
 	msgB, mk, err := cpace.Exchange(pass, cpace.NewContextInfo("", "", nil), msgA)
 	if err != nil {
-		panic(err)
+		return []interface{}{nil, nil}
 	}
 	hkdf := hkdf.New(sha256.New, mk, nil, nil)
 	key := [32]byte{}
 	_, err = io.ReadFull(hkdf, key[:])
 	if err != nil {
-		panic(err)
+		return []interface{}{nil, nil}
 	}
 
 	dst := js.Global().Get("Uint8Array").New(32)
@@ -92,14 +102,14 @@ func open(_ js.Value, args []js.Value) interface{} {
 	js.CopyBytesToGo(key[:], args[0])
 	encrypted, err := base64.URLEncoding.DecodeString(args[1].String())
 	if err != nil {
-		panic(err)
+		return nil
 	}
 
 	var nonce [24]byte
 	copy(nonce[:], encrypted[:24])
 	clear, ok := secretbox.Open(nil, encrypted[24:], &nonce, &key)
 	if !ok {
-		panic("secretbox cannot be opened")
+		return nil
 	}
 
 	return string(clear)
@@ -113,7 +123,7 @@ func seal(_ js.Value, args []js.Value) interface{} {
 
 	var nonce [24]byte
 	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
-		panic(err)
+		return nil
 	}
 
 	result := secretbox.Seal(nonce[:], []byte(clear), &nonce, &key)
@@ -122,11 +132,13 @@ func seal(_ js.Value, args []js.Value) interface{} {
 }
 
 func main() {
-	js.Global().Get("cm").Set("start", js.FuncOf(start))
-	js.Global().Get("cm").Set("finish", js.FuncOf(finish))
-	js.Global().Get("cm").Set("exchange", js.FuncOf(exchange))
-	js.Global().Get("cm").Set("open", js.FuncOf(open))
-	js.Global().Get("cm").Set("seal", js.FuncOf(seal))
+	js.Global().Set("cryptowrap", map[string]interface{}{
+		"start":    js.FuncOf(start),
+		"finish":   js.FuncOf(finish),
+		"exchange": js.FuncOf(exchange),
+		"open":     js.FuncOf(open),
+		"seal":     js.FuncOf(seal),
+	})
 
 	// TODO release functions and exit when done.
 	select {}

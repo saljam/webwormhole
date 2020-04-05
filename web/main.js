@@ -31,6 +31,7 @@ let send = async f => {
 	}));
 	// TODO maybe wait for an ok message?
 	// TODO progress bar. https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress
+	console.log(f);
 	datachannel.send(await f.arrayBuffer());
 }
 
@@ -59,32 +60,44 @@ let connect = async e => {
 	let pc = new RTCPeerConnection();
 	datachannel = pc.createDataChannel("data", {negotiated: true, id: 0});
 	datachannel.onopen = connected;
-	datachannel.onclose = disconnected;
 	datachannel.onmessage = receive;
-	if (document.getElementById("magiccode").value === "") {
-		diallingA();
-		let pass = genpassword(2);
-		let [slot, c] = await newwormhole(pc, pass);
-		console.log ("assigned slot", slot, "pass", pass);
-		document.getElementById("magiccode").value = slot + "-" + pass;
-		await c;
-	} else {
-		diallingB();
-		let [slot, ...passparts] = document.getElementById("magiccode").value.split("-");
-		let pass = passparts.join("-");
-		console.log("dialling slot", slot, "pass", pass);
-		await dial(pc, slot, pass);
+	datachannel.onclose = e => {
+		disconnected();
+		document.getElementById("info").innerHTML = "DISCONNECTED";
+	};
+	datachannel.onerror = e => {
+		console.log("datachannel error:", e);
+		disconnected();
+		document.getElementById("info").innerHTML = "NETWORK ERROR TRY AGAIN";
+	};
+	try {
+		if (document.getElementById("magiccode").value === "") {
+			dialling();
+			document.getElementById("info").innerHTML = "WAITING FOR THE OTHER SIDE";
+			let pass = genpassword(2);
+			let [slot, c] = await newwormhole(pc, pass);
+			console.log ("assigned slot", slot, "pass", pass);
+			document.getElementById("magiccode").value = slot + "-" + pass;
+			await c;
+		} else {
+			dialling();
+			document.getElementById("info").innerHTML = "CONNECTING";
+			let [slot, ...passparts] = document.getElementById("magiccode").value.split("-");
+			let pass = passparts.join("-");
+			console.log("dialling slot", slot, "pass", pass);
+			await dial(pc, slot, pass);
+		}
+	} catch (err) {
+		console.log("handshake error:", err);
+		disconnected();
+		if (err == "bad key") {
+			document.getElementById("info").innerHTML = "BAD KEY TRY AGAIN";
+		} else if (err == "// TODO TIMEOUT / CANCELLATION") {
+			document.getElementById("info").innerHTML = "TIMED OUT TRY AGAIN";
+		} else {
+			document.getElementById("info").innerHTML = "COULD NOT CONNECT TRY AGAIN";
+		}
 	}
-}
-
-let diallingA = () => {
-	document.getElementById("info").innerHTML = "WAITING FOR THE OTHER SIDE";
-	dialling();
-}
-
-let diallingB = () => {
-	document.getElementById("info").innerHTML = "CONNECTING";
-	dialling();
 }
 
 let dialling = () => {
@@ -101,13 +114,13 @@ let connected = () => {
 	document.body.classList.add("connected");
 	document.body.classList.remove("disconnected");
 
-	document.getElementById("info").innerHTML = " OR DRAG FILES TO SEND";
-
 	document.body.addEventListener('drop', drop);
 	document.body.addEventListener('dragenter', highlight);
 	document.body.addEventListener('dragover', highlight);
 	document.body.addEventListener('drop', unhighlight);
 	document.body.addEventListener('dragleave', unhighlight);
+
+	document.getElementById("info").innerHTML = "OR DRAG FILES TO SEND";
 }
 
 let disconnected = () => {
@@ -118,8 +131,6 @@ let disconnected = () => {
 	document.getElementById("dial").disabled = false;
 	document.getElementById("magiccode").readOnly = false;
 	document.getElementById("magiccode").value = ""
-
-	document.getElementById("info").innerHTML = "DISCONNECTED";
 
 	document.body.removeEventListener('drop', drop);
 	document.body.removeEventListener('dragenter', highlight);
