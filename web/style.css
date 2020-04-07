@@ -82,24 +82,18 @@ input[type="submit"], .button {
 	box-shadow: 0px 0px 6px 2px rgba(0, 0, 0, 0.3);
 	background: #6c6969;
 	color: #ccc589;
+	cursor: pointer;
 }
 input[type="submit"]:hover, .button:hover {
 	letter-spacing: 1px;
 	transition: all 0.2s ease 0s;
 	box-shadow: 0px 0px 10px 4px rgba(0, 0, 0, 0.4);
 }
-input[type="submit"]:disabled, .button:disabled {
+input[type="submit"]:disabled, .button:disabled, input[type="submit"]:disabled:hover, .button:disabled:hover {
 	transition: all 0.2s ease 0s;
-	box-shadow: 0px 0px 2px 2px rgba(0, 0, 0, 0.2);
+	box-shadow: 0px 0px 1px 1px rgba(0, 0, 0, 0.2);
 	background: #8e8a8a;
 	color: #aeac9c;
+	letter-spacing: unset;
+	cursor: unset;
 }
-input[type="submit"]:disabled:hover, .button:disabled:hover {
-	letter-spacing: 0px;
-	box-shadow: 0px 0px 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-// https://codepen.io/amiangie/pen/RRdQAb
-// https://codepen.io/indrekpaas/pen/xEmRVd
-// https://rainner.github.io/wormhole-extreme/
-// http://cssdeck.com/labs/fqbwi6xs

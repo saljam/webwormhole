@@ -44,7 +44,7 @@ let receive = e => {
 			blob = new Blob([e.data])
 		}
 		let a = document.createElement('a');
-		a.href = window.URL.createObjectURL(blob);
+		a.href = window.URL.createObjectURL(blob); // TODO release this.
 		a.download = receiving.name;
 		a.style.display = 'none';
 		document.body.appendChild(a);
@@ -57,7 +57,7 @@ let receive = e => {
 }
 
 let connect = async e => {
-	let pc = new RTCPeerConnection();
+	let pc = new RTCPeerConnection({"iceServers":[{"urls":"stun:stun.l.google.com:19302"}]});
 	datachannel = pc.createDataChannel("data", {negotiated: true, id: 0});
 	datachannel.onopen = connected;
 	datachannel.onmessage = receive;

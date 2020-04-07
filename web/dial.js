@@ -85,8 +85,8 @@ export let dial = async (pc, slot, pass) => {
 	response = await fetch(signalserver + `${slot}`, {
 		method: 'PUT',
 		body: JSON.stringify({
-			offer:cryptowrap.seal(key, JSON.stringify(pc.localDescription)), // also probably ok
-			msgB
+			msgB,
+			offer:cryptowrap.seal(key, JSON.stringify(pc.localDescription)) // also probably ok
 		}),
 		headers: {'If-Match': response.headers.get('ETag')}
 	});
