@@ -80,7 +80,7 @@ func main() {
 	pass := flag.String("password", "", "explicitly choose a password")
 	len := flag.Int("length", 2, "lenfth of generated secret")
 	flag.Parse()
-	code := strings.Join(flag.Args(), " ")
+	code := strings.Join(flag.Args(), "-")
 
 	// TODO use pgp words for code
 
@@ -93,20 +93,20 @@ func main() {
 		if _, err := io.ReadFull(crand.Reader, passbytes); err != nil {
 			log.Fatalf("could not generate password: %v", err)
 		}
-		passwords := strings.Join(EncodeWords(passbytes), " ")
+		passwords := strings.Join(EncodeWords(passbytes), "-")
 		s, r, err := Wormhole(passwords, *sigserv, strings.Split(*iceserv, ","))
 		if err != nil {
 			log.Fatalf("could not create wormhole: %v", err)
 		}
-		fmt.Fprintf(flag.CommandLine.Output(), "%s %s\n", s, passwords)
+		fmt.Fprintf(flag.CommandLine.Output(), "%s-%s\n", s, passwords)
 		c, err = r()
 		if err != nil {
 			log.Fatalf("could not dial: %v", err)
 		}
 	case *slot == "" && *pass == "" && code != "":
 		// Join wormhole.
-		parts := strings.Split(code, " ")
-		c, err = Dial(parts[0], strings.Join(parts[1:], " "), *sigserv, strings.Split(*iceserv, ","))
+		parts := strings.Split(code, "-")
+		c, err = Dial(parts[0], strings.Join(parts[1:], "-"), *sigserv, strings.Split(*iceserv, ","))
 		if err != nil {
 			log.Fatalf("could not dial: %v", err)
 		}

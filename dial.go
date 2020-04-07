@@ -108,8 +108,10 @@ func (c *Conn) error(err error) {
 
 // exchange is the container used to send data to signalling server
 type exchange struct {
-	Msg    string `json:"msg"`
-	Secret string `json:"secret"`
+	MsgA   string `json:"msgA"`
+	MsgB   string `json:"msgB"`
+	Offer  string `json:"offer"`
+	Answer string `json:"answer"`
 }
 
 func (c *Conn) a(pass string) error {
@@ -126,7 +128,7 @@ func (c *Conn) a(pass string) error {
 	// and use that + signalling server generated nonce in the context info?
 	msgA, pake, err := cpace.Start(pass, cpace.NewContextInfo("", "", nil))
 	resp, status, err := c.put(exchange{
-		Msg: base64.URLEncoding.EncodeToString(msgA),
+		MsgA: base64.URLEncoding.EncodeToString(msgA),
 	})
 	if err != nil {
 		return err
@@ -140,7 +142,7 @@ func (c *Conn) a(pass string) error {
 		return errors.New("a: bad status code")
 	}
 
-	msgB, err := base64.URLEncoding.DecodeString(resp.Msg)
+	msgB, err := base64.URLEncoding.DecodeString(resp.MsgB)
 	if err != nil {
 		return err
 	}
@@ -152,7 +154,7 @@ func (c *Conn) a(pass string) error {
 		return err
 	}
 
-	soffer, err := base64.URLEncoding.DecodeString(resp.Secret)
+	soffer, err := base64.URLEncoding.DecodeString(resp.Offer)
 	if err != nil {
 		return err
 	}
@@ -165,7 +167,7 @@ func (c *Conn) a(pass string) error {
 			return err
 		}
 		c.del(exchange{
-			Secret: base64.URLEncoding.EncodeToString(
+			Answer: base64.URLEncoding.EncodeToString(
 				secretbox.Seal(nonce[:], []byte("bad key"), &nonce, &k),
 			),
 		})
@@ -197,14 +199,14 @@ func (c *Conn) a(pass string) error {
 		return err
 	}
 	return c.del(exchange{
-		Secret: base64.URLEncoding.EncodeToString(
+		Answer: base64.URLEncoding.EncodeToString(
 			secretbox.Seal(nonce[:], jsonanswer, &nonce, &k),
 		),
 	})
 }
 
 func (c *Conn) b(pass string, resp exchange) error {
-	msgA, err := base64.URLEncoding.DecodeString(resp.Msg)
+	msgA, err := base64.URLEncoding.DecodeString(resp.MsgA)
 	if err != nil {
 		return err
 	}
@@ -233,8 +235,8 @@ func (c *Conn) b(pass string, resp exchange) error {
 		return err
 	}
 	resp, status, err := c.put(exchange{
-		Msg: base64.URLEncoding.EncodeToString(msgB),
-		Secret: base64.URLEncoding.EncodeToString(
+		MsgB: base64.URLEncoding.EncodeToString(msgB),
+		Offer: base64.URLEncoding.EncodeToString(
 			secretbox.Seal(nonce[:], jsonoffer, &nonce, &k),
 		),
 	})
@@ -242,7 +244,7 @@ func (c *Conn) b(pass string, resp exchange) error {
 		return errors.New("b: bad status code")
 	}
 
-	sanswer, err := base64.URLEncoding.DecodeString(resp.Secret)
+	sanswer, err := base64.URLEncoding.DecodeString(resp.Answer)
 	if err != nil {
 		return err
 	}
