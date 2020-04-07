@@ -35,11 +35,13 @@ package main
 
 import (
 	crand "crypto/rand"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -60,6 +62,12 @@ resumption
 simple header, stream secretboxes
 */
 
+type fileHeader struct {
+	Name string
+	Size int
+	Type string
+}
+
 func usage() {
 	fmt.Fprintf(flag.CommandLine.Output(), `cpace-machine creates secure ephemeral pipes between computers.
 
@@ -79,7 +87,13 @@ func main() {
 	slot := flag.String("slot", "", "explicitly choose a slot")
 	pass := flag.String("password", "", "explicitly choose a password")
 	len := flag.Int("length", 2, "lenfth of generated secret")
+	receive := flag.Bool("receive", false, "receive a file")
+	cwd, _ := os.Getwd()
+	directory := flag.String("directory", cwd, "directory to put downloaded files")
 	flag.Parse()
+	if *directory == "" {
+		log.Fatal("No ouput directory")
+	}
 	code := strings.Join(flag.Args(), "-")
 
 	// TODO use pgp words for code
@@ -126,7 +140,32 @@ func main() {
 	done := make(chan struct{})
 	// The recieve end of the pipe.
 	go func() {
-		_, err := io.Copy(os.Stdout, c)
+		out := os.Stdout
+
+		if *receive {
+			// TODO use a buffered read to do this more cleanly
+			buf := make([]byte, 1024)
+			n, err := c.Read(buf)
+			if err != nil {
+				log.Fatal("Could not read file header")
+			}
+
+			var header fileHeader
+			err = json.Unmarshal(buf[:n], &header)
+			if err != nil {
+				log.Fatal("Could not decode file header")
+			}
+
+			out, err = os.Create(filepath.Join(*directory, filepath.Clean(header.Name)))
+			if err != nil {
+				log.Fatal("Could not create output file ", header.Name)
+			}
+
+			defer out.Close()
+			log.Println("Receiving ", header.Name)
+		}
+		// Give the copy buffer 64k so the webrtc data channel doesn't barf on us
+		_, err := io.CopyBuffer(out, c, make([]byte, 64<<10))
 		if err != nil {
 			log.Printf("could not write to stdout: %v", err)
 		}
