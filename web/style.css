@@ -53,6 +53,15 @@ body.highlight {
 	display: inline-block;
 }
 
+#transfers {
+	margin: 0;
+	display: none;
+	list-style-type: none;
+}
+.connected #transfers {
+	display: unset;
+}
+
 #magiccode {
 	margin: 16px;
 	font-size: 2em;
