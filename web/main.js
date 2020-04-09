@@ -28,26 +28,31 @@ let send = async f => {
 		console.log("haven't finished sending", sending.name);
 		return
 	}
+
 	console.log("sending", f.name);
 	datachannel.send(JSON.stringify({
 		name: f.name,
 		size: f.size,
 		type: f.type,
 	}));
-	// TODO progress bar. https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress
-
-	const chunksize = 16<<10
-	datachannel.bufferedAmountLowThreshold = 2 * chunksize;
-	// TODO apparently ios safari does not have onbufferedamountlow. fallback to
-	// something else?
 
 	sending = f;
 	sending.offset = 0;
-	let reader = f.stream().getReader()
+	sending.li = document.createElement('li');
+	sending.li.innerHTML = `↑ ${f.name} <progress>`;
+	sending.progress = sending.li.getElementsByTagName("progress")[0];
+	document.getElementById("transfers").appendChild(sending.li);
+
+	// TODO apparently ios safari does not have onbufferedamountlow. fallback to
+	// something else?
+	let reader = f.stream().getReader();
+	const chunksize = 64<<10;
+	datachannel.bufferedAmountLowThreshold = 1<<20;
 	datachannel.onbufferedamountlow = async () => {
 		let { done, value } = await reader.read();
 		if (done) {
 			console.log("send complete");
+			sending.li.innerHTML = `↑ ${f.name}`;
 			sending = null;
 			return;
 		}
@@ -55,8 +60,9 @@ let send = async f => {
 			const n = offset+chunksize > value.length? value.length : offset+chunksize;
 			datachannel.send(value.subarray(offset, n));
 		}
-		if (value.length <= datachannel.bufferedAmountLowThreshold) {
-			// This won't trigger the callback again. Try to read more.
+		sending.offset += value.length;
+		sending.progress.value = sending.offset / sending.size;
+		if (datachannel.bufferedAmount <= datachannel.bufferedAmountLowThreshold) {
 			datachannel.onbufferedamountlow();
 		}
 	};
@@ -84,11 +90,16 @@ let receive = async e => {
 		receiving = JSON.parse(decoder.decode(data));
 		receiving.data = new Uint8Array(receiving.size);
 		receiving.offset = 0;
+		receiving.li = document.createElement('li');
+		receiving.li.innerHTML = `↓ ${receiving.name} <progress>`;
+		receiving.progress = receiving.li.getElementsByTagName("progress")[0];
+		document.getElementById("transfers").appendChild(receiving.li);
 		return
 	}
 
 	receiving.data.set(data, receiving.offset);
 	receiving.offset += data.length;
+	receiving.progress.value = receiving.offset / receiving.size;
 
 	if (receiving.offset > receiving.data.length) {
 		console.log("PANIC received more bytes than expecting")
@@ -102,6 +113,7 @@ let receive = async e => {
 		document.body.appendChild(a);
 		a.click();
 		document.body.removeChild(a);
+		receiving.li.innerHTML = `↓ ${receiving.name}`;
 		receiving = null;
 	}
 }
