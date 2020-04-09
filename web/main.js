@@ -6,6 +6,7 @@ import { genpassword } from './wordlist.js';
 // transfers in progress? Each could be mapped to a different datachannel
 // there too, new object instantiated by ondatachannel callback.
 let receiving;
+let sending;
 let datachannel;
 
 let pick = e => {
@@ -23,26 +24,77 @@ let drop = e => {
 }
 
 let send = async f => {
-	console.log("sending", f.name)
+	if (sending) {
+		console.log("haven't finished sending", sending.name);
+		return
+	}
+	console.log("sending", f.name);
 	datachannel.send(JSON.stringify({
 		name: f.name,
 		size: f.size,
 		type: f.type,
 	}));
-	// TODO maybe wait for an ok message?
 	// TODO progress bar. https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress
-	console.log(f);
-	datachannel.send(await f.arrayBuffer());
+
+	const chunksize = 16<<10
+	datachannel.bufferedAmountLowThreshold = 2 * chunksize;
+	// TODO apparently ios safari does not have onbufferedamountlow. fallback to
+	// something else?
+
+	sending = f;
+	sending.offset = 0;
+	let reader = f.stream().getReader()
+	datachannel.onbufferedamountlow = async () => {
+		let { done, value } = await reader.read();
+		if (done) {
+			console.log("send complete");
+			sending = null;
+			return;
+		}
+		for (let offset = 0; offset < value.length; offset += chunksize) {
+			const n = offset+chunksize > value.length? value.length : offset+chunksize;
+			datachannel.send(value.subarray(offset, n));
+		}
+		if (value.length <= datachannel.bufferedAmountLowThreshold) {
+			// This won't trigger the callback again. Try to read more.
+			datachannel.onbufferedamountlow();
+		}
+	};
+	datachannel.onbufferedamountlow(); // start it off.
 }
 
-let receive = e => {
-	// TODO stream data. https://github.com/maxogden/filereader-stream/blob/master/index.js
-	// plan b: service worker to reflect stream back?
-	if (receiving) {
-		let blob = e.data
-		if (blob instanceof ArrayBuffer) {
-			blob = new Blob([e.data])
-		}
+let receive = async e => {
+	// TODO ensure the type is always sent as one of these.
+	let data;
+	if (e.data instanceof ArrayBuffer) {
+		data = new Uint8Array(e.data);
+	} else if (e.data instanceof Blob) {
+		data = new Uint8Array(await e.data.arrayBuffer());
+	} else if (typeof e.data === "string"){
+		let encoder = new TextEncoder('utf8');
+		data = encoder.encode(e.data);
+	} else {
+		console.log("unknown type")
+		console.log(e.data)
+		return
+	}
+
+	if (!receiving) {
+		let decoder = new TextDecoder('utf8');
+		receiving = JSON.parse(decoder.decode(data));
+		receiving.data = new Uint8Array(receiving.size);
+		receiving.offset = 0;
+		return
+	}
+
+	receiving.data.set(data, receiving.offset);
+	receiving.offset += data.length;
+
+	if (receiving.offset > receiving.data.length) {
+		console.log("PANIC received more bytes than expecting")
+	}
+	if (receiving.offset == receiving.data.length) {
+		let blob = new Blob([receiving.data])
 		let a = document.createElement('a');
 		a.href = window.URL.createObjectURL(blob); // TODO release this.
 		a.download = receiving.name;
@@ -51,9 +103,7 @@ let receive = e => {
 		a.click();
 		document.body.removeChild(a);
 		receiving = null;
-		return;
 	}
-	receiving = JSON.parse(e.data);
 }
 
 let connect = async e => {
