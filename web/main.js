@@ -23,6 +23,35 @@ let drop = e => {
 	}
 }
 
+class DataChannelWriter {
+	constructor(dc) {
+		this.dc = dc;
+		this.chunksize = 64<<10;
+		this.bufferedAmountHighThreshold = 1<<20;
+		this.dc.bufferedAmountLowThreshold = 512<<10;
+		this.dc.onbufferedamountlow = () => {
+			this.resolve()
+		};
+		this.ready = new Promise((resolve) => {
+			this.resolve = resolve;
+			this.resolve();
+		});
+	}
+	async write(buf) {
+		for (let offset = 0; offset < buf.length; offset += this.chunksize) {
+			let end = offset+this.chunksize;
+			if (end > buf.length) {
+				end = buf.length;
+			}
+			await this.ready;
+			this.dc.send(buf.subarray(offset, end));
+		}
+		if (this.dc.bufferedAmount >= this.bufferedAmountHighThreshold) {
+			this.ready = new Promise((resolve) => this.resolve = resolve);
+		}
+	}
+}
+
 let send = async f => {
 	if (sending) {
 		console.log("haven't finished sending", sending.name);
@@ -30,64 +59,65 @@ let send = async f => {
 	}
 
 	console.log("sending", f.name);
-	datachannel.send(JSON.stringify({
+	datachannel.send(new TextEncoder('utf8').encode(JSON.stringify({
 		name: f.name,
 		size: f.size,
 		type: f.type,
-	}));
+	})));
 
-	sending = f;
+	sending = {f};
 	sending.offset = 0;
 	sending.li = document.createElement('li');
 	sending.li.innerHTML = `↑ ${f.name} <progress>`;
 	sending.progress = sending.li.getElementsByTagName("progress")[0];
 	document.getElementById("transfers").appendChild(sending.li);
 
-	// TODO apparently ios safari does not have onbufferedamountlow. fallback to
-	// something else?
-	let reader = f.stream().getReader();
-	const chunksize = 64<<10;
-	datachannel.bufferedAmountLowThreshold = 1<<20;
-	datachannel.onbufferedamountlow = async () => {
-		let { done, value } = await reader.read();
-		if (done) {
-			console.log("send complete");
-			sending.li.innerHTML = `↑ ${f.name}`;
-			sending = null;
-			return;
+	let writer = new DataChannelWriter(datachannel);
+	if (!f.stream) {
+		// Hack around safari's lack of Blob.stream() and arrayBuffer().
+		// This is unbenchmarked and could probably be made better.
+		let read = b => {
+			return new Promise(r => {
+				let fr = new FileReader();
+				fr.onload = (e) => {
+					r(new Uint8Array(e.target.result));
+				};
+				fr.readAsArrayBuffer(b);
+			});
+		};
+		const chunksize = 64<<10;
+		while (sending.offset < f.size) {
+			let end = sending.offset+chunksize
+			if (end > f.size) {
+				end = f.size;
+			}
+			await writer.write(await read(f.slice(sending.offset, end)));
+			sending.offset = end;
+			sending.progress.value = sending.offset / f.size;
 		}
-		for (let offset = 0; offset < value.length; offset += chunksize) {
-			const n = offset+chunksize > value.length? value.length : offset+chunksize;
-			datachannel.send(value.subarray(offset, n));
+	} else {
+		let reader = f.stream().getReader();
+		while (true) {
+			let { done, value } = await reader.read();
+			if (done) {
+				break;
+			}
+			await writer.write(value);
+			sending.offset += value.length;
+			sending.progress.value = sending.offset / f.size;
 		}
-		sending.offset += value.length;
-		sending.progress.value = sending.offset / sending.size;
-		if (datachannel.bufferedAmount <= datachannel.bufferedAmountLowThreshold) {
-			datachannel.onbufferedamountlow();
-		}
-	};
-	datachannel.onbufferedamountlow(); // start it off.
+	}
+	sending.li.innerHTML = `↑ ${f.name}`;
+	sending = null;
 }
 
-let receive = async e => {
-	// TODO ensure the type is always sent as one of these.
-	let data;
-	if (e.data instanceof ArrayBuffer) {
-		data = new Uint8Array(e.data);
-	} else if (e.data instanceof Blob) {
-		data = new Uint8Array(await e.data.arrayBuffer());
-	} else if (typeof e.data === "string"){
-		let encoder = new TextEncoder('utf8');
-		data = encoder.encode(e.data);
-	} else {
-		console.log("unknown type")
-		console.log(e.data)
-		return
-	}
-
+// receive is the new message handler.
+//
+// This function cannot be async without carefully thinking through the
+// order of messages coming in.
+let receive = e => {
 	if (!receiving) {
-		let decoder = new TextDecoder('utf8');
-		receiving = JSON.parse(decoder.decode(data));
+		receiving = JSON.parse(new TextDecoder('utf8').decode(e.data));
 		receiving.data = new Uint8Array(receiving.size);
 		receiving.offset = 0;
 		receiving.li = document.createElement('li');
@@ -97,17 +127,18 @@ let receive = async e => {
 		return
 	}
 
+	let data = new Uint8Array(e.data)
 	receiving.data.set(data, receiving.offset);
 	receiving.offset += data.length;
 	receiving.progress.value = receiving.offset / receiving.size;
 
 	if (receiving.offset > receiving.data.length) {
-		console.log("PANIC received more bytes than expecting")
+		throw "received more bytes than expected";
 	}
 	if (receiving.offset == receiving.data.length) {
 		let blob = new Blob([receiving.data])
 		let a = document.createElement('a');
-		a.href = window.URL.createObjectURL(blob); // TODO release this.
+		a.href = window.URL.createObjectURL(blob); // TODO release this?
 		a.download = receiving.name;
 		a.style.display = 'none';
 		document.body.appendChild(a);
@@ -123,6 +154,7 @@ let connect = async e => {
 	datachannel = pc.createDataChannel("data", {negotiated: true, id: 0});
 	datachannel.onopen = connected;
 	datachannel.onmessage = receive;
+	datachannel.binaryType = "arraybuffer"
 	datachannel.onclose = e => {
 		disconnected();
 		document.getElementById("info").innerHTML = "DISCONNECTED";
