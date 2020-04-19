@@ -12,14 +12,14 @@ import (
 
 const (
 	// msgChunkSize is the maximum size of a WebRTC DataChannel message.
-	// 64k is okay for modern browsers.
-	msgChunkSize = 64 << 10
+	// 64k is okay for most modern browsers, 32 is conservative.
+	msgChunkSize = 32 << 10
 )
 
 type header struct {
-	Name string
-	Size int
-	Type string
+	Name string `json:"name",omitempty`
+	Size int    `json:"size",omitempty`
+	Type string `json:"type",omitempty`
 }
 
 func receive(args ...string) {
@@ -62,8 +62,7 @@ func receive(args ...string) {
 		if err != nil {
 			log.Fatalf("could not create output file %s: %v", h.Name, err)
 		}
-		log.Printf("Receiving %v", h.Name)
-
+		log.Printf("receiving %v", h.Name)
 		written, err := io.CopyBuffer(f, io.LimitReader(c, int64(h.Size)), make([]byte, msgChunkSize))
 		if err != nil {
 			log.Fatalf("could not save file: %v", err)
@@ -72,7 +71,7 @@ func receive(args ...string) {
 			log.Fatalf("EOF before receiving all bytes: (%d/%d)", written, h.Size)
 		}
 		f.Close()
-		log.Printf("Done")
+		log.Printf("done")
 	}
 	c.Close()
 }
@@ -94,6 +93,34 @@ func send(args ...string) {
 		os.Exit(2)
 	}
 	c := newConn(*code, *length)
-	// TODO
+
+	for _, filename := range set.Args() {
+		f, err := os.Open(filename)
+		if err != nil {
+			log.Fatalf("could not open file %s: %v", filename, err)
+		}
+		info, err := f.Stat()
+		if err != nil {
+			log.Fatalf("could not stat file %s: %v", filename, err)
+		}
+		h, err := json.Marshal(header{
+			Name: filepath.Base(filepath.Clean(filename)),
+			Size: int(info.Size()),
+		})
+		_, err = c.Write(h)
+		if err != nil {
+			log.Fatalf("could not send file header: %v", err)
+		}
+		log.Printf("sending %v", filepath.Base(filepath.Clean(filename)))
+		written, err := io.CopyBuffer(c, f, make([]byte, msgChunkSize))
+		if err != nil {
+			log.Fatalf("could not send file: %v", err)
+		}
+		if written != info.Size() {
+			log.Fatalf("EOF before sending all bytes: (%d/%d)", written, info.Size())
+		}
+		f.Close()
+		log.Printf("done")
+	}
 	c.Close()
 }

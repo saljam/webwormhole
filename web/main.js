@@ -26,7 +26,7 @@ let drop = e => {
 class DataChannelWriter {
 	constructor(dc) {
 		this.dc = dc;
-		this.chunksize = 64<<10;
+		this.chunksize = 32<<10;
 		this.bufferedAmountHighThreshold = 1<<20;
 		this.dc.bufferedAmountLowThreshold = 512<<10;
 		this.dc.onbufferedamountlow = () => {

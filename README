@@ -6,25 +6,27 @@ CRYPTOGRAPHY REVIEWS. IT MIGHT BE BROKEN AND UNSAFE.
 
 CPACE-MACHINE
 
-Cpace Machine creates ephemeral pipes between computers.
+Cpace Machine creates ephemeral pipes between computers to send
+files or other data. Try it at https://sa.lj.am/cm or on the command
+line.
 
 On one computer the tool generates a one-time code for us:
 
 	$ shasum file.zip
 	71f2727ffa77002b8e48de6555c6ea810950c1c0  file.zip
-	$ cpace-machine <file.zip
-	8 enlist decadence
+	$ cpace-machine send file.zip
+	8-enlist-decadence
 
 On another we use the code to establish a connection:
 
-	$ cpace-machine 8 enlist decadence >file.zip
+	$ cpace-machine receive 8-enlist-decadence
 	$ shasum file.zip
 	71f2727ffa77002b8e48de6555c6ea810950c1c0  file.zip
 
 It is inspired by and uses a model very similar to that of Magic
-Wormhole. Thanks Brian Warner!
+Wormhole. Thanks Brian!
 
-https://github.com/warner/magic-wormhole
+	https://github.com/warner/magic-wormhole
 
 Cpace Machine differs from Magic Wormhole in that it uses WebRTC
 to make the direct peer connections. This allows us to make use of
@@ -37,13 +39,7 @@ its communications.
 
 To install:
 
-	$ go get -u github.com/saljam/cpace-machine
+	$ go get -u github.com/saljam/cpace-machine/cmd/cpace-machine
 
 Unless otherwise noted, the source files are distributed under the
 BSD-style license found in the LICENSE file.
-
-WARNING
-
-THIS PROJECT IS STILL IN EARLY DEVELOPMENT, USES EXPERIMENTAL
-CRYPTOGRAPHIC LIBRARIES, AND HAS NOT HAD ANY KIND OF SECURITY OR
-CRYPTOGRAPHY REVIEWS. IT MIGHT BE BROKEN AND UNSAFE.
