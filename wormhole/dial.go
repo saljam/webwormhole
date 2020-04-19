@@ -1,4 +1,38 @@
-package main
+// Package wormhole implements a signalling protocol to establish password protected
+// WebRTC connections between peers.
+//
+// WebRTC uses DTLS-RSTP (https://tools.ietf.org/html/rfc5764) to secure its
+// data. The mechanism it uses to exchange keys relies on exchanging metadata
+// that includes both endpoints' certificate fingerprints via some trusted channel,
+// typically a signalling server over https and websockets. More in RFC5763
+// (https://tools.ietf.org/html/rfc5763).
+//
+// This package removes the signalling server from the trust model by using a
+// PAKE to estabish the authenticity of the WebRTC metadata. In other words,
+// it's a clone of Magic Wormhole made to use WebRTC as the transport.
+//
+// The protocol requires a signalling server that facilitates exchanging arbitrary
+// messages via a slot system. cpace-machine-server is an implementation of the
+// server side.
+//
+// Rough sketch of the handshake:
+//
+//	Peer A             Signalling Server              Peer B
+//	----PUT /slot if-match:0--->
+//	    pake_msg_a
+//	                             <---PUT /slot if-match:0---
+//	                                 pake_msg_a
+//	                             --status:Conflict etag:X-->
+//	                                 pake_msg_a
+//	                             <---PUT /slot if-match:X---
+//	                                 pake_msg_b+sbox(offer)
+//	<-----status:OK etag:X------
+//	    pake_msg_b+sbox(offer)
+//	--DELETE /slot if-match:X-->
+//	    sbox(answer)
+//	                             ---status:OK etag:X------->
+//	                                 sbox(answer)
+package wormhole
 
 import (
 	"bytes"

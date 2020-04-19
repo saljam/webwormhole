@@ -1,11 +1,13 @@
-package main
+// Package wordlist provides an encoder and a decoder for the PGP Word List.
+//
+// PGP Word List is like NATO phonetic alphabet but for bytes.
+// https://en.wikipedia.org/wiki/PGP_Words
+package wordlist
 
 import "strings"
 
-// PGP Word List. Like NATO phonetic alphabet but for bytes.
-// https://en.wikipedia.org/wiki/PGP_Words
-
-func EncodeWords(buf []byte) []string {
+// Encode returns the words representing the bytes in buf.
+func Encode(buf []byte) []string {
 	words := make([]string, len(buf))
 	for i := range buf {
 		words[i] = pgpWords[int(buf[i])*2+i%2]
@@ -13,21 +15,26 @@ func EncodeWords(buf []byte) []string {
 	return words
 }
 
-func DecodeWords(words []string) (bytes []byte, parity []byte, ok bool) {
+// Decode decodes the array of words in words. It returns the bytes
+// it represents and the parity of each word.
+//
+// It does not perform any parity validation. If it encounters a word
+// not in its dictionary it returns nil.
+func Decode(words []string) (bytes []byte, parity []byte) {
 	bytes = make([]byte, len(words))
 	parity = make([]byte, len(words))
 	for i := range words {
-		j, ok := pgpWordIndex(words[i])
+		j, ok := index(words[i])
 		if !ok {
-			return bytes[:i], parity[:i], false
+			return nil, nil
 		}
 		bytes[i] = byte(j / 2)
 		parity[i] = byte(j % 2)
 	}
-	return bytes, parity, true
+	return bytes, parity
 }
 
-func pgpWordIndex(word string) (i int, ok bool) {
+func index(word string) (i int, ok bool) {
 	for i := range pgpWords {
 		if strings.ToLower(word) == strings.ToLower(pgpWords[i]) {
 			return i, true
@@ -46,42 +53,42 @@ var pgpWords = []string{
 	"afflict", "amulet",
 	"ahead", "amusement",
 	"aimless", "antenna",
-	"Algol", "applicant",
-	"allow", "Apollo",
+	"algol", "applicant",
+	"allow", "apollo",
 	"alone", "armistice",
 	"ammo", "article",
 	"ancient", "asteroid",
-	"apple", "Atlantic",
+	"apple", "atlantic",
 	"artist", "atmosphere",
 	"assume", "autopsy",
-	"Athens", "Babylon",
+	"athens", "babylon",
 	"atlas", "backwater",
-	"Aztec", "barbecue",
+	"aztec", "barbecue",
 	"baboon", "belowground",
 	"backfield", "bifocals",
 	"backward", "bodyguard",
 	"banjo", "bookseller",
 	"beaming", "borderline",
 	"bedlamp", "bottomless",
-	"beehive", "Bradbury",
+	"beehive", "bradbury",
 	"beeswax", "bravado",
-	"befriend", "Brazilian",
-	"Belfast", "breakaway",
-	"berserk", "Burlington",
+	"befriend", "brazilian",
+	"belfast", "breakaway",
+	"berserk", "burlington",
 	"billiard", "businessman",
 	"bison", "butterfat",
-	"blackjack", "Camelot",
+	"blackjack", "camelot",
 	"blockade", "candidate",
 	"blowtorch", "cannonball",
-	"bluebird", "Capricorn",
+	"bluebird", "capricorn",
 	"bombast", "caravan",
 	"bookshelf", "caretaker",
 	"brackish", "celebrate",
 	"breadline", "cellulose",
 	"breakup", "certify",
 	"brickyard", "chambermaid",
-	"briefcase", "Cherokee",
-	"Burbank", "Chicago",
+	"briefcase", "cherokee",
+	"burbank", "chicago",
 	"button", "clergyman",
 	"buzzard", "coherence",
 	"cement", "combustion",
@@ -91,7 +98,7 @@ var pgpWords = []string{
 	"chisel", "concurrent",
 	"choking", "confidence",
 	"chopper", "conformist",
-	"Christmas", "congregate",
+	"christmas", "congregate",
 	"clamshell", "consensus",
 	"classic", "consulting",
 	"classroom", "corporate",
@@ -101,9 +108,9 @@ var pgpWords = []string{
 	"commence", "crucifix",
 	"concert", "cumbersome",
 	"cowbell", "customer",
-	"crackdown", "Dakota",
+	"crackdown", "dakota",
 	"cranky", "decadence",
-	"crowfoot", "December",
+	"crowfoot", "december",
 	"crucial", "decimal",
 	"crumpled", "designing",
 	"crusade", "detector",
@@ -119,12 +126,12 @@ var pgpWords = []string{
 	"dropper", "document",
 	"drumbeat", "embezzle",
 	"drunken", "enchanting",
-	"Dupont", "enrollment",
+	"dupont", "enrollment",
 	"dwelling", "enterprise",
 	"eating", "equation",
 	"edict", "equipment",
 	"egghead", "escapade",
-	"eightball", "Eskimo",
+	"eightball", "eskimo",
 	"endorse", "everyday",
 	"endow", "examine",
 	"enlist", "existence",
@@ -136,15 +143,15 @@ var pgpWords = []string{
 	"facial", "fortitude",
 	"fallout", "frequency",
 	"flagpole", "gadgetry",
-	"flatfoot", "Galveston",
+	"flatfoot", "galveston",
 	"flytrap", "getaway",
 	"fracture", "glossary",
 	"framework", "gossamer",
 	"freedom", "graduate",
 	"frighten", "gravity",
 	"gazelle", "guitarist",
-	"Geiger", "hamburger",
-	"glitter", "Hamilton",
+	"geiger", "hamburger",
+	"glitter", "hamilton",
 	"glucose", "handiwork",
 	"goggles", "hazardous",
 	"goldfish", "headwaters",
@@ -167,16 +174,16 @@ var pgpWords = []string{
 	"lockup", "integrate",
 	"merit", "intention",
 	"minnow", "inventive",
-	"miser", "Istanbul",
-	"Mohawk", "Jamaica",
-	"mural", "Jupiter",
+	"miser", "istanbul",
+	"mohawk", "jamaica",
+	"mural", "jupiter",
 	"music", "leprosy",
 	"necklace", "letterhead",
-	"Neptune", "liberty",
+	"neptune", "liberty",
 	"newborn", "maritime",
 	"nightbird", "matchmaker",
-	"Oakland", "maverick",
-	"obtuse", "Medusa",
+	"oakland", "maverick",
+	"obtuse", "medusa",
 	"offload", "megaton",
 	"optic", "microscope",
 	"orca", "microwave",
@@ -185,30 +192,30 @@ var pgpWords = []string{
 	"pheasant", "miracle",
 	"physique", "misnomer",
 	"playhouse", "molasses",
-	"Pluto", "molecule",
-	"preclude", "Montana",
+	"pluto", "molecule",
+	"preclude", "montana",
 	"prefer", "monument",
 	"preshrunk", "mosquito",
 	"printer", "narrative",
 	"prowler", "nebula",
 	"pupil", "newsletter",
-	"puppy", "Norwegian",
-	"python", "October",
-	"quadrant", "Ohio",
+	"puppy", "norwegian",
+	"python", "october",
+	"quadrant", "ohio",
 	"quiver", "onlooker",
 	"quota", "opulent",
-	"ragtime", "Orlando",
+	"ragtime", "orlando",
 	"ratchet", "outfielder",
-	"rebirth", "Pacific",
+	"rebirth", "pacific",
 	"reform", "pandemic",
-	"regain", "Pandora",
+	"regain", "pandora",
 	"reindeer", "paperweight",
 	"rematch", "paragon",
 	"repay", "paragraph",
 	"retouch", "paramount",
 	"revenge", "passenger",
 	"reward", "pedigree",
-	"rhythm", "Pegasus",
+	"rhythm", "pegasus",
 	"ribcage", "penetrate",
 	"ringbolt", "perceptive",
 	"robust", "performance",
@@ -219,7 +226,7 @@ var pgpWords = []string{
 	"scallion", "pocketful",
 	"scenic", "politeness",
 	"scorecard", "positive",
-	"Scotland", "potato",
+	"scotland", "potato",
 	"seabird", "processor",
 	"select", "provincial",
 	"sentence", "proximate",
@@ -244,7 +251,7 @@ var pgpWords = []string{
 	"spigot", "revolver",
 	"spindle", "sandalwood",
 	"spyglass", "sardonic",
-	"stagehand", "Saturday",
+	"stagehand", "saturday",
 	"stagnate", "savagery",
 	"stairway", "scavenger",
 	"standard", "sensation",
@@ -271,7 +278,7 @@ var pgpWords = []string{
 	"transit", "truncated",
 	"trauma", "typewriter",
 	"treadmill", "ultimate",
-	"Trojan", "undaunted",
+	"trojan", "undaunted",
 	"trouble", "underfoot",
 	"tumor", "unicorn",
 	"tunnel", "unify",
@@ -281,16 +288,16 @@ var pgpWords = []string{
 	"unwind", "vacancy",
 	"uproot", "vagabond",
 	"upset", "vertigo",
-	"upshot", "Virginia",
+	"upshot", "virginia",
 	"vapor", "visitor",
 	"village", "vocalist",
 	"virus", "voyager",
-	"Vulcan", "warranty",
-	"waffle", "Waterloo",
+	"vulcan", "warranty",
+	"waffle", "waterloo",
 	"wallet", "whimsical",
-	"watchword", "Wichita",
-	"wayside", "Wilmington",
-	"willow", "Wyoming",
+	"watchword", "wichita",
+	"wayside", "wilmington",
+	"willow", "wyoming",
 	"woodlark", "yesteryear",
-	"Zulu", "Yucatan",
+	"zulu", "yucatan",
 }
