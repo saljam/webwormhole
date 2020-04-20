@@ -3,6 +3,7 @@ package main
 // This is the signalling server. It holds messages between peers wishing to connect.
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -71,6 +72,8 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "PUT, POST, DELETE")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, If-Match")
 	w.Header().Set("Access-Control-Expose-Headers", "Etag, Location")
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
+	defer cancel()
 
 	if r.Method == http.MethodGet &&
 		(r.URL.Path == "/" ||
@@ -111,8 +114,6 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("%v %v", r.Method, slotkey)
-
 	slots.Lock()
 	if slotkey == "" && r.Method == http.MethodPost {
 		var ok bool
@@ -140,13 +141,16 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		// Is there a header to contol this? Chrome does not need this.
 		w.Write([]byte("\n"))
 		w.(http.Flusher).Flush()
+		log.Printf("start %v %v", slotkey, s.id)
 		select {
 		case a := <-s.answer:
+			log.Printf("answered %v %v", slotkey, s.id)
 			_, err := w.Write(a)
 			if err != nil {
 				log.Printf("%v", err)
 			}
-		case <-r.Context().Done():
+		case <-ctx.Done():
+			log.Printf("timeout %v %v", slotkey, s.id)
 			slots.Lock()
 			delete(slots.m, slotkey)
 			slots.Unlock()
@@ -171,12 +175,14 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("ETag", s.id)
 		select {
 		case s.answer <- msg:
-		case <-r.Context().Done():
+		case <-ctx.Done():
+			log.Printf("timeout %v %v", slotkey, s.id)
 			slots.Lock()
 			delete(slots.m, slotkey)
 			slots.Unlock()
 		}
 		if r.Method == http.MethodDelete {
+			log.Printf("end %v %v", slotkey, s.id)
 			slots.Lock()
 			delete(slots.m, slotkey)
 			slots.Unlock()
@@ -184,11 +190,13 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		select {
 		case a := <-s.answer:
+			log.Printf("answered %v %v", slotkey, s.id)
 			_, err := w.Write(a)
 			if err != nil {
 				log.Printf("%v", err)
 			}
-		case <-r.Context().Done():
+		case <-ctx.Done():
+			log.Printf("timeout %v %v", slotkey, s.id)
 			slots.Lock()
 			delete(slots.m, slotkey)
 			slots.Unlock()
@@ -225,7 +233,7 @@ func server(args ...string) {
 	}
 	ssrv := &http.Server{
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 20 * time.Minute,
+		WriteTimeout: 60 * time.Minute,
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpsaddr,
 		Handler:      http.HandlerFunc(serveHTTP),
@@ -233,7 +241,7 @@ func server(args ...string) {
 	}
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 20 * time.Minute,
+		WriteTimeout: 60 * time.Minute,
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpaddr,
 		Handler:      m.HTTPHandler(http.HandlerFunc(serveHTTP)),

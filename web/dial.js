@@ -30,11 +30,12 @@ export let newwormhole = async (pc, pass) => {
 		throw "couldn't reach signalling server";
 	}
 	let slot = response.headers.get("location").slice(1); // remove leading slash
-	return [slot, new Promise(async (r, reject) => {
+
+	let cont = async () => {
 		let msg = await response.json();
 		let key = cryptowrap.finish(msg.msgB);
 		if (key == null) {
-			reject("couldn't generate key");
+			throw "couldn't generate key";
 		}
 		let jsonoffer = cryptowrap.open(key, msg.offer)
 		if (jsonoffer == null) {
@@ -44,8 +45,7 @@ export let newwormhole = async (pc, pass) => {
 				body: JSON.stringify({answer:cryptowrap.seal(key,"bye")}),
 				headers: {'If-Match': response.headers.get('ETag')}
 			});
-			reject("bad key");
-			return;
+			throw "bad key";
 		}
 		let offer = JSON.parse(jsonoffer);
 		await pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -53,11 +53,12 @@ export let newwormhole = async (pc, pass) => {
 		await candidates;
 		await fetch(signalserver+slot, {
 			method: 'DELETE',
-			body: JSON.stringify({answer:cryptowrap.seal(key, JSON.stringify(pc.localDescription))}), // probably ok
+			body: JSON.stringify({answer:cryptowrap.seal(key, JSON.stringify(pc.localDescription))}),
 			headers: {'If-Match': response.headers.get('ETag')}
 		});
-		r();
-	})];
+	}
+
+	return [slot, cont()];
 }
 
 // dial joins a wormhole, the B side.

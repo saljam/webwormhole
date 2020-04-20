@@ -2,9 +2,6 @@ import { goready, newwormhole, dial } from './dial.js';
 import { genpassword } from './wordlist.js';
 
 // TODO multiple streams.
-// TODO have less of a global mess here. Maybe a "transfers" object for
-// transfers in progress? Each could be mapped to a different datachannel
-// there too, new object instantiated by ondatachannel callback.
 let receiving;
 let sending;
 let datachannel;
@@ -182,12 +179,9 @@ let connect = async e => {
 			await dial(pc, slot, pass);
 		}
 	} catch (err) {
-		console.log("handshake error:", err);
 		disconnected();
 		if (err == "bad key") {
 			document.getElementById("info").innerHTML = "BAD KEY TRY AGAIN";
-		} else if (err == "// TODO TIMEOUT / CANCELLATION") {
-			document.getElementById("info").innerHTML = "TIMED OUT TRY AGAIN";
 		} else {
 			document.getElementById("info").innerHTML = "COULD NOT CONNECT TRY AGAIN";
 		}

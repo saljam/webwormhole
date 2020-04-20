@@ -158,8 +158,6 @@ func (c *Conn) a(pass string) error {
 	//   a) The password is randomly generated and ephemeral.
 	//   b) A peer only gets one guess.
 	// An unintended destination is likely going to fail PAKE.
-	// TODO consider adding extra round trip to signalling server to "book" a slot
-	// and use that + signalling server generated nonce in the context info?
 	msgA, pake, err := cpace.Start(pass, cpace.NewContextInfo("", "", nil))
 	resp, status, err := c.put(exchange{
 		MsgA: base64.URLEncoding.EncodeToString(msgA),
@@ -384,7 +382,6 @@ func dial(slot, pass string, sigserv string, iceserv []string, slotnamec chan st
 	c.d.OnBufferedAmountLow(c.flushed)
 	// Any threshold amount >= 1MiB seems to occasionally lock up pion.
 	// Choose 512 KiB as a safe default.
-	// TODO look into why.
 	c.d.SetBufferedAmountLowThreshold(512 << 10)
 
 	// Start the handshake

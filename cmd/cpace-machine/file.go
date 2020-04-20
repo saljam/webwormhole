@@ -31,7 +31,7 @@ func receive(args ...string) {
 		set.PrintDefaults()
 	}
 	length := set.Int("length", 2, "length of generated secret, if generating")
-	directory := set.String("directory", ".", "directory to put downloaded files")
+	directory := set.String("dir", ".", "directory to put downloaded files")
 	set.Parse(args[1:])
 
 	if set.NArg() > 1 {

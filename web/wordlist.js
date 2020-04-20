@@ -1,9 +1,8 @@
 export let genpassword = length => {
 	let words = [];
+	let bytes = crypto.getRandomValues(new Uint8Array(length));
 	for (let i = 0; i < length; i++) {
-		// TODO use crypto random?
-		let b = Math.floor(Math.random() * 255);
-		words.push(wordlist[(b*2)+(i%2)]);
+		words.push(wordlist[(bytes[i]*2)+(bytes[i]%2)]);
 	}
 	return words.join("-");
 }
