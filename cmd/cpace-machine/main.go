@@ -23,7 +23,7 @@ var subcmds = map[string]func(args ...string){
 
 var (
 	iceserv = flag.String("ice", "stun:stun.l.google.com:19302", "stun or turn servers to use")
-	sigserv = flag.String("minsig", "https://minimumsignal.0f.io/", "signalling server to use")
+	sigserv = flag.String("minsig", "https://cpace-machine.0f.io/", "signalling server to use")
 )
 
 func usage() {
