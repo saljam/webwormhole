@@ -1,4 +1,4 @@
-const signalserver = "https://minimumsignal.0f.io/";
+const signalserver = "/"; // relative URL, no CORS.
 
 // TODO something nicer than this global?
 // https://github.com/golang/go/issues/25612
@@ -40,7 +40,7 @@ export let newwormhole = async (pc, pass) => {
 		if (jsonoffer == null) {
 			// Auth failed.
 			// TODO We should still send a response so the other side knows.
-			await fetch(signalserver + `${slot}`, {
+			await fetch(signalserver+slot, {
 				method: 'DELETE',
 				body: JSON.stringify({answer:cryptowrap.seal(key,"bye")}),
 				headers: {'If-Match': response.headers.get('ETag')}
@@ -52,7 +52,7 @@ export let newwormhole = async (pc, pass) => {
 		await pc.setRemoteDescription(new RTCSessionDescription(offer));
 		await pc.setLocalDescription(await pc.createAnswer());
 		await candidates;
-		await fetch(signalserver + `${slot}`, {
+		await fetch(signalserver+slot, {
 			method: 'DELETE',
 			body: JSON.stringify({answer:cryptowrap.seal(key, JSON.stringify(pc.localDescription))}), // probably ok
 			headers: {'If-Match': response.headers.get('ETag')}
@@ -66,7 +66,7 @@ export let dial = async (pc, slot, pass) => {
 	let candidates = collectcandidates(pc);
 	const controller = new AbortController();
 	const { signal } = controller;
-	let response = await fetch(`https://minimumsignal.0f.io/${slot}`, {
+	let response = await fetch(signalserver+slot, {
 		signal,
 		method: 'PUT', // TODO dummy until server supports GET here
 		body: ""
@@ -82,7 +82,7 @@ export let dial = async (pc, slot, pass) => {
 	}
 	await pc.setLocalDescription(await pc.createOffer())
 	await candidates;
-	response = await fetch(signalserver + `${slot}`, {
+	response = await fetch(signalserver+slot, {
 		method: 'PUT',
 		body: JSON.stringify({
 			msgB,
