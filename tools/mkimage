@@ -1,0 +1,7 @@
+#!/bin/bash
+name="cpace-machine-$(date -u +%Y%m%d%H%M%S)"
+dir="$(mktemp -d)"
+#rm -rf $dir
+docker build -f tools/Dockerfile -t cpace-machine .
+linuxkit build -format raw-bios -dir $dir tools/linuxkit.yaml
+mv "$dir/linuxkit-bios.img" "$HOME/Desktop/$name.img"

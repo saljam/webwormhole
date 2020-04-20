@@ -1,6 +1,8 @@
 FROM golang:alpine as build
-COPY . /src
 WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . /src
 RUN cp -r ./web /web
 RUN cp $(go env GOROOT)/misc/wasm/wasm_exec.js /web/wasm_exec.js
 RUN GOOS=js GOARCH=wasm go build -o /web/cryptowrap.wasm ./web
