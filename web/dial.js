@@ -39,7 +39,6 @@ export let newwormhole = async (pc, pass) => {
 		let jsonoffer = cryptowrap.open(key, msg.offer)
 		if (jsonoffer == null) {
 			// Auth failed.
-			// TODO We should still send a response so the other side knows.
 			await fetch(signalserver+slot, {
 				method: 'DELETE',
 				body: JSON.stringify({answer:cryptowrap.seal(key,"bye")}),
@@ -64,15 +63,8 @@ export let newwormhole = async (pc, pass) => {
 // dial joins a wormhole, the B side.
 export let dial = async (pc, slot, pass) => {
 	let candidates = collectcandidates(pc);
-	const controller = new AbortController();
-	const { signal } = controller;
-	let response = await fetch(signalserver+slot, {
-		signal,
-		method: 'PUT', // TODO dummy until server supports GET here
-		body: ""
-	})
-	if (response.status !== 428) {
-		controller.abort();
+	let response = await fetch(signalserver+slot)
+	if (response.status !== 200) {
 		throw "no such slot";
 	}
 	let msg = await response.json();
