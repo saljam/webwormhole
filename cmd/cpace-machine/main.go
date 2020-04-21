@@ -99,23 +99,37 @@ func printurl(code string) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(out, "\n\n")
+	for x := 0; x < qrcode.Size; x++ {
+		fmt.Fprintf(out, "█")
+	}
+	fmt.Fprintf(out, "████████\n")
+	for x := 0; x < qrcode.Size; x++ {
+		fmt.Fprintf(out, "█")
+	}
+	fmt.Fprintf(out, "████████\n")
 	for y := 0; y < qrcode.Size; y += 2 {
-		fmt.Fprintf(out, "    ")
+		fmt.Fprintf(out, "████")
 		for x := 0; x < qrcode.Size; x++ {
 			switch {
 			case qrcode.Black(x, y) && qrcode.Black(x, y+1):
-				fmt.Fprintf(out, "█")
-			case qrcode.Black(x, y):
-				fmt.Fprintf(out, "▀")
-			case qrcode.Black(x, y+1):
-				fmt.Fprintf(out, "▄")
-			default:
 				fmt.Fprintf(out, " ")
+			case qrcode.Black(x, y):
+				fmt.Fprintf(out, "▄")
+			case qrcode.Black(x, y+1):
+				fmt.Fprintf(out, "▀")
+			default:
+				fmt.Fprintf(out, "█")
 			}
 		}
-		fmt.Fprintf(out, "\n")
+		fmt.Fprintf(out, "████\n")
 	}
-	fmt.Fprintf(out, "\n\n")
+	for x := 0; x < qrcode.Size; x++ {
+		fmt.Fprintf(out, "█")
+	}
+	fmt.Fprintf(out, "████████\n")
+	for x := 0; x < qrcode.Size; x++ {
+		fmt.Fprintf(out, "█")
+	}
+	fmt.Fprintf(out, "████████\n")
 	fmt.Fprintf(out, "%s\n", u.String())
 }
