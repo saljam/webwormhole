@@ -62,6 +62,14 @@ body.highlight {
 	display: unset;
 }
 
+#qrCode {
+	display: none;
+	border: 2px solid;
+}
+.dialling #qrCode {
+	display: unset;
+}
+
 #magiccode {
 	margin: 16px;
 	font-size: 2em;

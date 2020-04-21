@@ -174,6 +174,14 @@ let connect = async e => {
 			console.log ("assigned slot", slot, "pass", pass);
 			document.getElementById("magiccode").value = code;
 			location.hash = code;
+
+			// setup the QR code
+			let qrPng = util.qrEncode(location.href);
+			if(qrPng !== null) {
+				// update DOM with png
+				document.getElementById("qrCode").src = URL.createObjectURL(new Blob([qrPng]));
+			}
+
 			await c;
 		} else {
 			dialling();
@@ -232,7 +240,7 @@ let disconnected = () => {
 	document.body.removeEventListener('dragenter', highlight);
 	document.body.removeEventListener('dragover', highlight);
 	document.body.removeEventListener('drop', unhighlight);
-	document.body.removeEventListener('dragleave', unhighlight);	
+	document.body.removeEventListener('dragleave', unhighlight);
 }
 
 let highlight = e => {
