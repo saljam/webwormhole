@@ -12,16 +12,16 @@ line.
 
 On one computer the tool generates a one-time code for us:
 
-	$ shasum file.zip
-	71f2727ffa77002b8e48de6555c6ea810950c1c0  file.zip
-	$ cpace-machine send file.zip
+	$ cat hello.txt
+	hello, world
+	$ cpace-machine send hello.txt
 	8-enlist-decadence
 
 On another we use the code to establish a connection:
 
 	$ cpace-machine receive 8-enlist-decadence
-	$ shasum file.zip
-	71f2727ffa77002b8e48de6555c6ea810950c1c0  file.zip
+	$ cat hello.txt
+	hello, world
 
 It is inspired by and uses a model very similar to that of Magic
 Wormhole. Thanks Brian!
