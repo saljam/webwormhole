@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 
@@ -75,6 +76,11 @@ func newConn(code string, length int) *wormhole.Conn {
 		log.Fatalf("could not create wormhole: %v", err)
 	}
 	fmt.Fprintf(flag.CommandLine.Output(), "%s-%s\n", s, password)
+	u, err := url.Parse(*sigserv)
+	if err == nil {
+		u.Fragment = s + "-" + password
+		fmt.Fprintf(flag.CommandLine.Output(), "%s\n", u.String())
+	}
 	c, err := r()
 	if err != nil {
 		log.Fatalf("could not dial: %v", err)
