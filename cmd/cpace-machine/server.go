@@ -131,6 +131,11 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case s == nil && r.Header.Get("If-Match") == "":
 		// This is a new conversation.
+		if r.Method == http.MethodGet {
+			http.Error(w, "nothing at this slot", http.StatusNotFound)
+			slots.Unlock()
+			return
+		}
 		s = &slot{msg: msg, answer: make(chan []byte), id: strconv.Itoa(rand.Int())}
 		slots.m[slotkey] = s
 		slots.Unlock()
