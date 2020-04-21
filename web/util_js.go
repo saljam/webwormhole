@@ -1,14 +1,14 @@
 // +build js,wasm
 
-// Package cryptowrap is a set of wrappers for crypto functions to be invoked
-// via Web Assembly.
+// Package util is a set of wrappers for crypto (and other) functions to be
+// invoked via Web Assembly.
 //
 // All functions return nil/null on error.
 //
-//	msgA = cryptowrap.start("some pass")
-//	[keyB, msgB] = cryptowrap.exchange("some pass", msgA)
-//	keyA = cryptowrap.finish(msgB)
-//	cryptowrap.open(keyA, cryptowrap.seal(keyB, "hello"))
+//	msgA = util.start("some pass")
+//	[keyB, msgB] = util.exchange("some pass", msgA)
+//	keyA = util.finish(msgB)
+//	util.open(keyA, util.seal(keyB, "hello"))
 package main
 
 import (
@@ -21,6 +21,7 @@ import (
 	"filippo.io/cpace"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/nacl/secretbox"
+	"rsc.io/qr"
 )
 
 // state is the PAKE state so far.
@@ -131,13 +132,26 @@ func seal(_ js.Value, args []js.Value) interface{} {
 	return base64.URLEncoding.EncodeToString(result)
 }
 
+func qrEncode(_ js.Value, args []js.Value) interface{} {
+	// encode("http://asdfasdf#8-sata-wer") -> Bytes (png image)
+	code, err := qr.Encode(args[0].String(), qr.L)
+	if err != nil {
+		return nil
+	}
+	pngBytes := code.PNG()
+	dst := js.Global().Get("Uint8Array").New(len(pngBytes))
+	js.CopyBytesToJS(dst, pngBytes)
+	return dst
+}
+
 func main() {
-	js.Global().Set("cryptowrap", map[string]interface{}{
+	js.Global().Set("util", map[string]interface{}{
 		"start":    js.FuncOf(start),
 		"finish":   js.FuncOf(finish),
 		"exchange": js.FuncOf(exchange),
 		"open":     js.FuncOf(open),
 		"seal":     js.FuncOf(seal),
+		"qrEncode": js.FuncOf(qrEncode),
 	})
 
 	// TODO release functions and exit when done.

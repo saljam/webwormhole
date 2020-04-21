@@ -10,7 +10,7 @@ export let goready = new Promise(async r => {
 		};
 	}
 	const go = new Go();
-	let wasm = await WebAssembly.instantiateStreaming(fetch("cryptowrap.wasm"), go.importObject);
+	let wasm = await WebAssembly.instantiateStreaming(fetch("util.wasm"), go.importObject);
 	go.run(wasm.instance);
 	r();
 });
@@ -18,7 +18,7 @@ export let goready = new Promise(async r => {
 // newwormhole creates wormhole, the A side.
 export let newwormhole = async (pc, pass) => {
 	let candidates = collectcandidates(pc);
-	let msgA = cryptowrap.start(pass)
+	let msgA = util.start(pass)
 	if (msgA == null) {
 		throw "couldn't generate A's PAKE message";
 	}
@@ -33,16 +33,16 @@ export let newwormhole = async (pc, pass) => {
 
 	let cont = async () => {
 		let msg = await response.json();
-		let key = cryptowrap.finish(msg.msgB);
+		let key = util.finish(msg.msgB);
 		if (key == null) {
 			throw "couldn't generate key";
 		}
-		let jsonoffer = cryptowrap.open(key, msg.offer)
+		let jsonoffer = util.open(key, msg.offer)
 		if (jsonoffer == null) {
 			// Auth failed.
 			await fetch(signalserver+slot, {
 				method: 'DELETE',
-				body: JSON.stringify({answer:cryptowrap.seal(key,"bye")}),
+				body: JSON.stringify({answer:util.seal(key,"bye")}),
 				headers: {'If-Match': response.headers.get('ETag')}
 			});
 			throw "bad key";
@@ -53,7 +53,7 @@ export let newwormhole = async (pc, pass) => {
 		await candidates;
 		await fetch(signalserver+slot, {
 			method: 'DELETE',
-			body: JSON.stringify({answer:cryptowrap.seal(key, JSON.stringify(pc.localDescription))}),
+			body: JSON.stringify({answer:util.seal(key, JSON.stringify(pc.localDescription))}),
 			headers: {'If-Match': response.headers.get('ETag')}
 		});
 	}
@@ -69,7 +69,7 @@ export let dial = async (pc, slot, pass) => {
 		throw "no such slot";
 	}
 	let msg = await response.json();
-	let [key, msgB] = cryptowrap.exchange(pass, msg.msgA);
+	let [key, msgB] = util.exchange(pass, msg.msgA);
 	if (key == null) {
 		throw "couldn't generate key";
 	}
@@ -79,12 +79,12 @@ export let dial = async (pc, slot, pass) => {
 		method: 'PUT',
 		body: JSON.stringify({
 			msgB,
-			offer:cryptowrap.seal(key, JSON.stringify(pc.localDescription)) // also probably ok
+			offer:util.seal(key, JSON.stringify(pc.localDescription)) // also probably ok
 		}),
 		headers: {'If-Match': response.headers.get('ETag')}
 	});
 	msg = await response.json();
-	let jsonanswer = cryptowrap.open(key, msg.answer)
+	let jsonanswer = util.open(key, msg.answer)
 	if (jsonanswer == null) {
 		throw "bad key";
 	}
