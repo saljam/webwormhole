@@ -62,11 +62,11 @@ body.highlight {
 	display: unset;
 }
 
-#qrCode {
+#qr {
 	display: none;
 	border: 2px solid;
 }
-.dialling #qrCode {
+.dialling #qr {
 	display: unset;
 }
 

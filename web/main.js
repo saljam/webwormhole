@@ -135,7 +135,7 @@ let receive = e => {
 	if (receiving.offset == receiving.data.length) {
 		let blob = new Blob([receiving.data])
 		let a = document.createElement('a');
-		a.href = window.URL.createObjectURL(blob); // TODO release this?
+		a.href = URL.createObjectURL(blob); // TODO release this?
 		a.download = receiving.name;
 		a.style.display = 'none';
 		document.body.appendChild(a);
@@ -175,11 +175,11 @@ let connect = async e => {
 			document.getElementById("magiccode").value = code;
 			location.hash = code;
 
-			// setup the QR code
-			let qrPng = util.qrEncode(location.href);
-			if(qrPng !== null) {
-				// update DOM with png
-				document.getElementById("qrCode").src = URL.createObjectURL(new Blob([qrPng]));
+			let qr = util.qrencode(location.href);
+			if (qr === null) {
+				document.getElementById("qr").src = "";
+			} else {
+				document.getElementById("qr").src = URL.createObjectURL(new Blob([qr]));
 			}
 
 			await c;

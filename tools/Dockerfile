@@ -5,7 +5,7 @@ RUN go mod download
 COPY . /src
 RUN cp -r ./web /web
 RUN cp $(go env GOROOT)/misc/wasm/wasm_exec.js /web/wasm_exec.js
-RUN GOOS=js GOARCH=wasm go build -o /web/cryptowrap.wasm ./web
+RUN GOOS=js GOARCH=wasm go build -o /web/util.wasm ./web
 RUN go build -o /bin/cpace-machine ./cmd/cpace-machine
 
 FROM alpine:latest

@@ -13,6 +13,7 @@ import (
 
 	"github.com/saljam/cpace-machine/wordlist"
 	"github.com/saljam/cpace-machine/wormhole"
+	"rsc.io/qr"
 )
 
 var subcmds = map[string]func(args ...string){
@@ -24,7 +25,7 @@ var subcmds = map[string]func(args ...string){
 
 var (
 	iceserv = flag.String("ice", "stun:stun.l.google.com:19302", "stun or turn servers to use")
-	sigserv = flag.String("minsig", "https://cpace-machine.0f.io/", "signalling server to use")
+	sigserv = flag.String("signal", "https://cpace-machine.0f.io/", "signalling server to use")
 )
 
 func usage() {
@@ -71,19 +72,50 @@ func newConn(code string, length int) *wormhole.Conn {
 		log.Fatalf("could not generate password: %v", err)
 	}
 	password := strings.Join(wordlist.Encode(passbytes), "-")
-	s, r, err := wormhole.Wormhole(password, *sigserv, strings.Split(*iceserv, ","))
+	slot, dial, err := wormhole.Wormhole(password, *sigserv, strings.Split(*iceserv, ","))
 	if err != nil {
 		log.Fatalf("could not create wormhole: %v", err)
 	}
-	fmt.Fprintf(flag.CommandLine.Output(), "%s-%s\n", s, password)
-	u, err := url.Parse(*sigserv)
-	if err == nil {
-		u.Fragment = s + "-" + password
-		fmt.Fprintf(flag.CommandLine.Output(), "%s\n", u.String())
-	}
-	c, err := r()
+	code = slot + "-" + password
+
+	fmt.Fprintf(flag.CommandLine.Output(), "%s\n", code)
+	printurl(code)
+
+	c, err := dial()
 	if err != nil {
 		log.Fatalf("could not dial: %v", err)
 	}
 	return c
+}
+
+func printurl(code string) {
+	out := flag.CommandLine.Output()
+	u, err := url.Parse(*sigserv)
+	if err != nil {
+		return
+	}
+	u.Fragment = code
+	qrcode, err := qr.Encode(u.String(), qr.L)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(out, "\n\n")
+	for y := 0; y < qrcode.Size; y += 2 {
+		fmt.Fprintf(out, "    ")
+		for x := 0; x < qrcode.Size; x++ {
+			switch {
+			case qrcode.Black(x, y) && qrcode.Black(x, y+1):
+				fmt.Fprintf(out, "█")
+			case qrcode.Black(x, y):
+				fmt.Fprintf(out, "▀")
+			case qrcode.Black(x, y+1):
+				fmt.Fprintf(out, "▄")
+			default:
+				fmt.Fprintf(out, " ")
+			}
+		}
+		fmt.Fprintf(out, "\n")
+	}
+	fmt.Fprintf(out, "\n\n")
+	fmt.Fprintf(out, "%s\n", u.String())
 }

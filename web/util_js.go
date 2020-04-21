@@ -132,15 +132,15 @@ func seal(_ js.Value, args []js.Value) interface{} {
 	return base64.URLEncoding.EncodeToString(result)
 }
 
-func qrEncode(_ js.Value, args []js.Value) interface{} {
-	// encode("http://asdfasdf#8-sata-wer") -> Bytes (png image)
+// qrencode(url string) (png []byte)
+func qrencode(_ js.Value, args []js.Value) interface{} {
 	code, err := qr.Encode(args[0].String(), qr.L)
 	if err != nil {
 		return nil
 	}
-	pngBytes := code.PNG()
-	dst := js.Global().Get("Uint8Array").New(len(pngBytes))
-	js.CopyBytesToJS(dst, pngBytes)
+	png := code.PNG()
+	dst := js.Global().Get("Uint8Array").New(len(png))
+	js.CopyBytesToJS(dst, png)
 	return dst
 }
 
@@ -151,7 +151,7 @@ func main() {
 		"exchange": js.FuncOf(exchange),
 		"open":     js.FuncOf(open),
 		"seal":     js.FuncOf(seal),
-		"qrEncode": js.FuncOf(qrEncode),
+		"qrencode": js.FuncOf(qrencode),
 	})
 
 	// TODO release functions and exit when done.
