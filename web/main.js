@@ -165,17 +165,25 @@ let connect = async e => {
 		if (document.getElementById("magiccode").value === "") {
 			dialling();
 			document.getElementById("info").innerHTML = "WAITING FOR THE OTHER SIDE";
+
+			// TODO move this logic to wormhole package.
 			let pass = genpassword(2);
 			let [slot, c] = await newwormhole(pc, pass);
+			let code = slot + "-" + pass;
+
 			console.log ("assigned slot", slot, "pass", pass);
-			document.getElementById("magiccode").value = slot + "-" + pass;
+			document.getElementById("magiccode").value = code;
+			location.hash = code;
 			await c;
 		} else {
 			dialling();
 			document.getElementById("info").innerHTML = "CONNECTING";
+
+			// TODO move this logic to wormhole package.
 			let [slot, ...passparts] = document.getElementById("magiccode").value.split("-");
 			let pass = passparts.join("-");
 			console.log("dialling slot", slot, "pass", pass);
+
 			await dial(pc, slot, pass);
 		}
 	} catch (err) {
@@ -251,5 +259,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 	document.body.addEventListener('drop', preventdefault);
 	document.body.addEventListener('dragleave', preventdefault);
 	await goready;
+	if (location.hash.substring(1) != "") {
+		document.getElementById("magiccode").value = location.hash.substring(1);
+		connect();
+	}
 	document.getElementById("dial").disabled = false;
 });
