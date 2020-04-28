@@ -1,4 +1,4 @@
-module github.com/saljam/cpace-machine
+module webwormhole.io
 
 go 1.13
 

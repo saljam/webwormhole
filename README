@@ -4,24 +4,22 @@ THIS PROJECT IS STILL IN EARLY DEVELOPMENT, USES EXPERIMENTAL
 CRYPTOGRAPHIC LIBRARIES, AND HAS NOT HAD ANY KIND OF SECURITY OR
 CRYPTOGRAPHY REVIEWS. IT MIGHT BE BROKEN AND UNSAFE.
 
-CPACE-MACHINE
-
 	https://xkcd.com/949/
 
-Cpace Machine creates ephemeral pipes between computers to send
-files or other data. Try it at https://sa.lj.am/cm or on the command
+WebWormhole creates ephemeral pipes between computers to send files
+or other data. Try it at https://webwormhole.io or on the command
 line.
 
 On one computer the tool generates a one-time code for us:
 
 	$ cat hello.txt
 	hello, world
-	$ cpace-machine send hello.txt
+	$ ww send hello.txt
 	8-enlist-decadence
 
 On another we use the code to establish a connection:
 
-	$ cpace-machine receive 8-enlist-decadence
+	$ ww receive 8-enlist-decadence
 	$ cat hello.txt
 	hello, world
 
@@ -41,7 +39,7 @@ its communications.
 
 To install:
 
-	$ go get -u github.com/saljam/cpace-machine/cmd/cpace-machine
+	$ go get -u webwormhole.io/cmd/ww
 
 Unless otherwise noted, the source files are distributed under the
 BSD-style license found in the LICENSE file.

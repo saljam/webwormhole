@@ -217,7 +217,7 @@ func server(args ...string) {
 	rand.Seed(time.Now().UnixNano())
 	set := flag.NewFlagSet(args[0], flag.ExitOnError)
 	set.Usage = func() {
-		fmt.Fprintf(set.Output(), "run the cpace-machine signalling server\n\n")
+		fmt.Fprintf(set.Output(), "run the webwormhole signalling server\n\n")
 		fmt.Fprintf(set.Output(), "usage: %s %s\n\n", os.Args[0], args[0])
 		fmt.Fprintf(set.Output(), "flags:\n")
 		set.PrintDefaults()
@@ -226,7 +226,7 @@ func server(args ...string) {
 	httpsaddr := set.String("https", ":https", "https listen address")
 	whitelist := set.String("hosts", ":https", "comma separated list of hosts for which to request let's encrypt certs")
 	secretpath := set.String("secrets", os.Getenv("HOME")+"/keys", "path to put let's encrypt cache")
-	html := set.String("ui", "/lib/cpace-machine/web", "path to the web interface files")
+	html := set.String("ui", "/lib/webwormhole/web", "path to the web interface files")
 	set.Parse(args[1:])
 
 	fs = http.FileServer(http.Dir(*html))

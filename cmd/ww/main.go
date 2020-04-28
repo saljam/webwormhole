@@ -1,4 +1,4 @@
-// Command cpace-machine is a tool to move files and other data over WebRTC.
+// Command ww is a tool to move files and other data over WebRTC.
 package main
 
 import (
@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/saljam/cpace-machine/wordlist"
-	"github.com/saljam/cpace-machine/wormhole"
+	"webwormhole.io/wordlist"
+	"webwormhole.io/wormhole"
 	"rsc.io/qr"
 )
 
@@ -25,12 +25,12 @@ var subcmds = map[string]func(args ...string){
 
 var (
 	iceserv = flag.String("ice", "stun:stun.l.google.com:19302", "stun or turn servers to use")
-	sigserv = flag.String("signal", "https://cpacemachine.0f.io/", "signalling server to use")
+	sigserv = flag.String("signal", "https://wrmhl.link/", "signalling server to use")
 )
 
 func usage() {
 	w := flag.CommandLine.Output()
-	fmt.Fprintf(w, "cpace-machine creates ephemeral pipes between computers.\n\n")
+	fmt.Fprintf(w, "webwormhole creates ephemeral pipes between computers.\n\n")
 	fmt.Fprintf(w, "usage:\n\n")
 	fmt.Fprintf(w, "  %s [flags] <command> [arguments]\n\n", os.Args[0])
 	fmt.Fprintf(w, "commands:\n")

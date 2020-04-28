@@ -11,9 +11,10 @@
 // PAKE to estabish the authenticity of the WebRTC metadata. In other words,
 // it's a clone of Magic Wormhole made to use WebRTC as the transport.
 //
-// The protocol requires a signalling server that facilitates exchanging arbitrary
-// messages via a slot system. cpace-machine-server is an implementation of the
-// server side.
+// The protocol requires a signalling server that facilitates exchanging
+// arbitrary messages via a slot system. The server subcommand of the
+// ww tool is an implementation of the server side.
+//
 //
 // Rough sketch of the handshake:
 //

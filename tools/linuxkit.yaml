@@ -20,11 +20,11 @@ onboot:
 services:
   - name: rngd
     image: linuxkit/rngd:v0.6
-  - name: cpace-machine
-    image: cpace-machine:latest
+  - name: webwormhole
+    image: webwormhole:latest
     capabilities:
       - CAP_NET_BIND_SERVICE
-    command: ["/bin/cpace-machine", "server", "-hosts", "cpacemachine.0f.io,oursink.com,bitfro.st,webwormhole.io,wrmhl.link"]
+    command: ["/bin/ww", "server", "-hosts", "cpacemachine.0f.io,oursink.com,bitfro.st,webwormhole.io,wrmhl.link"]
     binds:
       - /etc/resolv.conf:/etc/resolv.conf
   - name: sshd
