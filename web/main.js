@@ -285,7 +285,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 	}
 	if (location.hash.substring(1) != "") {
 		document.getElementById("magiccode").value = location.hash.substring(1);
-		connect();
+		if (/iPad|iPhone|iPod/.test(navigator.userAgent) &&
+			!(window.innerWidth == 414 ||
+				window.innerWidth == 375 ||
+				window.innerWidth == 320 ||
+				window.innerWidth == 1024 ||
+				window.innerWidth == 768)) {
+			// Work around iOS trying to connect when the link is previewed.
+			// You never saw this.
+		} else {
+			connect();
+		}
 	}
 	document.getElementById("dial").disabled = false;
 });
