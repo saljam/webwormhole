@@ -24,6 +24,10 @@ body.highlight {
 	background: radial-gradient(#801384 0%, #170926 100%);
 }
 
+#magiccode {
+	color: #80d5d7;
+}
+
 .connected .stars {
 	display: none;
 }
