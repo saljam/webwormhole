@@ -278,6 +278,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 	document.body.addEventListener('drop', preventdefault);
 	document.body.addEventListener('dragleave', preventdefault);
 	await goready;
+	if (document.getElementById("magiccode").value === "") {
+		document.getElementById("dial").value = "NEW WORMHOLE";
+	} else {
+		document.getElementById("dial").value = "JOIN WORMHOLE";
+	}
 	if (location.hash.substring(1) != "") {
 		document.getElementById("magiccode").value = location.hash.substring(1);
 		connect();
