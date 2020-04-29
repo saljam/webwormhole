@@ -164,7 +164,7 @@ let connect = async e => {
 	try {
 		if (document.getElementById("magiccode").value === "") {
 			dialling();
-			document.getElementById("info").innerHTML = "WAITING FOR THE OTHER SIDE";
+			document.getElementById("info").innerHTML = "WAITING FOR THE OTHER SIDE - SHARE CODE OR URL";
 
 			// TODO move this logic to wormhole package.
 			let pass = genpassword(2);
@@ -225,6 +225,8 @@ let connected = () => {
 	document.body.addEventListener('dragleave', unhighlight);
 
 	document.getElementById("info").innerHTML = "OR DRAG FILES TO SEND";
+
+	location.hash = "";
 }
 
 let disconnected = () => {
@@ -241,6 +243,8 @@ let disconnected = () => {
 	document.body.removeEventListener('dragover', highlight);
 	document.body.removeEventListener('drop', unhighlight);
 	document.body.removeEventListener('dragleave', unhighlight);
+
+	location.hash = "";
 }
 
 let highlight = e => {
@@ -258,6 +262,13 @@ let preventdefault = e => {
 
 document.addEventListener('DOMContentLoaded', async () => {
 	document.getElementById("magiccode").value = "";
+	document.getElementById("magiccode").addEventListener('input', ()=>{
+		if (document.getElementById("magiccode").value === "") {
+			document.getElementById("dial").value = "NEW WORMHOLE";
+		} else {
+			document.getElementById("dial").value = "JOIN WORMHOLE";
+		}
+	});
 	document.getElementById("filepicker").addEventListener('change', pick);
 	document.getElementById("dialog").addEventListener('submit', preventdefault);
 	document.getElementById("dialog").addEventListener('submit', connect);

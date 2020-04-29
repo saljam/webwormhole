@@ -11,6 +11,7 @@ body, body.disconnected, body.dialling {
 	overflow-x: hidden;
 	overflow-y: hidden;
 	background: #801384;
+	color: #80d5d7;
 	background: radial-gradient(ellipse at bottom, #801384 0%, #170926 100%);
 }
 body.connected {
@@ -51,6 +52,7 @@ body.highlight {
 	position: absolute;
 	left: 0;
 	top: 0;
+	z-index: -1;
 }
 
 .stars .large {

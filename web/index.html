@@ -7,15 +7,20 @@
 <link rel="stylesheet" href="dark.css" media="(prefers-color-scheme: dark)">
 <script src="wasm_exec.js"></script>
 <script type="module" src="main.js"></script>
-<title>CPACE-MACHINE</title>
+<title>WEBWORMHOLE</title>
 <body>
 <form id="dialog">
-<div><label id="filepicker-wrap" class="button"><input type="file" id="filepicker">OPEN</label><p id="info">TYPE WORMHOLE CODE OR LEAVE EMPTY TO GENERATE A NEW ONE</p></div>
+<div><label id="filepicker-wrap" class="button"><input type="file" id="filepicker">OPEN</label><p id="info">WEB WORMHOLE LETS YOU SEND FILES FROM ONE PLACE TO ANOTHER</p></div>
 <ul id="transfers"></ul>
-<input type="text" id="magiccode" placeholder="CODE">
 <img id="qr">
-<input type="submit" id="dial" value="CONNECT" autocomplete="off" disabled>
+<input type="submit" id="dial" value="NEW WORMHOLE" disabled>
+<input type="text" id="magiccode" autocomplete="off" placeholder="GOT A CODE? TYPE HERE">
 </form>
+
+<footer>
+<a href="https://github.com/saljam/webwormhole">github.com/saljam/webwormhole</a>
+<span>go get webwormhole.io/cmd/ww</span>
+</footer>
 
 <div class="stars"><div class="small"></div><div class="medium"></div><div class="large"></div></div>
 <div class="rings"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>

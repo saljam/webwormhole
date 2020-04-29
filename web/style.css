@@ -4,6 +4,7 @@ html {
 }
 body {
 	display: flex;
+	flex-direction: column;
 	justify-content: center;
 	align-items: stretch;
 	padding: 0;
@@ -30,11 +31,25 @@ body.highlight {
 	background: #e6ffde;
 }
 
+footer {
+	flex-shrink: 0;
+	display: flex;
+	justify-content: space-between;
+	flex-wrap: wrap;
+}
+footer a, footer span {
+	margin: 0 auto;
+}
+.connected footer {
+	display: none;
+}
+
 #dialog {
 	display: flex;
 	flex-flow: column;
 	align-items: center;
 	justify-content: center;
+	flex: 1 0 auto;
 }
 .connected #dialog {
 	justify-content: space-between;
@@ -67,20 +82,20 @@ body.highlight {
 	display: none;
 	border: 2px solid;
 }
-.dialling #qr {
+.dialling #qr[src] {
 	display: unset;
 }
 
 #magiccode {
 	margin: 16px;
-	font-size: 2em;
+	font-size: 1.4em;
 	text-align: center;
 	border-style: none;
 	color: #2f6b6c;
 	border-bottom: solid;
 	background: none;
 	width: 80%;
-	max-width: 12em;
+	max-width: 16em;
 }
 .connected #filepicker {
 	font-size: 1.5em;
@@ -88,7 +103,7 @@ body.highlight {
 
 #dial {
 	font-size: 1em;
-	appearance: none;
+	-webkit-appearance: none !important;
 }
 .connected #dial {
 	display: none;
@@ -117,4 +132,19 @@ input[type="submit"]:disabled, .button:disabled, input[type="submit"]:disabled:h
 	color: #aeac9c;
 	letter-spacing: unset;
 	cursor: unset;
+}
+
+a {
+	text-decoration: none;
+}
+a:link {
+	color: FireBrick;
+	border-bottom: 1px dotted;
+}
+a:visited {
+	color: RosyBrown;
+	border-bottom: 1px dotted;
+}
+a:link:hover, a:visited:hover {
+	border-bottom: 1px solid;
 }
