@@ -4,6 +4,6 @@ name="webwormhole-$(date -u +%Y%m%d%H%M%S)"
 dir="$(mktemp -d)"
 trap "rm -rf $dir" EXIT
 
-docker build -f tools/Dockerfile -t webwormhole .
-linuxkit build -format raw-bios -dir $dir tools/linuxkit.yaml
+docker build -f werkzeuge/Dockerfile -t webwormhole .
+linuxkit build -format raw-bios -dir $dir werkzeuge/linuxkit.yaml
 mv "$dir/linuxkit-bios.img" "$HOME/Desktop/$name.img"

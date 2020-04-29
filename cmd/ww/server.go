@@ -24,6 +24,7 @@ import (
 const (
 	maxSlotLength    = 125
 	maxMessageLength = 10 << 10
+	importMeta       = `<meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole"><meta http-equiv="refresh" content="0;URL='https://webwormhole.io'">`
 )
 
 type slot struct {
@@ -75,13 +76,18 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
 	defer cancel()
 
-	if r.Method == http.MethodGet &&
+	if (r.Method == http.MethodGet || r.Method == http.MethodOptions || r.Method == http.MethodHead) &&
 		(r.URL.Path == "/" ||
 			strings.HasSuffix(r.URL.Path, ".html") ||
 			strings.HasSuffix(r.URL.Path, ".css") ||
 			strings.HasSuffix(r.URL.Path, ".js") ||
 			strings.HasSuffix(r.URL.Path, ".wasm")) {
 		fs.ServeHTTP(w, r)
+		return
+	}
+
+	if r.Method == http.MethodGet && r.URL.Query().Get("go-get") == "1" {
+		w.Write([]byte(importMeta))
 		return
 	}
 
