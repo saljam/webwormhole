@@ -28,10 +28,10 @@ body.highlight {
 	display: none;
 }
 
-.dialling .stars {
+/*.dialling .stars {
 	animation: shake 0.5s infinite both;
 	transform: translate(0, 0);
-}
+}*/
 
 @keyframes shake {
 	10%, 90% {
@@ -127,20 +127,25 @@ body.highlight {
 	border: solid 2px;
 	border-radius: 50%;
 	border-color: rgba(41, 101, 102, 0.05);
-	animation: ring var(--cycle) cubic-bezier(.95,.05,.8,.04) 0s normal infinite;
+	/*animation: ring var(--cycle) cubic-bezier(.95,.05,.8,.04) 0s normal infinite;*/
+	display: none;
 	width: 200px;
 	height: 200px;
 }
 .rings div:nth-of-type(1) {
 	animation-delay: calc(-1 * var(--cycle) / 8);
+	transform: scale(1);
 }
 .rings div:nth-of-type(2) {
+	transform: scale(2);
 	animation-delay: calc(-2 * var(--cycle) / 8);
 }
 .rings div:nth-of-type(3) {
+	transform: scale(3);
 	animation-delay: calc(-3 * var(--cycle) / 8);
 }
 .rings div:nth-of-type(4) {
+	transform: scale(4);
 	animation-delay: calc(-4 * var(--cycle) / 8);
 }
 .rings div:nth-of-type(5) {
@@ -177,7 +182,7 @@ body.highlight {
 	bottom: 0;
 	width: 200px;
 	height: 200px;
-	animation: spokes 60s linear infinite; 
+	/*animation: spokes 60s linear infinite;*/
 }
 .connected .spokes div {
 	height: 1000px;
