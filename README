@@ -28,7 +28,7 @@ Wormhole. Thanks Brian!
 
 	https://github.com/warner/magic-wormhole
 
-Cpace Machine differs from Magic Wormhole in that it uses WebRTC
+WebWormhole differs from Magic Wormhole in that it uses WebRTC
 to make the direct peer connections. This allows us to make use of
 WebRTC's NAT traversal tricks, as well as the fact that it can be
 used in browsers. The exchange of session descriptions (offers and
