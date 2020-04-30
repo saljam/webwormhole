@@ -65,7 +65,8 @@ let send = async f => {
 	sending = {f};
 	sending.offset = 0;
 	sending.li = document.createElement('li');
-	sending.li.innerHTML = `↑ ${f.name} <progress>`;
+	sending.li.appendChild(document.createTextNode(`↑ ${f.name}`));
+	sending.li.appendChild(document.createElement(`progress`));
 	sending.progress = sending.li.getElementsByTagName("progress")[0];
 	document.getElementById("transfers").appendChild(sending.li);
 
@@ -104,7 +105,7 @@ let send = async f => {
 			sending.progress.value = sending.offset / f.size;
 		}
 	}
-	sending.li.innerHTML = `↑ ${f.name}`;
+	sending.li.removeChild(sending.progress);
 	sending = null;
 }
 
@@ -118,7 +119,8 @@ let receive = e => {
 		receiving.data = new Uint8Array(receiving.size);
 		receiving.offset = 0;
 		receiving.li = document.createElement('li');
-		receiving.li.innerHTML = `↓ ${receiving.name} <progress>`;
+		receiving.li.appendChild(document.createTextNode(`↓ ${receiving.name}`));
+		receiving.li.appendChild(document.createElement('progress'));
 		receiving.progress = receiving.li.getElementsByTagName("progress")[0];
 		document.getElementById("transfers").appendChild(receiving.li);
 		return
@@ -141,7 +143,7 @@ let receive = e => {
 		document.body.appendChild(a);
 		a.click();
 		document.body.removeChild(a);
-		receiving.li.innerHTML = `↓ ${receiving.name}`;
+		receiving.li.removeChild(receiving.progress);
 		receiving = null;
 	}
 }
