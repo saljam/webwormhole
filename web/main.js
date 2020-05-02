@@ -1,9 +1,23 @@
 import { goready, newwormhole, dial } from './dial.js';
 
+const SW_PREFIX = '/_';
+
 // TODO multiple streams.
 let receiving;
 let sending;
 let datachannel;
+let downloadServiceWorker; // Service worker managing download urls.
+
+const serviceWorkerInUse = 'serviceWorker' in navigator;
+
+if (serviceWorkerInUse) {
+	navigator.serviceWorker.register('sw.js', {
+		scope: `${SW_PREFIX}/`
+	}).then(function(registration) {
+		// TODO handle updates to service workers.
+		downloadServiceWorker = registration.active || registration.waiting || registration.installing;
+	});
+}
 
 let pick = e => {
 	let files = document.getElementById("filepicker").files;
@@ -108,6 +122,29 @@ let send = async f => {
 	sending = null;
 }
 
+let triggerDownload = receiving => {
+	if (serviceWorkerInUse) {
+		// `<a download=...>` doesn't work with service workers on Chrome yet.
+		// See https://bugs.chromium.org/p/chromium/issues/detail?id=468227
+
+		// Possible solutions:
+
+		// - `window.open` is blocked as a popup.
+		// window.open(`${SW_PREFIX}/${receiving.id}`);
+
+		// - And this is quite scary but `Content-Disposition` to the rescue!
+		//   It will navigate to 404 page if there is no service worker for some reason...
+		//   But if `postMessage` didn't throw we should be safe.
+		window.location = `${SW_PREFIX}/${receiving.id}`;
+
+	} else {
+		let blob = new Blob([receiving.data]);
+		receiving.a.href = URL.createObjectURL(blob);
+		receiving.a.download = receiving.name;
+		receiving.a.click();
+	}
+}
+
 // receive is the new message handler.
 //
 // This function cannot be async without carefully thinking through the
@@ -115,8 +152,12 @@ let send = async f => {
 let receive = e => {
 	if (!receiving) {
 		receiving = JSON.parse(new TextDecoder('utf8').decode(e.data));
-		receiving.data = new Uint8Array(receiving.size);
+		receiving.id = receiving.name +
+			'-' + Math.random().toString(16).substring(2); // Strip leading '0.'.
 		receiving.offset = 0;
+		if (!serviceWorkerInUse)
+			receiving.data = new Uint8Array(receiving.size);
+
 		receiving.li = document.createElement('li');
 		receiving.li.appendChild(document.createElement("a"));
 		receiving.a = receiving.li.getElementsByTagName("a")[0];
@@ -124,22 +165,45 @@ let receive = e => {
 		receiving.li.appendChild(document.createElement('progress'));
 		receiving.progress = receiving.li.getElementsByTagName("progress")[0];
 		document.getElementById("transfers").appendChild(receiving.li);
+
+		if (serviceWorkerInUse) {
+			downloadServiceWorker.postMessage({
+				id: receiving.id,
+				type: 'metadata',
+				name: receiving.name,
+				size: receiving.size
+			});
+			triggerDownload(receiving);
+		}
+
 		return
 	}
 
-	let data = new Uint8Array(e.data)
-	receiving.data.set(data, receiving.offset);
-	receiving.offset += data.length;
+	let chunkSize = e.data.byteLength;
+
+	if (receiving.offset + chunkSize > receiving.size) {
+		let error = "received more bytes than expected";
+		if (serviceWorkerInUse)
+			downloadServiceWorker.postMessage({id: receiving.id, type: 'error', error});
+		throw error;
+	}
+
+	if (serviceWorkerInUse) {
+		downloadServiceWorker.postMessage({id: receiving.id, type: 'data', data: e.data}, [e.data]);
+	} else {
+		receiving.data.set(new Uint8Array(e.data), receiving.offset);
+	}
+
+	receiving.offset += chunkSize;
 	receiving.progress.value = receiving.offset / receiving.size;
 
-	if (receiving.offset > receiving.data.length) {
-		throw "received more bytes than expected";
-	}
-	if (receiving.offset == receiving.data.length) {
-		let blob = new Blob([receiving.data])
-		receiving.a.href = URL.createObjectURL(blob);
-		receiving.a.download = receiving.name;
-		receiving.a.click();
+	if (receiving.offset == receiving.size) {
+		if (serviceWorkerInUse) {
+			downloadServiceWorker.postMessage({id: receiving.id, type: 'end'});
+		} else {
+			triggerDownload(receiving);
+		}
+
 		receiving.li.removeChild(receiving.progress);
 		receiving = null;
 	}
@@ -234,6 +298,9 @@ let disconnected = () => {
 	document.body.removeEventListener('dragleave', unhighlight);
 
 	location.hash = "";
+
+	if (serviceWorkerInUse && receiving)
+		downloadServiceWorker.postMessage({id: receiving.id, type: 'error', error: 'rtc disconnected'});
 }
 
 let highlight = e => {
