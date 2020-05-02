@@ -8,14 +8,14 @@ body {
 	justify-content: center;
 	align-items: stretch;
 	padding: 0;
-	margin: 20px;
+	margin: 10px;
 	flex-grow: 1;
 	font-family: helvetica, sans-serif;
 	color: #2f6b6c;
 	background: #fff;
 	transition: background-color 0.3s;
 }
-body.disconnected {
+body.disconnected, body.error {
 	background:  #ff978c;
 }
 body.dialling {
@@ -69,6 +69,9 @@ footer a, footer span {
 .connected #filepicker-wrap {
 	display: inline-block;
 }
+.connected #filepicker {
+	font-size: 1.5em;
+}
 
 #transfers {
 	margin: 0;
@@ -98,15 +101,15 @@ footer a, footer span {
 	width: 80%;
 	max-width: 16em;
 }
-.connected #filepicker {
-	font-size: 1.5em;
+.error #magiccode {
+	display: none;
 }
 
 #dial {
 	font-size: 1em;
 	-webkit-appearance: none !important;
 }
-.connected #dial {
+.connected #dial, .error #dial {
 	display: none;
 }
 

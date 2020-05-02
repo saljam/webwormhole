@@ -7,7 +7,7 @@ Much of this madness was based on these two examples:
 Thanks!
 */
 
-body, body.disconnected, body.dialling {
+body, body.disconnected, body.dialling, body.error {
 	overflow-x: hidden;
 	overflow-y: hidden;
 	background: #801384;

@@ -5,7 +5,7 @@
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>📠</text></svg>">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="dark.css" media="(prefers-color-scheme: dark)">
-<script src="wasm_exec.js"></script>
+<script defer src="wasm_exec.js"></script>
 <script type="module" src="main.js"></script>
 <title>WEBWORMHOLE</title>
 <body>
@@ -26,3 +26,23 @@
 <div class="stars"><div class="small"></div><div class="medium"></div><div class="large"></div></div>
 <div class="rings"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
 <div class="spokes"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+
+<script>
+// Detect for features we need for this to work.
+if (!("WebSocket" in window) ||
+	!("RTCPeerConnection" in window) ||
+	!("WebAssembly" in window) ||
+	!('noModule' in document.createElement('script'))) {
+	document.getElementById("info").innerHTML = "Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.";
+	document.body.classList.add("error");
+	throw new Error("Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.");
+}
+
+// Work around iOS trying to connect when the link is previewed.
+// You never saw this.
+if (/iPad|iPhone|iPod/.test(navigator.userAgent) &&
+	![320, 375, 414, 768, 1024].includes(window.innerWidth)) {
+	document.getElementById("magiccode").value = location.hash.substring(1);
+	location.hash = "";
+}
+</script>

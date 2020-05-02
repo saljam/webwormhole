@@ -264,7 +264,8 @@ let preventdefault = e => {
 
 document.addEventListener('DOMContentLoaded', async () => {
 	document.getElementById("magiccode").value = "";
-	document.getElementById("magiccode").addEventListener('input', ()=>{
+	document.getElementById("magiccode").addEventListener('input', async ()=>{
+		await goready;
 		if (document.getElementById("magiccode").value === "") {
 			document.getElementById("dial").value = "NEW WORMHOLE";
 		} else {
@@ -287,17 +288,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 	}
 	if (location.hash.substring(1) != "") {
 		document.getElementById("magiccode").value = location.hash.substring(1);
-		if (/iPad|iPhone|iPod/.test(navigator.userAgent) &&
-			!(window.innerWidth == 414 ||
-				window.innerWidth == 375 ||
-				window.innerWidth == 320 ||
-				window.innerWidth == 1024 ||
-				window.innerWidth == 768)) {
-			// Work around iOS trying to connect when the link is previewed.
-			// You never saw this.
-		} else {
-			connect();
-		}
+		document.getElementById("dial").value = "JOIN WORMHOLE";
+		connect();
+	} else {
+		document.getElementById("dial").disabled = false;
 	}
-	document.getElementById("dial").disabled = false;
 });
