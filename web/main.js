@@ -5,6 +5,14 @@ import { genpassword } from './wordlist.js';
 let receiving;
 let sending;
 let datachannel;
+let downloadServiceWorker; // Service worker managing `/download/...` urls.
+
+navigator.serviceWorker.register('sw.js', {
+	scope: '/download/'
+}).then(function(registration) {
+	// TODO handle updates to service workers.
+	downloadServiceWorker = registration.active || registration.waiting || registration.installing;
+});
 
 let pick = e => {
 	let files = document.getElementById("filepicker").files;
@@ -116,33 +124,58 @@ let send = async f => {
 let receive = e => {
 	if (!receiving) {
 		receiving = JSON.parse(new TextDecoder('utf8').decode(e.data));
-		receiving.data = new Uint8Array(receiving.size);
+		// Maybe there is a better way to identify a single file transfer.
+		receiving.id = document.getElementById("magiccode").value + '-' + Date.now().toString(16);
 		receiving.offset = 0;
 		receiving.li = document.createElement('li');
 		receiving.li.appendChild(document.createTextNode(`↓ ${receiving.name}`));
 		receiving.li.appendChild(document.createElement('progress'));
 		receiving.progress = receiving.li.getElementsByTagName("progress")[0];
 		document.getElementById("transfers").appendChild(receiving.li);
+
+		downloadServiceWorker.postMessage({
+			id: receiving.id,
+			type: 'metadata',
+			name: receiving.name,
+			size: receiving.size
+		});
+
+		// `<a download=...>` doesn't work with service workers on Chrome yet.
+		// See https://bugs.chromium.org/p/chromium/issues/detail?id=468227
+		// let a = document.createElement('a');
+		// a.href = `/download/${receiving.id}`;
+		// a.download = receiving.name;
+		// a.style.display = 'none';
+		// document.body.appendChild(a);
+		// a.click();
+		// document.body.removeChild(a);
+
+		// Possible solutions:
+
+		// - `window.open` is blocked as a popup.
+		// window.open(`/download/${receiving.id}`);
+
+		// - And this is quite scary but `Content-Disposition` to the rescue!
+		//   It will navigate to 404 page if there is no service worker for some reason...
+		//   But if `postMessage` didn't throw we should be safe.
+		window.location = `/download/${receiving.id}`;
+
 		return
 	}
 
-	let data = new Uint8Array(e.data)
-	receiving.data.set(data, receiving.offset);
-	receiving.offset += data.length;
+	receiving.offset += e.data.byteLength;
 	receiving.progress.value = receiving.offset / receiving.size;
 
-	if (receiving.offset > receiving.data.length) {
-		throw "received more bytes than expected";
+	if (receiving.offset > receiving.size) {
+		let error = "received more bytes than expected";
+		downloadServiceWorker.postMessage({id: receiving.id, type: 'error', error});
+		throw error;
 	}
-	if (receiving.offset == receiving.data.length) {
-		let blob = new Blob([receiving.data])
-		let a = document.createElement('a');
-		a.href = URL.createObjectURL(blob); // TODO release this?
-		a.download = receiving.name;
-		a.style.display = 'none';
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
+
+	downloadServiceWorker.postMessage({id: receiving.id, type: 'data', data: e.data}, [e.data]);
+
+	if (receiving.offset == receiving.size) {
+		downloadServiceWorker.postMessage({id: receiving.id, type: 'end'});
 		receiving.li.removeChild(receiving.progress);
 		receiving = null;
 	}
@@ -247,6 +280,8 @@ let disconnected = () => {
 	document.body.removeEventListener('dragleave', unhighlight);
 
 	location.hash = "";
+
+	if (receiving) serviceWorker.postMessage({id: receiving.id, type: 'error', error: 'rtc disconnected'});
 }
 
 let highlight = e => {
