@@ -4,7 +4,7 @@ THIS PROJECT IS STILL IN EARLY DEVELOPMENT, USES EXPERIMENTAL
 CRYPTOGRAPHIC LIBRARIES, AND HAS NOT HAD ANY KIND OF SECURITY OR
 CRYPTOGRAPHY REVIEWS. IT MIGHT BE BROKEN AND UNSAFE.
 
-	https://xkcd.com/949/
+![https://xkcd.com/949/](https://imgs.xkcd.com/comics/file_transfer.png)
 
 WebWormhole creates ephemeral pipes between computers to send files
 or other data. Try it at https://webwormhole.io or on the command
@@ -26,7 +26,7 @@ On another we use the code to establish a connection:
 It is inspired by and uses a model very similar to that of Magic
 Wormhole. Thanks Brian!
 
-	https://github.com/warner/magic-wormhole
+[https://github.com/warner/magic-wormhole](https://github.com/warner/magic-wormhole)
 
 WebWormhole differs from Magic Wormhole in that it uses WebRTC
 to make the direct peer connections. This allows us to make use of
