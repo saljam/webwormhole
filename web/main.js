@@ -119,7 +119,9 @@ let receive = e => {
 		receiving.data = new Uint8Array(receiving.size);
 		receiving.offset = 0;
 		receiving.li = document.createElement('li');
-		receiving.li.appendChild(document.createTextNode(`↓ ${receiving.name}`));
+		receiving.li.appendChild(document.createElement("a"));
+		receiving.a = receiving.li.getElementsByTagName("a")[0];
+		receiving.a.innerHTML = `↓ ${receiving.name}`;
 		receiving.li.appendChild(document.createElement('progress'));
 		receiving.progress = receiving.li.getElementsByTagName("progress")[0];
 		document.getElementById("transfers").appendChild(receiving.li);
@@ -136,13 +138,9 @@ let receive = e => {
 	}
 	if (receiving.offset == receiving.data.length) {
 		let blob = new Blob([receiving.data])
-		let a = document.createElement('a');
-		a.href = URL.createObjectURL(blob); // TODO release this?
-		a.download = receiving.name;
-		a.style.display = 'none';
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
+		receiving.a.href = URL.createObjectURL(blob); // TODO release this?
+		receiving.a.download = receiving.name;
+		receiving.a.click();
 		receiving.li.removeChild(receiving.progress);
 		receiving = null;
 	}
