@@ -1,5 +1,8 @@
 package main
 
+//go:generate sh -c "GOOS=js GOARCH=wasm go build -o ../../web/util.wasm ../../web"
+//go:generate sh -c "cp $(go env GOROOT)/misc/wasm/wasm_exec.js ../../web/"
+
 // This is the signalling server. It holds messages between peers wishing to connect.
 
 import (
