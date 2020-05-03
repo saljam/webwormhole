@@ -39,11 +39,11 @@ its communications.
 
 To run locally:
 
-        $ make serve
+    $ make serve
 
 To install:
 
-        $ go get -u webwormhole.io/cmd/ww
+    $ go get -u webwormhole.io/cmd/ww
 
 Unless otherwise noted, the source files are distributed under the
 BSD-style license found in the LICENSE file.
