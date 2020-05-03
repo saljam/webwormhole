@@ -124,8 +124,8 @@ let send = async f => {
 let receive = e => {
 	if (!receiving) {
 		receiving = JSON.parse(new TextDecoder('utf8').decode(e.data));
-		// Maybe there is a better way to identify a single file transfer.
-		receiving.id = document.getElementById("magiccode").value + '-' + Date.now().toString(16);
+		receiving.id = document.getElementById("magiccode").value +
+			'-' + Math.random().toString(16).substring(2); // Strip leading '0.'.
 		receiving.offset = 0;
 		receiving.li = document.createElement('li');
 		receiving.li.appendChild(document.createTextNode(`↓ ${receiving.name}`));
