@@ -12,16 +12,16 @@ line.
 
 On one computer the tool generates a one-time code for us:
 
-	$ cat hello.txt
-	hello, world
-	$ ww send hello.txt
-	8-enlist-decadence
+    $ cat hello.txt
+    hello, world
+    $ ww send hello.txt
+    8-enlist-decadence
 
 On another we use the code to establish a connection:
 
-	$ ww receive 8-enlist-decadence
-	$ cat hello.txt
-	hello, world
+    $ ww receive 8-enlist-decadence
+    $ cat hello.txt
+    hello, world
 
 It is inspired by and uses a model very similar to that of Magic
 Wormhole. Thanks Brian!
@@ -37,9 +37,13 @@ similar to Magic Wormhole. The session descriptions include the
 fingerprints of the DTLS certificates that WebRTC uses to secure
 its communications.
 
+To run locally:
+
+    $ make serve
+
 To install:
 
-	$ go get -u webwormhole.io/cmd/ww
+    $ go get -u webwormhole.io/cmd/ww
 
 Unless otherwise noted, the source files are distributed under the
 BSD-style license found in the LICENSE file.
