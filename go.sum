@@ -8,6 +8,8 @@ dmitri.shuralyov.com/service/change v0.0.0-20181023043359-a85b471d5412/go.mod h1
 dmitri.shuralyov.com/state v0.0.0-20180228185332-28bcc343414c/go.mod h1:0PRwlb0D6DFvNNtx+9ybjezNCa8XF0xaYcETyp6rHWU=
 filippo.io/cpace v0.0.0-20200329174001-6ff507385bae h1:65bv8FFj5QnVm/PiZRT4PyGQ0XmIsnS6OZrNO6IfdGo=
 filippo.io/cpace v0.0.0-20200329174001-6ff507385bae/go.mod h1:b8UFwXF0HGYD8OWBGJEPwu3IMDHqTpzCtGFtY2xRwTU=
+filippo.io/cpace v0.0.0-20200503185815-340c58da85ed h1:+6tV4gCvAW6BbCHa+yrkoo4xlwIb37KKvyBWCFLAHeg=
+filippo.io/cpace v0.0.0-20200503185815-340c58da85ed/go.mod h1:b8UFwXF0HGYD8OWBGJEPwu3IMDHqTpzCtGFtY2xRwTU=
 git.apache.org/thrift.git v0.0.0-20180902110319-2566ecd5d999/go.mod h1:fPE2ZNJGynbRyZ4dJvy6G277gSllfV2HJqblrnkyeyg=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/alangpierce/go-forceexport v0.0.0-20160317203124-8f1d6941cd75 h1:3ILjVyslFbc4jl1w5TWuvvslFD/nDfR2H8tVaMVLrEY=
