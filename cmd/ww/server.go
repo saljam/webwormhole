@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -200,7 +201,7 @@ func server(args ...string) {
 	html := set.String("ui", "./web", "path to the web interface files")
 	set.Parse(args[1:])
 
-	fs := http.FileServer(http.Dir(*html))
+	fs := gziphandler.GzipHandler(http.FileServer(http.Dir(*html)))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/s/", relay)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

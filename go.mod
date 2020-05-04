@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	filippo.io/cpace v0.0.0-20200503185815-340c58da85ed
+	github.com/NYTimes/gziphandler v1.1.1
 	github.com/golang/protobuf v1.3.5 // indirect
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucas-clemente/quic-go v0.15.2 // indirect
