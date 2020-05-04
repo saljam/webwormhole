@@ -11,9 +11,9 @@ import (
 	"os"
 	"strings"
 
+	"rsc.io/qr"
 	"webwormhole.io/wordlist"
 	"webwormhole.io/wormhole"
-	"rsc.io/qr"
 )
 
 var subcmds = map[string]func(args ...string){
@@ -72,24 +72,20 @@ func newConn(code string, length int) *wormhole.Conn {
 		log.Fatalf("could not generate password: %v", err)
 	}
 	password := strings.Join(wordlist.Encode(passbytes), "-")
-	slot, dial, err := wormhole.Wormhole(password, *sigserv, strings.Split(*iceserv, ","))
-	if err != nil {
-		log.Fatalf("could not create wormhole: %v", err)
-	}
-	code = slot + "-" + password
-
-	fmt.Fprintf(flag.CommandLine.Output(), "%s\n", code)
-	printurl(code)
-
-	c, err := dial()
+	slotc := make(chan string)
+	go func() {
+		printcode(<-slotc + "-" + password)
+	}()
+	c, err := wormhole.Wormhole(password, *sigserv, strings.Split(*iceserv, ","), slotc)
 	if err != nil {
 		log.Fatalf("could not dial: %v", err)
 	}
 	return c
 }
 
-func printurl(code string) {
+func printcode(code string) {
 	out := flag.CommandLine.Output()
+	fmt.Fprintf(out, "%s\n", code)
 	u, err := url.Parse(*sigserv)
 	if err != nil {
 		return
