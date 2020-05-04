@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"strings"
@@ -56,20 +55,33 @@ func main() {
 	cmd(flag.Args()...)
 }
 
+func fatalf(format string, v ...interface{}) {
+	fmt.Fprintf(flag.CommandLine.Output(), format+"\n", v...)
+	os.Exit(1)
+}
+
 func newConn(code string, length int) *wormhole.Conn {
 	if code != "" {
 		// Join wormhole.
 		parts := strings.Split(code, "-")
 		c, err := wormhole.Dial(parts[0], strings.Join(parts[1:], "-"), *sigserv, strings.Split(*iceserv, ","))
+		if err == wormhole.ErrBadVersion {
+			fatalf(
+				"%s%s%s",
+				"the signalling server is running an incompatable version.\n",
+				"try upgrading the client:\n\n",
+				"    go get webwormhole.io/cmd/ww\n",
+			)
+		}
 		if err != nil {
-			log.Fatalf("could not dial: %v", err)
+			fatalf("could not dial: %v", err)
 		}
 		return c
 	}
 	// New wormhole.
 	passbytes := make([]byte, length)
 	if _, err := io.ReadFull(crand.Reader, passbytes); err != nil {
-		log.Fatalf("could not generate password: %v", err)
+		fatalf("could not generate password: %v", err)
 	}
 	password := strings.Join(wordlist.Encode(passbytes), "-")
 	slotc := make(chan string)
@@ -77,8 +89,16 @@ func newConn(code string, length int) *wormhole.Conn {
 		printcode(<-slotc + "-" + password)
 	}()
 	c, err := wormhole.Wormhole(password, *sigserv, strings.Split(*iceserv, ","), slotc)
+	if err == wormhole.ErrBadVersion {
+		fatalf(
+			"%s%s%s",
+			"the signalling server is running an incompatable version.\n",
+			"try upgrading the client:\n\n",
+			"    go get webwormhole.io/cmd/ww\n",
+		)
+	}
 	if err != nil {
-		log.Fatalf("could not dial: %v", err)
+		fatalf("could not dial: %v", err)
 	}
 	return c
 }
