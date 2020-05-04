@@ -1,5 +1,4 @@
 import { goready, newwormhole, dial } from './dial.js';
-import { genpassword } from './wordlist.js';
 
 // TODO multiple streams.
 let receiving;
@@ -165,39 +164,29 @@ let connect = async e => {
 		if (document.getElementById("magiccode").value === "") {
 			dialling();
 			document.getElementById("info").innerHTML = "WAITING FOR THE OTHER SIDE - SHARE CODE OR URL";
-
-			// TODO move this logic to wormhole package.
-			let pass = genpassword(2);
-			let [slot, c] = await newwormhole(pc, pass);
-			let code = slot + "-" + pass;
-
-			console.log ("assigned slot", slot, "pass", pass);
+			let [code, finish] = await newwormhole(pc);
 			document.getElementById("magiccode").value = code;
 			location.hash = code;
-
 			let qr = util.qrencode(location.href);
 			if (qr === null) {
 				document.getElementById("qr").src = "";
 			} else {
 				document.getElementById("qr").src = URL.createObjectURL(new Blob([qr]));
 			}
-
-			await c;
+			await finish;
 		} else {
 			dialling();
 			document.getElementById("info").innerHTML = "CONNECTING";
-
-			// TODO move this logic to wormhole package.
-			let [slot, ...passparts] = document.getElementById("magiccode").value.split("-");
-			let pass = passparts.join("-");
-			console.log("dialling slot", slot, "pass", pass);
-
-			await dial(pc, slot, pass);
+			await dial(pc, document.getElementById("magiccode").value);
 		}
 	} catch (err) {
 		disconnected();
 		if (err == "bad key") {
 			document.getElementById("info").innerHTML = "BAD KEY TRY AGAIN";
+		} else if (err == "no such slot") {
+			document.getElementById("info").innerHTML = "NO SUCH SLOT";
+		} else if (err == "timed out") {
+			document.getElementById("info").innerHTML = "CODE TIMED OUT GENERATE ANOTHER";
 		} else {
 			document.getElementById("info").innerHTML = "COULD NOT CONNECT TRY AGAIN";
 		}
