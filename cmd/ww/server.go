@@ -20,16 +20,25 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
+// slotTimeout is the the maximum amount of time a client is allowed to
+// hold a slot.
+const slotTimeout = 30 * time.Minute
+
+// protocolVersion is an identifier for the current signalling scheme.
+// It's intended to help clients print a friendlier message urging them
+// to upgrade.
+const protocolVersion = "3"
+
+const importMeta = `
+<meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole">
+<meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">
+`
+
 // slots is a map of allocated slot numbers.
 var slots = struct {
 	m map[string]chan *websocket.Conn
 	sync.RWMutex
 }{m: make(map[string]chan *websocket.Conn)}
-
-const importMeta = `<doctype html>
-<meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole">
-<meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">
-`
 
 // freeslot tries to find an available numeric slot, favouring smaller numbers.
 // This assume slots is locked.
@@ -70,6 +79,7 @@ func freeslot() (slot string, ok bool) {
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1 << 10,
 	WriteBufferSize: 1 << 10,
+	CheckOrigin:     func(*http.Request) bool { return true },
 }
 
 // relay sets up a rendezvous on a slot and pipes the two websockets together.
@@ -82,7 +92,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), slotTimeout)
 
 	go func() {
 		if slotkey == "" {
@@ -92,7 +102,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				slots.Unlock()
 				conn.WriteControl(
-					websocket.CloseNormalClosure,
+					websocket.CloseMessage,
 					websocket.FormatCloseMessage(http.StatusServiceUnavailable, "can't allocate slots"),
 					time.Now().Add(10*time.Second),
 				)
@@ -193,6 +203,7 @@ func server(args ...string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/s/", relay)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Version", protocolVersion)
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			w.Write([]byte(importMeta))
 			return

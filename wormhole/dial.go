@@ -13,30 +13,22 @@
 //
 // The protocol requires a signalling server that facilitates exchanging
 // arbitrary messages via a slot system. The server subcommand of the
-// ww tool is an implementation of the server side.
-//
+// ww tool is an implementation of this over WebSockets.
 //
 // Rough sketch of the handshake:
 //
-//	Peer A             Signalling Server              Peer B
-//	----PUT /slot if-match:0--->
-//	    pake_msg_a
-//	                             <---PUT /slot if-match:0---
-//	                                 pake_msg_a
-//	                             --status:Conflict etag:X-->
-//	                                 pake_msg_a
-//	                             <---PUT /slot if-match:X---
-//	                                 pake_msg_b+sbox(offer)
-//	<-----status:OK etag:X------
-//	    pake_msg_b+sbox(offer)
-//	--DELETE /slot if-match:X-->
-//	    sbox(answer)
-//	                             ---status:OK etag:X------->
-//	                                 sbox(answer)
+//	Peer               Signalling Server                Peer
+//	----open------------------>
+//	<---new_slot---------------
+//	<-----------------------------------------pake_msg_a----
+//	----pake_msg_b----------------------------------------->
+//	----sbox(offer)---------------------------------------->
+//	<---------------------------------------sbox(answer)----
+//	----sbox(candidates...)-------------------------------->
+//	<--------------------------------sbox(candidates...)----
 package wormhole
 
 import (
-	"bytes"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -44,17 +36,26 @@ import (
 	"errors"
 	"io"
 	"log"
-	"net/http"
 	"net/url"
-	"strings"
+	"path"
 	"sync"
 	"time"
 
 	"filippo.io/cpace"
+	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v2"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/nacl/secretbox"
 )
+
+// protocolVersion is an identifier for the current signalling scheme.
+// It's intended to help clients print a friendlier message urging them
+// to upgrade if the signalling server has a diffect version.
+const protocolVersion = "3"
+
+// ErrBadVersion is returned when the signalling server runs an incompatible
+// version of the signalling protocol.
+var ErrBadVersion = errors.New("bad version")
 
 // Accessing pion/webrtc APIs like DataChannel.Detach() requires
 // that we do this voodoo.
@@ -72,10 +73,8 @@ type Conn struct {
 	d  *webrtc.DataChannel
 	pc *webrtc.PeerConnection
 
-	slot      string
-	slotnamec chan string // optional to return server-chosen slots
-	sigserv   string
-	etag      string
+	// wsaddr is the url to the signalling websocket.
+	wsaddr string
 
 	// opened signals that the underlying DataChannel is open and ready
 	// to handle data.
@@ -141,125 +140,26 @@ func (c *Conn) error(err error) {
 	c.err <- err
 }
 
-// exchange is the container used to send data to signalling server
-type exchange struct {
-	MsgA   string `json:"msgA"`
-	MsgB   string `json:"msgB"`
-	Offer  string `json:"offer"`
-	Answer string `json:"answer"`
-}
-
-func (c *Conn) a(pass string) error {
-	// The identity arguments are to bind endpoint identities in PAKE. Cf. Unknown
-	// Key-Share Attack. https://tools.ietf.org/html/draft-ietf-mmusic-sdp-uks-03
-	//
-	// In the context of a program like magic-wormhole we do not have ahead of time
-	// information on the identity of the remote party. We only have the slot name,
-	// and sometimes even that at this stage. But that's okay, since:
-	//   a) The password is randomly generated and ephemeral.
-	//   b) A peer only gets one guess.
-	// An unintended destination is likely going to fail PAKE.
-	msgA, pake, err := cpace.Start(pass, cpace.NewContextInfo("", "", nil))
-	resp, status, err := c.put(exchange{
-		MsgA: base64.URLEncoding.EncodeToString(msgA),
-	})
+func readEncJSON(ws *websocket.Conn, key *[32]byte, v interface{}) error {
+	_, buf, err := ws.ReadMessage()
 	if err != nil {
 		return err
 	}
-
-	if status == http.StatusPreconditionRequired {
-		// We are actually B.
-		return c.b(pass, resp)
-	}
-	if status != http.StatusOK {
-		return errors.New("a: bad status code")
-	}
-
-	msgB, err := base64.URLEncoding.DecodeString(resp.MsgB)
-	if err != nil {
-		return err
-	}
-	mk, err := pake.Finish(msgB)
-	hkdf := hkdf.New(sha256.New, mk, nil, nil)
-	k := [32]byte{}
-	_, err = io.ReadFull(hkdf, k[:])
-	if err != nil {
-		return err
-	}
-
-	soffer, err := base64.URLEncoding.DecodeString(resp.Offer)
+	encrypted, err := base64.URLEncoding.DecodeString(string(buf))
 	if err != nil {
 		return err
 	}
 	var nonce [24]byte
-	copy(nonce[:], soffer[:24])
-	jsonoffer, ok := secretbox.Open(nil, soffer[24:], &nonce, &k)
+	copy(nonce[:], encrypted[:24])
+	jsonmsg, ok := secretbox.Open(nil, encrypted[24:], &nonce, key)
 	if !ok {
-		// Bad key. Send an answer anyway so the other side knows.
-		if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
-			return err
-		}
-		c.del(exchange{
-			Answer: base64.URLEncoding.EncodeToString(
-				secretbox.Seal(nonce[:], []byte("bad key"), &nonce, &k),
-			),
-		})
 		return errors.New("bad key")
 	}
-	var offer webrtc.SessionDescription
-	err = json.Unmarshal(jsonoffer, &offer)
-	if err != nil {
-		return err
-	}
-	err = c.pc.SetRemoteDescription(offer)
-	if err != nil {
-		return err
-	}
-	answer, err := c.pc.CreateAnswer(nil)
-	if err != nil {
-		return err
-	}
-	err = c.pc.SetLocalDescription(answer)
-	if err != nil {
-		return err
-	}
-	jsonanswer, err := json.Marshal(answer)
-	if err != nil {
-		return err
-	}
-
-	if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
-		return err
-	}
-	return c.del(exchange{
-		Answer: base64.URLEncoding.EncodeToString(
-			secretbox.Seal(nonce[:], jsonanswer, &nonce, &k),
-		),
-	})
+	return json.Unmarshal(jsonmsg, v)
 }
 
-func (c *Conn) b(pass string, resp exchange) error {
-	msgA, err := base64.URLEncoding.DecodeString(resp.MsgA)
-	if err != nil {
-		return err
-	}
-	offer, err := c.pc.CreateOffer(nil)
-	if err != nil {
-		return err
-	}
-	err = c.pc.SetLocalDescription(offer)
-	if err != nil {
-		return err
-	}
-	jsonoffer, err := json.Marshal(offer)
-	if err != nil {
-		return err
-	}
-
-	msgB, mk, err := cpace.Exchange(pass, cpace.NewContextInfo("", "", nil), msgA)
-	hkdf := hkdf.New(sha256.New, mk, nil, nil)
-	k := [32]byte{}
-	_, err = io.ReadFull(hkdf, k[:])
+func writeEncJSON(ws *websocket.Conn, key *[32]byte, v interface{}) error {
+	jsonmsg, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
@@ -267,105 +167,73 @@ func (c *Conn) b(pass string, resp exchange) error {
 	if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
 		return err
 	}
-	resp, status, err := c.put(exchange{
-		MsgB: base64.URLEncoding.EncodeToString(msgB),
-		Offer: base64.URLEncoding.EncodeToString(
-			secretbox.Seal(nonce[:], jsonoffer, &nonce, &k),
-		),
-	})
-	if status != http.StatusOK {
-		return errors.New("b: bad status code")
-	}
-
-	sanswer, err := base64.URLEncoding.DecodeString(resp.Answer)
-	if err != nil {
-		return err
-	}
-	copy(nonce[:], sanswer[:24])
-	jsonanswer, ok := secretbox.Open(nil, sanswer[24:], &nonce, &k)
-	if !ok {
-		return errors.New("bad key")
-	}
-	var answer webrtc.SessionDescription
-	err = json.Unmarshal(jsonanswer, &answer)
-	if err != nil {
-		return err
-	}
-	return c.pc.SetRemoteDescription(answer)
+	return ws.WriteMessage(
+		websocket.TextMessage,
+		[]byte(base64.URLEncoding.EncodeToString(
+			secretbox.Seal(nonce[:], jsonmsg, &nonce, key),
+		)),
+	)
 }
 
-func (c *Conn) del(e exchange) error {
-	body, err := json.Marshal(e)
+func readBase64(ws *websocket.Conn) ([]byte, error) {
+	_, buf, err := ws.ReadMessage()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodDelete, c.sigserv+c.slot, bytes.NewReader(body))
-	if c.etag != "" {
-		req.Header.Add("If-Match", c.etag)
-	}
-	req.Header.Add("Content-Type", "application/json")
-	r, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	if r.StatusCode != http.StatusOK {
-		return errors.New("bad status code")
-	}
-	return nil
+	return base64.URLEncoding.DecodeString(string(buf))
 }
 
-func (c *Conn) put(e exchange) (ans exchange, status int, err error) {
-	body, err := json.Marshal(e)
-	if err != nil {
-		return ans, 0, err
-	}
-	method := http.MethodPost
-	if c.slot != "" {
-		method = http.MethodPut
-	}
-	req, err := http.NewRequest(method, c.sigserv+c.slot, bytes.NewReader(body))
-	if c.etag != "" {
-		req.Header.Add("If-Match", c.etag)
-	}
-	req.Header.Add("Content-Type", "application/json")
-	r, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return ans, 0, err
-	}
-	c.etag = r.Header.Get("ETag")
-	if r.Header.Get("Location") != "" && c.slot == "" {
-		u, err := url.Parse(r.Header.Get("Location"))
+func writeBase64(ws *websocket.Conn, p []byte) error {
+	return ws.WriteMessage(websocket.TextMessage, []byte(base64.URLEncoding.EncodeToString(p)))
+}
+
+func readString(ws *websocket.Conn) (string, error) {
+	_, buf, err := ws.ReadMessage()
+	return string(buf), err
+}
+
+// addCandidates waits for candidate to trickle in. We close the websocket
+// when we get a successful connection so this should fail and exit at some
+// point.
+func (c *Conn) addCandidates(ws *websocket.Conn, key *[32]byte) {
+	for {
+		var candidate webrtc.ICECandidateInit
+		err := readEncJSON(ws, key, &candidate)
 		if err != nil {
-			return ans, 0, err
+			return
 		}
-		c.slot = strings.TrimPrefix(u.Path, "/")
-		if c.slotnamec != nil {
-			c.slotnamec <- c.slot
+		err = c.pc.AddICECandidate(candidate)
+		if err != nil {
+			return
 		}
 	}
-	err = json.NewDecoder(r.Body).Decode(&ans)
-	return ans, r.StatusCode, err
 }
 
-func dial(slot, pass string, sigserv string, iceserv []string, slotnamec chan string) (*Conn, error) {
-	// TODO refactor this to take in a webrtc.PeerConnection object instead of making one?
+func newConn(sigserv string, iceserv []string) (*Conn, error) {
 	c := &Conn{
-		slot:      slot,
-		slotnamec: slotnamec,
-		sigserv:   sigserv,
-		opened:    make(chan struct{}),
-		err:       make(chan error),
-		flushc:    sync.NewCond(&sync.Mutex{}),
+		opened: make(chan struct{}),
+		err:    make(chan error),
+		flushc: sync.NewCond(&sync.Mutex{}),
 	}
+
+	u, err := url.Parse(sigserv)
+	if err != nil {
+		return nil, err
+	}
+	if u.Scheme == "http" || u.Scheme == "ws" {
+		u.Scheme = "ws"
+	} else {
+		u.Scheme = "wss"
+	}
+	u.Path = path.Join(u.Path, "/s/")
+	c.wsaddr = u.String()
 
 	rtccfg := webrtc.Configuration{}
-	// TODO parse creds for turn servers
 	for i := range iceserv {
 		if iceserv[i] != "" {
 			rtccfg.ICEServers = append(rtccfg.ICEServers, webrtc.ICEServer{URLs: []string{iceserv[i]}})
 		}
 	}
-	var err error
 	c.pc, err = rtcapi.NewPeerConnection(rtccfg)
 	if err != nil {
 		return nil, err
@@ -385,42 +253,86 @@ func dial(slot, pass string, sigserv string, iceserv []string, slotnamec chan st
 	// Choose 512 KiB as a safe default.
 	c.d.SetBufferedAmountLowThreshold(512 << 10)
 
-	// Start the handshake
-	err = c.a(pass)
+	return c, nil
+}
+
+// Wormhole is like Dial, but asks the signalling server to assign it a slot
+// and writes it to slotc as soon as it gets it.
+func Wormhole(pass string, sigserv string, iceserv []string, slotc chan string) (*Conn, error) {
+	c, err := newConn(sigserv, iceserv)
+	if err != nil {
+		return nil, err
+	}
+	ws, r, err := websocket.DefaultDialer.Dial(c.wsaddr+"/", nil)
+	if err != nil {
+		if r != nil && r.Header.Get("X-Version") != protocolVersion {
+			return nil, ErrBadVersion
+		}
+		return nil, err
+	}
+
+	slot, err := readString(ws)
+	if err != nil {
+		return nil, err
+	}
+	slotc <- slot
+
+	msgA, err := readBase64(ws)
 	if err != nil {
 		return nil, err
 	}
 
-	select {
-	case <-c.opened:
-		return c, nil
-	case err := <-c.err:
+	msgB, mk, err := cpace.Exchange(pass, cpace.NewContextInfo("", "", nil), msgA)
+	if err != nil {
+		return nil, err
+	}
+	key := [32]byte{}
+	_, err = io.ReadFull(hkdf.New(sha256.New, mk, nil, nil), key[:])
+	if err != nil {
+		return nil, err
+	}
+	err = writeBase64(ws, msgB)
+	if err != nil {
 		return nil, err
 	}
 
-	return c, nil
-}
+	offer, err := c.pc.CreateOffer(nil)
+	if err != nil {
+		return nil, err
+	}
+	err = c.pc.SetLocalDescription(offer)
+	if err != nil {
+		return nil, err
+	}
+	err = writeEncJSON(ws, &key, offer)
+	if err != nil {
+		return nil, err
+	}
 
-// Wormhole is like Dial, but asks the signalling server to assign it a slot.
-//
-// On success it returns a slot name and a function to resume dialling.
-func Wormhole(pass string, sigserv string, iceserv []string) (slot string, resume func() (*Conn, error), err error) {
-	slotnamec := make(chan string)
-	done := make(chan struct{})
-	var c *Conn
-	go func() {
-		c, err = dial("", pass, sigserv, iceserv, slotnamec)
-		close(done)
-	}()
-	resume = func() (*Conn, error) {
-		<-done
-		return c, err
+	var answer webrtc.SessionDescription
+	err = readEncJSON(ws, &key, &answer)
+	if err != nil {
+		return nil, err
 	}
+	err = c.pc.SetRemoteDescription(answer)
+	if err != nil {
+		return nil, err
+	}
+
+	go c.addCandidates(ws, &key)
+
+	// TODO put a timeout here.
 	select {
-	case slot = <-slotnamec:
-	case <-done:
+	case <-c.opened:
+	case err = <-c.err:
 	}
-	return
+
+	ws.WriteControl(
+		websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "done"),
+		time.Now().Add(10*time.Second),
+	)
+	return c, err
 }
 
 // Dial returns an established WebRTC data channel to a peer.
@@ -431,5 +343,85 @@ func Wormhole(pass string, sigserv string, iceserv []string) (slot string, resum
 //
 // iceserv is an optional list of STUN and TURN URLs to use for NAT traversal.
 func Dial(slot, pass string, sigserv string, iceserv []string) (*Conn, error) {
-	return dial(slot, pass, sigserv, iceserv, nil)
+	c, err := newConn(sigserv, iceserv)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start the handshake
+	ws, r, err := websocket.DefaultDialer.Dial(c.wsaddr+"/"+slot, nil)
+	if err != nil {
+		if r != nil && r.Header.Get("X-Version") != protocolVersion {
+			return nil, ErrBadVersion
+		}
+		return nil, err
+	}
+
+	// The identity arguments are to bind endpoint identities in PAKE. Cf. Unknown
+	// Key-Share Attack. https://tools.ietf.org/html/draft-ietf-mmusic-sdp-uks-03
+	//
+	// In the context of a program like magic-wormhole we do not have ahead of time
+	// information on the identity of the remote party. We only have the slot name,
+	// and sometimes even that at this stage. But that's okay, since:
+	//   a) The password is randomly generated and ephemeral.
+	//   b) A peer only gets one guess.
+	// An unintended destination is likely going to fail PAKE.
+
+	msgA, pake, err := cpace.Start(pass, cpace.NewContextInfo("", "", nil))
+	err = writeBase64(ws, msgA)
+	if err != nil {
+		return nil, err
+	}
+
+	msgB, err := readBase64(ws)
+	if err != nil {
+		return nil, err
+	}
+	mk, err := pake.Finish(msgB)
+	if err != nil {
+		return nil, err
+	}
+	key := [32]byte{}
+	_, err = io.ReadFull(hkdf.New(sha256.New, mk, nil, nil), key[:])
+	if err != nil {
+		return nil, err
+	}
+
+	var offer webrtc.SessionDescription
+	err = readEncJSON(ws, &key, &offer)
+	if err != nil {
+		return nil, err
+	}
+	err = c.pc.SetRemoteDescription(offer)
+	if err != nil {
+		return nil, err
+	}
+	answer, err := c.pc.CreateAnswer(nil)
+	if err != nil {
+		return nil, err
+	}
+	err = c.pc.SetLocalDescription(answer)
+	if err != nil {
+		return nil, err
+	}
+
+	err = writeEncJSON(ws, &key, answer)
+	if err != nil {
+		return nil, err
+	}
+
+	go c.addCandidates(ws, &key)
+
+	// TODO put a timeout here.
+	select {
+	case <-c.opened:
+	case err = <-c.err:
+	}
+
+	ws.WriteControl(
+		websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "done"),
+		time.Now().Add(10*time.Second),
+	)
+	return c, err
 }
