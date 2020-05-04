@@ -29,7 +29,8 @@ const slotTimeout = 30 * time.Minute
 // to upgrade.
 const protocolVersion = "3"
 
-const importMeta = `
+const importMeta = `<!doctype html>
+<meta charset=utf-8>
 <meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole">
 <meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">
 `

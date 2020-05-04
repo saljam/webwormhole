@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -50,28 +49,28 @@ func receive(args ...string) {
 			break
 		}
 		if err != nil {
-			log.Fatalf("could not read file header: %v", err)
+			fatalf("could not read file header: %v", err)
 		}
 		var h header
 		err = json.Unmarshal(buf[:n], &h)
 		if err != nil {
-			log.Fatalf("could not decode file header: %v", err)
+			fatalf("could not decode file header: %v", err)
 		}
 
 		f, err := os.Create(filepath.Join(*directory, filepath.Clean(h.Name)))
 		if err != nil {
-			log.Fatalf("could not create output file %s: %v", h.Name, err)
+			fatalf("could not create output file %s: %v", h.Name, err)
 		}
-		log.Printf("receiving %v", h.Name)
+		fmt.Fprintf(set.Output(), "receiving %v... ", h.Name)
 		written, err := io.CopyBuffer(f, io.LimitReader(c, int64(h.Size)), make([]byte, msgChunkSize))
 		if err != nil {
-			log.Fatalf("could not save file: %v", err)
+			fatalf("\ncould not save file: %v", err)
 		}
 		if written != int64(h.Size) {
-			log.Fatalf("EOF before receiving all bytes: (%d/%d)", written, h.Size)
+			fatalf("\nEOF before receiving all bytes: (%d/%d)", written, h.Size)
 		}
 		f.Close()
-		log.Printf("done")
+		fmt.Fprintf(set.Output(), "done\n")
 	}
 	c.Close()
 }
@@ -97,11 +96,11 @@ func send(args ...string) {
 	for _, filename := range set.Args() {
 		f, err := os.Open(filename)
 		if err != nil {
-			log.Fatalf("could not open file %s: %v", filename, err)
+			fatalf("could not open file %s: %v", filename, err)
 		}
 		info, err := f.Stat()
 		if err != nil {
-			log.Fatalf("could not stat file %s: %v", filename, err)
+			fatalf("could not stat file %s: %v", filename, err)
 		}
 		h, err := json.Marshal(header{
 			Name: filepath.Base(filepath.Clean(filename)),
@@ -109,18 +108,18 @@ func send(args ...string) {
 		})
 		_, err = c.Write(h)
 		if err != nil {
-			log.Fatalf("could not send file header: %v", err)
+			fatalf("could not send file header: %v", err)
 		}
-		log.Printf("sending %v", filepath.Base(filepath.Clean(filename)))
+		fmt.Fprintf(set.Output(), "sending %v... ", filepath.Base(filepath.Clean(filename)))
 		written, err := io.CopyBuffer(c, f, make([]byte, msgChunkSize))
 		if err != nil {
-			log.Fatalf("could not send file: %v", err)
+			fatalf("\ncould not send file: %v", err)
 		}
 		if written != info.Size() {
-			log.Fatalf("EOF before sending all bytes: (%d/%d)", written, info.Size())
+			fatalf("\nEOF before sending all bytes: (%d/%d)", written, info.Size())
 		}
 		f.Close()
-		log.Printf("done")
+		fmt.Fprintf(set.Output(), "done\n")
 	}
 	c.Close()
 }
