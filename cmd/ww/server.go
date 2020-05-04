@@ -1,14 +1,12 @@
 package main
 
-// This is the signalling server. It holds messages between peers wishing to connect.
+// This is the signalling server. It relays messages between peers wishing to connect.
 
 import (
 	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -18,25 +16,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const (
-	maxSlotLength    = 125
-	maxMessageLength = 10 << 10
-	importMeta       = `<meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole"><meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">`
-)
-
-type slot struct {
-	msg    []byte
-	answer chan []byte
-	id     string
-}
-
+// slots is a map of allocated slot numbers.
 var slots = struct {
-	m map[string]*slot
+	m map[string]chan *websocket.Conn
 	sync.RWMutex
-}{m: make(map[string]*slot)}
+}{m: make(map[string]chan *websocket.Conn)}
+
+const importMeta = `<doctype html>
+<meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole">
+<meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">
+`
 
 // freeslot tries to find an available numeric slot, favouring smaller numbers.
 // This assume slots is locked.
@@ -62,165 +55,126 @@ func freeslot() (slot string, ok bool) {
 			return s, true
 		}
 	}
+	// Try a 3-byte number.
+	for i := 0; i < 1024; i++ {
+		s := strconv.Itoa(rand.Intn(1 << 24))
+		if _, ok := slots.m[s]; !ok {
+			return s, true
+		}
+	}
 	// Give up.
 	return "", false
 }
 
-var fs http.Handler
+// upgrader is a used to start WebSocket connections.
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1 << 10,
+	WriteBufferSize: 1 << 10,
+}
 
-func serveHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "PUT, POST, DELETE")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, If-Match")
-	w.Header().Set("Access-Control-Expose-Headers", "Etag, Location")
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
-	defer cancel()
-
-	if (r.Method == http.MethodGet || r.Method == http.MethodOptions || r.Method == http.MethodHead) &&
-		(r.URL.Path == "/" ||
-			strings.HasSuffix(r.URL.Path, ".html") ||
-			strings.HasSuffix(r.URL.Path, ".css") ||
-			strings.HasSuffix(r.URL.Path, ".js") ||
-			strings.HasSuffix(r.URL.Path, ".wasm")) {
-		fs.ServeHTTP(w, r)
-		return
-	}
-
-	if r.Method == http.MethodGet && (r.URL.Query().Get("go-get") == "1" || r.URL.Path == "cmd/ww") {
-		w.Write([]byte(importMeta))
-		return
-	}
-
-	if r.Method == http.MethodOptions {
-		return
-	}
-
-	slotkey := strings.TrimPrefix(r.URL.Path, "/")
-	msg, err := ioutil.ReadAll(&io.LimitedReader{
-		R: r.Body,
-		N: maxMessageLength,
-	})
+// relay sets up a rendezvous on a slot and pipes the two websockets together.
+func relay(w http.ResponseWriter, r *http.Request) {
+	slotkey := r.URL.Path[len("/s/"):]
+	var rconn *websocket.Conn
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		http.Error(w, "could not read body", http.StatusBadRequest)
-		return
-	}
-	if len(slotkey) > maxSlotLength || strings.Contains(slotkey, "/") {
-		http.Error(w, "not found", http.StatusNotFound)
+		log.Println(err)
 		return
 	}
 
-	if r.Method == http.MethodPost && slotkey != "" {
-		http.Error(w, "not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
 
-	if r.Method != http.MethodGet && r.Method != http.MethodPut &&
-		r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		http.Error(w, "not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	slots.Lock()
-	if slotkey == "" && r.Method == http.MethodPost {
-		var ok bool
-		slotkey, ok = freeslot()
+	go func() {
+		if slotkey == "" {
+			// Book a new slot.
+			slots.Lock()
+			newslot, ok := freeslot()
+			if !ok {
+				slots.Unlock()
+				conn.WriteControl(
+					websocket.CloseNormalClosure,
+					websocket.FormatCloseMessage(http.StatusServiceUnavailable, "can't allocate slots"),
+					time.Now().Add(10*time.Second),
+				)
+				return
+			}
+			slotkey = newslot
+			sc := make(chan *websocket.Conn)
+			slots.m[slotkey] = sc
+			slots.Unlock()
+			log.Printf("%s book", slotkey)
+			err = conn.WriteMessage(websocket.TextMessage, []byte(slotkey))
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			select {
+			case <-ctx.Done():
+				log.Printf("%s timeout", slotkey)
+				slots.Lock()
+				delete(slots.m, slotkey)
+				slots.Unlock()
+				conn.WriteControl(
+					websocket.CloseMessage,
+					websocket.FormatCloseMessage(http.StatusRequestTimeout, "timed out"),
+					time.Now().Add(10*time.Second),
+				)
+				return
+			case sc <- conn:
+			}
+			rconn = <-sc
+			log.Printf("%s rendezvous", slotkey)
+			return
+		}
+		// Join an existing slot.
+		slots.Lock()
+		sc, ok := slots.m[slotkey]
 		if !ok {
 			slots.Unlock()
-			http.Error(w, "couldn't find an available slot", http.StatusServiceUnavailable)
+			conn.WriteControl(
+				websocket.CloseMessage,
+				websocket.FormatCloseMessage(http.StatusNotFound, "no such slot"),
+				time.Now().Add(10*time.Second),
+			)
 			return
 		}
-		r.URL.Path = "/" + slotkey
-		// TODO remember uploaded content-type and set it here.
-		w.Header().Set("Location", r.URL.String())
-	}
-	s := slots.m[slotkey]
-	switch {
-	case s == nil && r.Header.Get("If-Match") == "":
-		// This is a new conversation.
-		if r.Method == http.MethodGet {
-			http.Error(w, "nothing at this slot", http.StatusNotFound)
-			slots.Unlock()
-			return
-		}
-		s = &slot{msg: msg, answer: make(chan []byte), id: strconv.Itoa(rand.Int())}
-		slots.m[slotkey] = s
+		delete(slots.m, slotkey)
 		slots.Unlock()
-		// Set tag and flush, so the client can get the headers including the assigned slot.
-		w.Header().Set("ETag", s.id)
-		w.WriteHeader(http.StatusOK)
-		// Firefox fetch() promise does not resolve unless one byte of the body has been written.
-		// Is there a header to contol this? Chrome does not need this.
-		w.Write([]byte("\n"))
-		w.(http.Flusher).Flush()
-		log.Printf("start %v %v", slotkey, s.id)
+		log.Printf("%s visit", slotkey)
 		select {
-		case a := <-s.answer:
-			log.Printf("answered %v %v", slotkey, s.id)
-			_, err := w.Write(a)
-			if err != nil {
-				log.Printf("%v", err)
-			}
 		case <-ctx.Done():
-			log.Printf("timeout %v %v", slotkey, s.id)
-			slots.Lock()
-			delete(slots.m, slotkey)
-			slots.Unlock()
+			conn.WriteControl(
+				websocket.CloseMessage,
+				websocket.FormatCloseMessage(http.StatusRequestTimeout, "timed out"),
+				time.Now().Add(10*time.Second),
+			)
+		case rconn = <-sc:
 		}
-	case s != nil && r.Header.Get("If-Match") == "":
-		// Already have something in the slot, pass that down.
-		slots.Unlock()
-		w.Header().Set("ETag", s.id)
-		if r.Method == http.MethodPut {
-			w.WriteHeader(http.StatusPreconditionRequired)
-		}
-		_, err := w.Write(s.msg)
+		sc <- conn
+	}()
+
+	defer cancel()
+	for {
+		messageType, p, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("%v", err)
-		}
-	case s != nil && r.Header.Get("If-Match") == s.id:
-		// This is an answer, wake the other go routines up.
-		// TODO optimisation: after receiving the first of these, we can use s.id
-		// to match the messages and free the slot early. Would need another index
-		// to map ids to "sessions".
-		slots.Unlock()
-		w.Header().Set("ETag", s.id)
-		select {
-		case s.answer <- msg:
-		case <-ctx.Done():
-			log.Printf("timeout %v %v", slotkey, s.id)
-			slots.Lock()
-			delete(slots.m, slotkey)
-			slots.Unlock()
-		}
-		if r.Method == http.MethodDelete {
-			log.Printf("end %v %v", slotkey, s.id)
-			slots.Lock()
-			delete(slots.m, slotkey)
-			slots.Unlock()
 			return
 		}
-		select {
-		case a := <-s.answer:
-			log.Printf("answered %v %v", slotkey, s.id)
-			_, err := w.Write(a)
-			if err != nil {
-				log.Printf("%v", err)
-			}
-		case <-ctx.Done():
-			log.Printf("timeout %v %v", slotkey, s.id)
-			slots.Lock()
-			delete(slots.m, slotkey)
-			slots.Unlock()
+		if rconn == nil {
+			// We could synchronise with the rendezvous goroutine above and wait for
+			// B to connect, but receiving anything at this stage is a protocol violation
+			// so we should just bail out.
+			return
 		}
-	default:
-		// Empty slot + some If-Match. Bad request If-Match or slot timed out.
-		slots.Unlock()
-		http.Error(w, "nothing at this slot", http.StatusConflict)
+		err = rconn.WriteMessage(messageType, p)
+		if err != nil {
+			return
+		}
 	}
 }
 
 func server(args ...string) {
 	rand.Seed(time.Now().UnixNano())
+
 	set := flag.NewFlagSet(args[0], flag.ExitOnError)
 	set.Usage = func() {
 		fmt.Fprintf(set.Output(), "run the webwormhole signalling server\n\n")
@@ -230,12 +184,21 @@ func server(args ...string) {
 	}
 	httpaddr := set.String("http", ":http", "http listen address")
 	httpsaddr := set.String("https", ":https", "https listen address")
-	whitelist := set.String("hosts", ":https", "comma separated list of hosts for which to request let's encrypt certs")
+	whitelist := set.String("hosts", "", "comma separated list of hosts for which to request let's encrypt certs")
 	secretpath := set.String("secrets", os.Getenv("HOME")+"/keys", "path to put let's encrypt cache")
-	html := set.String("ui", "/lib/webwormhole/web", "path to the web interface files")
+	html := set.String("ui", "./web", "path to the web interface files")
 	set.Parse(args[1:])
 
-	fs = http.FileServer(http.Dir(*html))
+	fs := http.FileServer(http.Dir(*html))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/s/", relay)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
+			w.Write([]byte(importMeta))
+			return
+		}
+		fs.ServeHTTP(w, r)
+	})
 
 	m := &autocert.Manager{
 		Cache:      autocert.DirCache(*secretpath),
@@ -247,7 +210,7 @@ func server(args ...string) {
 		WriteTimeout: 60 * time.Minute,
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpsaddr,
-		Handler:      http.HandlerFunc(serveHTTP),
+		Handler:      mux,
 		TLSConfig:    &tls.Config{GetCertificate: m.GetCertificate},
 	}
 	srv := &http.Server{
@@ -255,7 +218,7 @@ func server(args ...string) {
 		WriteTimeout: 60 * time.Minute,
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpaddr,
-		Handler:      m.HTTPHandler(http.HandlerFunc(serveHTTP)),
+		Handler:      m.HTTPHandler(mux),
 	}
 
 	if *httpsaddr != "" {
