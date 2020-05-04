@@ -1,6 +1,5 @@
 wasm: ## Compile to wasm
-	GOOS=js GOARCH=wasm go build -o web/util.wasm ./web
-	cp $(shell go env GOROOT)/misc/wasm/wasm_exec.js ./web
+	go generate ./web
 
 serve: wasm ## Run development
 	go run ./cmd/ww server -http="localhost:8000" -https="" -ui="$(PWD)/web"
