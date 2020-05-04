@@ -24,7 +24,7 @@ services:
     image: webwormhole:latest
     capabilities:
       - CAP_NET_BIND_SERVICE
-    command: ["/bin/ww", "server", "-hosts", "cpacemachine.0f.io,oursink.com,bitfro.st,webwormhole.io,wrmhl.link"]
+    command: ["/bin/ww", "server", "-hosts", "webwormhole.io,wrmhl.link,tip.webwormhole.io,oursink.com,"]
     binds:
       - /etc/resolv.conf:/etc/resolv.conf
   - name: sshd

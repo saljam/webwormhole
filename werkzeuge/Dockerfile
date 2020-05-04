@@ -11,5 +11,6 @@ RUN go build -o /bin/ww ./cmd/ww
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 COPY --from=build /bin/ww /bin
-COPY --from=build /web /lib/webwormhole/web
+COPY --from=build /web /web
+WORKDIR /
 ENTRYPOINT ["/bin/ww", "server"]
