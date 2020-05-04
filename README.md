@@ -41,7 +41,7 @@ To run locally:
 
     $ make serve
 
-To install:
+To install (requires at least golang-1.13):
 
     $ go get -u webwormhole.io/cmd/ww
 
