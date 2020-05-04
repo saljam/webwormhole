@@ -46,7 +46,6 @@ export let newwormhole = async (pc) => {
 			ws.send(msgB);
 			pc.onicecandidate=e=>{
 				if (e.candidate) {
-					e.candidate.type = "candidate";
 					ws.send(util.seal(key, JSON.stringify(e.candidate)));
 				}
 			}
@@ -124,7 +123,6 @@ export let dial = async (pc, code) => {
 			console.log("generated key");
 			pc.onicecandidate=e=>{
 				if (e.candidate) {
-					e.candidate.type = "candidate";
 					ws.send(util.seal(key, JSON.stringify(e.candidate)));
 				}
 			}
