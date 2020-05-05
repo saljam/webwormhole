@@ -2,31 +2,26 @@
 <meta charset=utf-8>
 <meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole">
 <meta name="viewport" content="width=device-width, height=device-height, user-scalable=no">
-<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>📠</text></svg>">
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>🕳️</text></svg>">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="dark.css" media="(prefers-color-scheme: dark)">
 <script defer src="wasm_exec.js"></script>
 <script type="module" src="main.js"></script>
 <title>WEBWORMHOLE</title>
 <body>
 <form id="dialog">
-<div><label id="filepicker-wrap" class="button"><input type="file" id="filepicker">OPEN</label><p id="info">WEB WORMHOLE LETS YOU SEND FILES FROM ONE PLACE TO ANOTHER</p></div>
+<div>
+<label id="filepicker-wrap" class="button"><input type="file" id="filepicker">OPEN</label>
+<p id="info">WEB WORMHOLE LETS YOU SEND FILES FROM ONE PLACE TO ANOTHER</p></div>
 <ul id="transfers"></ul>
 <img id="qr">
 <input type="submit" id="dial" value="LOADING..." disabled>
 <input type="text" id="magiccode" autocomplete="off" placeholder="GOT A CODE? TYPE HERE">
 </form>
-
 <footer>
 <span>source: <a href="https://github.com/saljam/webwormhole">github.com/saljam/webwormhole</a></span>
 <span>feedback: <a href="mailto:s@lj.am">s@lj.am</a> <a href="https://twitter.com/_saljam">@_saljam</a></span>
 <span>install: go get webwormhole.io/cmd/ww</span>
 </footer>
-
-<div class="stars"><div class="small"></div><div class="medium"></div><div class="large"></div></div>
-<div class="rings"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
-<div class="spokes"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
-
 <script>
 // Detect for features we need for this to work.
 if (!("WebSocket" in window) ||

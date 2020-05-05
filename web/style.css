@@ -142,13 +142,47 @@ a {
 	text-decoration: none;
 }
 a:link {
-	color: FireBrick;
+	color: #3d88a6;
 	border-bottom: 1px dotted;
 }
 a:visited {
-	color: RosyBrown;
+	color: #3d88a6;
 	border-bottom: 1px dotted;
 }
 a:link:hover, a:visited:hover {
 	border-bottom: 1px solid;
+}
+
+@media (prefers-color-scheme: dark) {
+	body, body.disconnected, body.dialling, body.error {
+		color: #80d5d7;
+		background: #801384;
+		background: radial-gradient(ellipse at bottom, #801384 0%, #170926 100%);
+		background-image: url(stars.svg);
+		background-size: cover;
+		background-repeat: no-repeat;
+		background-position: center center;
+	}
+	body.connected {
+		border: 4px dashed #ccc;
+		border-radius: 20px;
+		background: radial-gradient(#170926 0%, #3a0c3c 100%);
+		background-image: url(wormhole.svg);
+		background-size: cover;
+		background-repeat: no-repeat;
+		background-position: center center;
+	}
+	body.highlight {
+		border: 4px dashed #fcabff;
+		background: radial-gradient(#801384 0%, #170926 100%);
+	}
+	a:link {
+		color: #b58787;
+	}
+	a:visited {
+		color: #b58787;
+	}
+	#magiccode {
+		color: #80d5d7;
+	}
 }
