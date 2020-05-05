@@ -14,6 +14,12 @@ image:
 	linuxkit build -format raw-bios -dir $(DIR) werkzeuge/linuxkit.yaml
 	mv "$(DIR)/linuxkit-bios.img" "$(HOME)/Desktop/$(NAME).img"
 
+.PHONY: format
+format:
+	go fmt ./...
+	# docker build -t standard -f ./werkzeuge/Dockerfile.standardjs ./werkzeuge
+	docker run --rm -v $PWD:$PWD -w $PWD standard --fix ./web/*.js
+
 .PHONY: help
 help:
 	@awk -F':[^#]*##' '/^[a-zA-Z0-9_]+:.*##/{print $$1"\t"$$2}' $(MAKEFILE_LIST) | sort

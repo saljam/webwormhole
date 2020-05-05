@@ -1,0 +1,3 @@
+FROM node:14-slim
+RUN npm install -g standard
+ENTRYPOINT ["/usr/local/bin/standard"]
