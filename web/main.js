@@ -256,7 +256,7 @@ let joining = () => {
 }
 
 let hashchange = e => {
-	if (location.hash.substring(1) != "" && !e.newUrl.endsWith(document.getElementById("magiccode").value)) {
+	if (location.hash.substring(1) != "" && !(e.newURL && e.newURL.endsWith(document.getElementById("magiccode").value))) {
 		joining();
 	}
 }
