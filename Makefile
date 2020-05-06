@@ -18,7 +18,7 @@ image:
 format:
 	go fmt ./...
 	# docker build -t standard -f ./werkzeuge/Dockerfile.standardjs ./werkzeuge
-	docker run --rm -v $PWD:$PWD -w $PWD standard --fix ./web/*.js
+	docker run --rm -v $(PWD):$(PWD) -w $(PWD) standard --fix ./web/*.js
 
 .PHONY: help
 help:
