@@ -215,6 +215,7 @@ let connected = () => {
 
 	document.getElementById("info").innerHTML = "OR DRAG FILES TO SEND";
 
+	window.removeEventListener('hashchange', hashchange)
 	location.hash = "";
 	window.addEventListener('hashchange', hashchange)
 }
@@ -234,6 +235,7 @@ let disconnected = () => {
 	document.body.removeEventListener('drop', unhighlight);
 	document.body.removeEventListener('dragleave', unhighlight);
 
+	window.removeEventListener('hashchange', hashchange)
 	location.hash = "";
 	window.addEventListener('hashchange', hashchange)
 }
@@ -260,7 +262,6 @@ let joining = () => {
 let hashchange = e => {
 	if (location.hash.substring(1) != "") {
 		joining();
-		document.removeEventListener('hashchange', hashchange);
 	}
 }
 
