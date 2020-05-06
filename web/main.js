@@ -249,6 +249,18 @@ let preventdefault = e => {
 	e.stopPropagation()
 }
 
+let joining = () => {
+	document.getElementById("magiccode").value = location.hash.substring(1);
+	document.getElementById("dial").value = "JOIN WORMHOLE";
+	connect();
+}
+
+let hashchange = e => {
+	if (location.hash.substring(1) != "" && !e.newUrl.endsWith(document.getElementById("magiccode").value)) {
+		joining();
+	}
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
 	document.getElementById("magiccode").value = "";
 	document.getElementById("magiccode").addEventListener('input', async ()=>{
@@ -267,6 +279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 	document.body.addEventListener('dragover', preventdefault);
 	document.body.addEventListener('drop', preventdefault);
 	document.body.addEventListener('dragleave', preventdefault);
+	window.addEventListener('hashchange', hashchange)
 	await goready;
 	if (document.getElementById("magiccode").value === "") {
 		document.getElementById("dial").value = "NEW WORMHOLE";
@@ -274,9 +287,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 		document.getElementById("dial").value = "JOIN WORMHOLE";
 	}
 	if (location.hash.substring(1) != "") {
-		document.getElementById("magiccode").value = location.hash.substring(1);
-		document.getElementById("dial").value = "JOIN WORMHOLE";
-		connect();
+		joining();
 	} else {
 		document.getElementById("dial").disabled = false;
 	}
