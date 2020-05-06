@@ -86,13 +86,16 @@ export let newwormhole = async (pc) => {
 		console.log("websocket session error", e)
 	}
 	ws.onclose = e => {
-		if (e.code === 404) {
+		// TODO hardcoded codes here for now. At somepoint, dialling code should
+		// be in the wasm portion and reuse server symbols.
+		if (e.code === 4000) {
 			connC.reject("no such slot")
-		} else if (e.code === 500) {
-			connC.reject("couldn't get slot")
-		} else if (e.code === 408) {
+		} else if (e.code === 4001) {
 			connC.reject("timed out")
+		} else if (e.code === 4002) {
+			connC.reject("couldn't get slot")
 		} else {
+			consloe.log("wat", e.code)
 			console.log("websocket session closed", e)
 		}
 	}
@@ -167,13 +170,16 @@ export let dial = async (pc, code) => {
 		console.log("websocket session error", e)
 	}
 	ws.onclose = e => {
-		if (e.code === 404) {
+		// TODO hardcoded codes here for now. At somepoint, dialling code should
+		// be in the wasm portion and reuse server symbols.
+		if (e.code === 4000) {
 			connC.reject("no such slot")
-		} else if (e.code === 500) {
-			connC.reject("couldn't get slot")
-		} else if (e.code === 408) {
+		} else if (e.code === 4001) {
 			connC.reject("timed out")
+		} else if (e.code === 4002) {
+			connC.reject("couldn't get slot")
 		} else {
+			consloe.log("wat", e.code)
 			console.log("websocket session closed", e)
 		}
 	}

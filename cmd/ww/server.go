@@ -36,6 +36,12 @@ const importMeta = `<!doctype html>
 <meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">
 `
 
+const (
+	CloseNoSuchSlot = 4000 + iota
+	CloseSlotTimedOut
+	CloseNoMoreSlots
+)
+
 // slots is a map of allocated slot numbers.
 var slots = struct {
 	m map[string]chan *websocket.Conn
@@ -105,9 +111,10 @@ func relay(w http.ResponseWriter, r *http.Request) {
 				slots.Unlock()
 				conn.WriteControl(
 					websocket.CloseMessage,
-					websocket.FormatCloseMessage(http.StatusServiceUnavailable, "can't allocate slots"),
+					websocket.FormatCloseMessage(CloseNoMoreSlots, "cannot allocate slots"),
 					time.Now().Add(10*time.Second),
 				)
+				conn.Close()
 				return
 			}
 			slotkey = newslot
@@ -128,9 +135,10 @@ func relay(w http.ResponseWriter, r *http.Request) {
 				slots.Unlock()
 				conn.WriteControl(
 					websocket.CloseMessage,
-					websocket.FormatCloseMessage(http.StatusRequestTimeout, "timed out"),
+					websocket.FormatCloseMessage(CloseSlotTimedOut, "timed out"),
 					time.Now().Add(10*time.Second),
 				)
+				conn.Close()
 				return
 			case sc <- conn:
 			}
@@ -145,9 +153,10 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			slots.Unlock()
 			conn.WriteControl(
 				websocket.CloseMessage,
-				websocket.FormatCloseMessage(http.StatusNotFound, "no such slot"),
+				websocket.FormatCloseMessage(CloseNoSuchSlot, "no such slot"),
 				time.Now().Add(10*time.Second),
 			)
+			conn.Close()
 			return
 		}
 		delete(slots.m, slotkey)
@@ -157,9 +166,10 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			conn.WriteControl(
 				websocket.CloseMessage,
-				websocket.FormatCloseMessage(http.StatusRequestTimeout, "timed out"),
+				websocket.FormatCloseMessage(CloseSlotTimedOut, "timed out"),
 				time.Now().Add(10*time.Second),
 			)
+			conn.Close()
 		case rconn = <-sc:
 		}
 		sc <- conn
