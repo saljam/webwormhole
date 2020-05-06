@@ -216,6 +216,7 @@ let connected = () => {
 	document.getElementById("info").innerHTML = "OR DRAG FILES TO SEND";
 
 	location.hash = "";
+	window.addEventListener('hashchange', hashchange)
 }
 
 let disconnected = () => {
@@ -234,6 +235,7 @@ let disconnected = () => {
 	document.body.removeEventListener('dragleave', unhighlight);
 
 	location.hash = "";
+	window.addEventListener('hashchange', hashchange)
 }
 
 let highlight = e => {
@@ -247,6 +249,19 @@ let unhighlight = e => {
 let preventdefault = e => {
 	e.preventDefault()
 	e.stopPropagation()
+}
+
+let joining = () => {
+	document.getElementById("magiccode").value = location.hash.substring(1);
+		document.getElementById("dial").value = "JOIN WORMHOLE";
+		connect();
+}
+
+let hashchange = e => {
+	if (location.hash.substring(1) != "") {
+		joining();
+		document.removeEventListener('hashchange', hashchange);
+	}
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -274,9 +289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 		document.getElementById("dial").value = "JOIN WORMHOLE";
 	}
 	if (location.hash.substring(1) != "") {
-		document.getElementById("magiccode").value = location.hash.substring(1);
-		document.getElementById("dial").value = "JOIN WORMHOLE";
-		connect();
+		joining();
 	} else {
 		document.getElementById("dial").disabled = false;
 	}
