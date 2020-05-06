@@ -215,9 +215,7 @@ let connected = () => {
 
 	document.getElementById("info").innerHTML = "OR DRAG FILES TO SEND";
 
-	window.removeEventListener('hashchange', hashchange)
 	location.hash = "";
-	window.addEventListener('hashchange', hashchange)
 }
 
 let disconnected = () => {
@@ -235,9 +233,7 @@ let disconnected = () => {
 	document.body.removeEventListener('drop', unhighlight);
 	document.body.removeEventListener('dragleave', unhighlight);
 
-	window.removeEventListener('hashchange', hashchange)
 	location.hash = "";
-	window.addEventListener('hashchange', hashchange)
 }
 
 let highlight = e => {
@@ -255,12 +251,12 @@ let preventdefault = e => {
 
 let joining = () => {
 	document.getElementById("magiccode").value = location.hash.substring(1);
-		document.getElementById("dial").value = "JOIN WORMHOLE";
-		connect();
+	document.getElementById("dial").value = "JOIN WORMHOLE";
+	connect();
 }
 
 let hashchange = e => {
-	if (location.hash.substring(1) != "") {
+	if (location.hash.substring(1) != "" && !e.newUrl.endsWith(document.getElementById("magiccode").value)) {
 		joining();
 	}
 }
@@ -283,6 +279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 	document.body.addEventListener('dragover', preventdefault);
 	document.body.addEventListener('drop', preventdefault);
 	document.body.addEventListener('dragleave', preventdefault);
+	window.addEventListener('hashchange', hashchange)
 	await goready;
 	if (document.getElementById("magiccode").value === "") {
 		document.getElementById("dial").value = "NEW WORMHOLE";
