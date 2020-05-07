@@ -33,9 +33,9 @@ if (!("WebSocket" in window) ||
 	!("RTCPeerConnection" in window) ||
 	!("WebAssembly" in window) ||
 	!('noModule' in document.createElement('script'))) {
-	document.getElementById("info").innerHTML = "Browser missing required feature. This application needs support for WebSockets, WebRTC and WebAssembly.";
+	document.getElementById("info").innerHTML = "Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.";
 	document.body.classList.add("error");
-	throw new Error("Browser missing required feature. This application needs support for WebSockets, WebRTC and WebAssembly.");
+	throw new Error("Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.");
 }
 
 // Work around iOS trying to connect when the link is previewed.

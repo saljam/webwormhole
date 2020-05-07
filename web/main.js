@@ -1,17 +1,19 @@
 import { goready, newwormhole, dial } from './dial.js';
 import { genpassword } from './wordlist.js';
 
+const SW_PREFIX = '/_';
+
 // TODO multiple streams.
 let receiving;
 let sending;
 let datachannel;
-let downloadServiceWorker; // Service worker managing `/download/...` urls.
+let downloadServiceWorker; // Service worker managing download urls.
 
 const serviceWorkerInUse = 'serviceWorker' in navigator;
 
 if (serviceWorkerInUse) {
 	navigator.serviceWorker.register('sw.js', {
-		scope: '/download/'
+		scope: `${SW_PREFIX}/`
 	}).then(function(registration) {
 		// TODO handle updates to service workers.
 		downloadServiceWorker = registration.active || registration.waiting || registration.installing;
@@ -129,12 +131,12 @@ let triggerDownload = receiving => {
 		// Possible solutions:
 
 		// - `window.open` is blocked as a popup.
-		// window.open(`/download/${receiving.id}`);
+		// window.open(`${SW_PREFIX}/${receiving.id}`);
 
 		// - And this is quite scary but `Content-Disposition` to the rescue!
 		//   It will navigate to 404 page if there is no service worker for some reason...
 		//   But if `postMessage` didn't throw we should be safe.
-		window.location = `/download/${receiving.id}`;
+		window.location = `${SW_PREFIX}/${receiving.id}`;
 
 	} else {
 		let blob = new Blob([receiving.data]);
@@ -155,7 +157,7 @@ let triggerDownload = receiving => {
 let receive = e => {
 	if (!receiving) {
 		receiving = JSON.parse(new TextDecoder('utf8').decode(e.data));
-		receiving.id = document.getElementById("magiccode").value +
+		receiving.id = receiving.name +
 			'-' + Math.random().toString(16).substring(2); // Strip leading '0.'.
 		receiving.offset = 0;
 		if (!serviceWorkerInUse)
@@ -311,7 +313,7 @@ let disconnected = () => {
 	location.hash = "";
 
 	if (serviceWorkerInUse && receiving)
-		serviceWorker.postMessage({id: receiving.id, type: 'error', error: 'rtc disconnected'});
+		downloadServiceWorker.postMessage({id: receiving.id, type: 'error', error: 'rtc disconnected'});
 }
 
 let highlight = e => {

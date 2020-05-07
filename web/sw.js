@@ -1,3 +1,7 @@
+' use strict';
+
+const PREFIX = '/_'
+
 // There can be multiple clients (pages) receiving files, so they generate an id
 // and here we store info assosiated with each transfer.
 const streams = new Map();
@@ -62,12 +66,17 @@ self.addEventListener('message', event => {
 });
 
 const encodeFilename = filename =>
-	encodeURIComponent(filename).replace(/['()]/g, escape).replace(/\*/g, '%2A');
+	encodeURIComponent(filename)
+		.replace(/\'/g, '%27')
+		.replace(/\(/g, '%28')
+		.replace(/\(/g, '%29')
+		.replace(/\*/g, '%2A');
 
 self.addEventListener('fetch', (event) => {
 	const url = new URL(event.request.url);
 
-	if (event.request.method !== 'GET' || !url.pathname.match(/^\/download\/[^\/]+$/)) return;
+	// Sanity test.
+	if (event.request.method !== 'GET' || ! new RegExp(`^${PREFIX}/[^/]+$`).test(url.pathname)) return;
 
 	event.respondWith((async () => {
 		const id = url.pathname.split('/')[2];
