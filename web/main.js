@@ -8,7 +8,7 @@ let sending
 let datachannel
 let downloadServiceWorker // Service worker managing download urls.
 
-const serviceWorkerInUse = !hacks.noblob && !!(navigator.serviceWorker)
+const serviceWorkerInUse = !hacks.noblob && !window.safari && !!(navigator.serviceWorker)
 
 if (serviceWorkerInUse) {
   navigator.serviceWorker.register('sw.js', {
