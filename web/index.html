@@ -5,6 +5,25 @@
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>🕳️</text></svg>">
 <link rel="stylesheet" href="style.css">
 <script defer src="wasm_exec.js"></script>
+<script>
+// Polyfill for Safari WASM streaming.
+if (!WebAssembly.instantiateStreaming) {
+  WebAssembly.instantiateStreaming = async (resp, importObject) => {
+    const source = await (await resp).arrayBuffer()
+    return await WebAssembly.instantiate(source, importObject)
+  }
+}
+
+var hacks = {}
+
+// Work around iOS Safari <= 12 not being able to download blob URLs.
+// This can die when iOS Safari usage is less than 1% on this table:
+// https://caniuse.com/usage-table
+hacks.noblob = false
+if (/^Mozilla\/5.0 \(iPhone; CPU iPhone OS 12_[0-9]_[0-9] like Mac OS X\)/.test(navigator.userAgent)) {
+  hacks.noblob = true
+}
+</script>
 <script type="module" src="main.js"></script>
 <title>WEBWORMHOLE</title>
 <body>
@@ -27,8 +46,8 @@
 
 // Detect for features we need for this to work.
 if (!(window.WebSocket) ||
-  !(window.RTCPeerConnection) ||
-  !(window.WebAssembly) {
+    !(window.RTCPeerConnection) ||
+    !(window.WebAssembly)) {
   document.getElementById('info').innerHTML = 'Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.'
   document.body.classList.add('error')
   console.log('browser missing required features')
@@ -40,13 +59,5 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent) &&
 	![320, 375, 414, 768, 1024].includes(window.innerWidth)) {
   document.getElementById('magiccode').value = location.hash.substring(1)
   location.hash = ''
-}
-
-// For Safari.
-if (!WebAssembly.instantiateStreaming) {
-  WebAssembly.instantiateStreaming = async (resp, importObject) => {
-    const source = await (await resp).arrayBuffer()
-    return await WebAssembly.instantiate(source, importObject)
-  }
 }
 </script>

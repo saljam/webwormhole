@@ -8,7 +8,7 @@ let sending
 let datachannel
 let downloadServiceWorker // Service worker managing download urls.
 
-const serviceWorkerInUse = 'serviceWorker' in navigator
+const serviceWorkerInUse = !hacks.noblob && !!(navigator.serviceWorker)
 
 if (serviceWorkerInUse) {
   navigator.serviceWorker.register('sw.js', {
@@ -87,7 +87,7 @@ const send = async f => {
 
   const writer = new DataChannelWriter(datachannel)
   if (!f.stream) {
-    // Hack around safari's lack of Blob.stream() and arrayBuffer().
+    // Hack around Safari's lack of Blob.stream() and arrayBuffer().
     // This is unbenchmarked and could probably be made better.
     const read = b => {
       return new Promise(resolve => {
@@ -138,8 +138,16 @@ const triggerDownload = receiving => {
     //   It will navigate to 404 page if there is no service worker for some reason...
     //   But if `postMessage` didn't throw we should be safe.
     window.location = `${SW_PREFIX}/${receiving.id}`
+  } else if (hacks.noblob) {
+    const blob = new Blob([receiving.data], {type: receiving.type})
+    let reader = new FileReader()
+    reader.onloadend = () => {
+      receiving.a.href = reader.result
+      receiving.a.download = receiving.name
+    }
+    reader.readAsDataURL(blob)
   } else {
-    const blob = new Blob([receiving.data])
+    const blob = new Blob([receiving.data], {type: receiving.type})
     receiving.a.href = URL.createObjectURL(blob)
     receiving.a.download = receiving.name
     receiving.a.click()
