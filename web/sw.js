@@ -34,11 +34,11 @@ self.addEventListener('message', event => {
   const id = message.id
 
   if (message.type === 'metadata') {
-    const { name, size } = message
+    const { name, size, filetype } = message
 
     // TODO propagate cancellation back to main window and sender.
     const onCancel = cancelReason => console.warn('Stream cancelled', cancelReason)
-    const streamInfo = { name, size, ...createStream(onCancel) }
+    const streamInfo = { name, size, filetype, ...createStream(onCancel) }
 
     // Resolve promise if GET request arrived first.
     signalMetadataReady(id, streamInfo)
@@ -71,10 +71,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
   // Sanity test.
-  if (event.request.method !== 'GET' || !new RegExp(`^${PREFIX}/[^/]+$`).test(url.pathname)) return
+  if (event.request.method !== 'GET' || !url.pathname.startsWith(PREFIX + '/')) return
 
   event.respondWith((async () => {
-    const id = url.pathname.split('/')[2]
+    const id = url.pathname.substring((PREFIX + '/').length)
 
     // Request may arrive before metadata.
     const streamInfo = streams.get(id) || await waitForMetadata(id)
@@ -82,14 +82,14 @@ self.addEventListener('fetch', (event) => {
     // Synchronize with message handler end to clean up properly.
     if (streamInfo.streamHandled) { streams.delete(id) } else streamInfo.requestHandled = true
 
-    const { size, name, stream } = streamInfo
+    const { size, name, filetype, stream } = streamInfo
 
     console.log(`serving ${name} (${id})`)
 
     // Thanks to https://github.com/jimmywarting/StreamSaver.js for proper headers.
     return new Response(stream, {
       headers: {
-        'Content-Type': 'application/octet-stream; charset=utf-8',
+        'Content-Type': filetype,
         'Content-Length': size,
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeFilename(name)}`
       }

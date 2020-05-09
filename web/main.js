@@ -15,6 +15,7 @@ if (serviceWorkerInUse) {
     scope: `${SW_PREFIX}/`
   }).then(function (registration) {
     // TODO handle updates to service workers.
+    console.log("service worker registered")
     downloadServiceWorker = registration.active || registration.waiting || registration.installing
   })
 }
@@ -152,7 +153,7 @@ const triggerDownload = receiving => {
 const receive = e => {
   if (!receiving) {
     receiving = JSON.parse(new TextDecoder('utf8').decode(e.data))
-    receiving.id = receiving.name + '-' + Math.random().toString(16).substring(2) // Strip leading '0.'.
+    receiving.id = Math.random().toString(16).substring(2) + '-' + encodeURIComponent(receiving.name)
     receiving.offset = 0
     if (!serviceWorkerInUse) { receiving.data = new Uint8Array(receiving.size) }
 
@@ -169,7 +170,8 @@ const receive = e => {
         id: receiving.id,
         type: 'metadata',
         name: receiving.name,
-        size: receiving.size
+        size: receiving.size,
+        filetype: receiving.type
       })
       triggerDownload(receiving)
     }
