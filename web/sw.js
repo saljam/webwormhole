@@ -37,8 +37,8 @@ self.addEventListener('message', event => {
     const { name, size, filetype } = message
 
     // TODO propagate cancellation back to main window and sender.
-    const onCancel = cancelReason => console.warn('Stream cancelled', cancelReason)
-    const streamInfo = { name, size, filetype, ...createStream(onCancel) }
+    const onCancel = cancelReason => console.warn('stream cancelled', cancelReason)
+    const streamInfo = { name, size, filetype, offset:0, ...createStream(onCancel) }
 
     // Resolve promise if GET request arrived first.
     signalMetadataReady(id, streamInfo)
@@ -48,7 +48,14 @@ self.addEventListener('message', event => {
     const streamInfo = streams.get(id)
 
     if (message.type === 'data') {
+      if (message.offset !== streamInfo.offset) {
+        console.warn(`aborting ${id}: got data out of order`)
+        // TODO abort fetch response
+        streams.delete(id)
+        return
+      }
       streamInfo.controller.enqueue(new Uint8Array(message.data))
+      streamInfo.offset += message.data.byteLength
     } else if (message.type === 'end') {
       streamInfo.controller.close()
 

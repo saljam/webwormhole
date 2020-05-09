@@ -128,12 +128,12 @@ const triggerDownload = receiving => {
   if (serviceWorkerInUse) {
     // `<a download=...>` doesn't work with service workers on Chrome yet.
     // See https://bugs.chromium.org/p/chromium/issues/detail?id=468227
-
+    //
     // Possible solutions:
-
+    //
     // - `window.open` is blocked as a popup.
     // window.open(`${SW_PREFIX}/${receiving.id}`);
-
+    //
     // - And this is quite scary but `Content-Disposition` to the rescue!
     //   It will navigate to 404 page if there is no service worker for some reason...
     //   But if `postMessage` didn't throw we should be safe.
@@ -196,7 +196,15 @@ const receive = e => {
   }
 
   if (serviceWorkerInUse) {
-    downloadServiceWorker.postMessage({ id: receiving.id, type: 'data', data: e.data }, [e.data])
+    downloadServiceWorker.postMessage(
+      {
+        id: receiving.id,
+        type: 'data',
+        data: e.data,
+        offset: receiving.offset
+      },
+      [e.data]
+    )
   } else {
     receiving.data.set(new Uint8Array(e.data), receiving.offset)
   }
