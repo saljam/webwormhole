@@ -1,24 +1,10 @@
-import { goready, newwormhole, dial } from './dial.js'
+import { newwormhole, dial } from './dial.js'
 
-const SW_PREFIX = '/_'
-
-// TODO multiple streams.
 let receiving
 let sending
 let datachannel
-let downloadServiceWorker // Service worker managing download urls.
-
-const serviceWorkerInUse = !hacks.noblob && !window.safari && !!(navigator.serviceWorker)
-
-if (serviceWorkerInUse) {
-  navigator.serviceWorker.register('sw.js', {
-    scope: `${SW_PREFIX}/`
-  }).then(function (registration) {
-    // TODO handle updates to service workers.
-    console.log("service worker registered")
-    downloadServiceWorker = registration.active || registration.waiting || registration.installing
-  })
-}
+let serviceworker
+let hacks = {}
 
 const pick = e => {
   const files = document.getElementById('filepicker').files
@@ -125,7 +111,7 @@ const send = async f => {
 }
 
 const triggerDownload = receiving => {
-  if (serviceWorkerInUse) {
+  if (serviceworker) {
     // `<a download=...>` doesn't work with service workers on Chrome yet.
     // See https://bugs.chromium.org/p/chromium/issues/detail?id=468227
     //
@@ -137,7 +123,7 @@ const triggerDownload = receiving => {
     // - And this is quite scary but `Content-Disposition` to the rescue!
     //   It will navigate to 404 page if there is no service worker for some reason...
     //   But if `postMessage` didn't throw we should be safe.
-    window.location = `${SW_PREFIX}/${receiving.id}`
+    window.location = `/_/${receiving.id}`
   } else if (hacks.noblob) {
     const blob = new Blob([receiving.data], {type: receiving.type})
     let reader = new FileReader()
@@ -163,18 +149,18 @@ const receive = e => {
     receiving = JSON.parse(new TextDecoder('utf8').decode(e.data))
     receiving.id = Math.random().toString(16).substring(2) + '-' + encodeURIComponent(receiving.name)
     receiving.offset = 0
-    if (!serviceWorkerInUse) { receiving.data = new Uint8Array(receiving.size) }
+    if (!serviceworker) { receiving.data = new Uint8Array(receiving.size) }
 
     receiving.li = document.createElement('li')
-    receiving.li.appendChild(document.createElement('a'))
-    receiving.a = receiving.li.getElementsByTagName('a')[0]
+    receiving.a = document.createElement('a')
+    receiving.li.appendChild(receiving.a)
     receiving.a.appendChild(document.createTextNode(`↓ ${receiving.name}`))
-    receiving.li.appendChild(document.createElement('progress'))
-    receiving.progress = receiving.li.getElementsByTagName('progress')[0]
+    receiving.progress = document.createElement('progress')
+    receiving.li.appendChild(receiving.progress)
     document.getElementById('transfers').appendChild(receiving.li)
 
-    if (serviceWorkerInUse) {
-      downloadServiceWorker.postMessage({
+    if (serviceworker) {
+      serviceworker.postMessage({
         id: receiving.id,
         type: 'metadata',
         name: receiving.name,
@@ -191,12 +177,12 @@ const receive = e => {
 
   if (receiving.offset + chunkSize > receiving.size) {
     const error = 'received more bytes than expected'
-    if (serviceWorkerInUse) { downloadServiceWorker.postMessage({ id: receiving.id, type: 'error', error }) }
+    if (serviceworker) { serviceworker.postMessage({ id: receiving.id, type: 'error', error }) }
     throw error
   }
 
-  if (serviceWorkerInUse) {
-    downloadServiceWorker.postMessage(
+  if (serviceworker) {
+    serviceworker.postMessage(
       {
         id: receiving.id,
         type: 'data',
@@ -213,8 +199,8 @@ const receive = e => {
   receiving.progress.value = receiving.offset / receiving.size
 
   if (receiving.offset === receiving.size) {
-    if (serviceWorkerInUse) {
-      downloadServiceWorker.postMessage({ id: receiving.id, type: 'end' })
+    if (serviceworker) {
+      serviceworker.postMessage({ id: receiving.id, type: 'end' })
     } else {
       triggerDownload(receiving)
     }
@@ -314,7 +300,7 @@ const disconnected = () => {
 
   location.hash = ''
 
-  if (serviceWorkerInUse && receiving) { downloadServiceWorker.postMessage({ id: receiving.id, type: 'error', error: 'rtc disconnected' }) }
+  if (serviceworker && receiving) { serviceworker.postMessage({ id: receiving.id, type: 'error', error: 'rtc disconnected' }) }
 }
 
 const highlight = e => {
@@ -330,28 +316,127 @@ const preventdefault = e => {
   e.stopPropagation()
 }
 
-const joining = () => {
-  document.getElementById('magiccode').value = location.hash.substring(1)
-  document.getElementById('dial').value = 'JOIN WORMHOLE'
-  connect()
-}
-
 const hashchange = e => {
-  if (location.hash.substring(1) !== '' && !(e.newURL && e.newURL.endsWith(document.getElementById('magiccode').value))) {
-    joining()
+  const newhash = location.hash.substring(1)
+  if (newhash !== '' && newhash !== document.getElementById('magiccode').value) {
+    console.log("hash changed dialling new code")
+    document.getElementById('magiccode').value = newhash
+    codechange()
+    connect()
   }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  document.getElementById('magiccode').value = ''
-  document.getElementById('magiccode').addEventListener('input', async () => {
-    await goready
-    if (document.getElementById('magiccode').value === '') {
-      document.getElementById('dial').value = 'NEW WORMHOLE'
-    } else {
-      document.getElementById('dial').value = 'JOIN WORMHOLE'
+const codechange = e => {
+  console.log("code changed")
+  if (document.getElementById('magiccode').value === '') {
+    document.getElementById('dial').value = 'NEW WORMHOLE'
+  } else {
+    document.getElementById('dial').value = 'JOIN WORMHOLE'
+  }
+}
+
+const browserhacks = () => {
+  // Detect for features we need for this to work.
+  if (!(window.WebSocket) ||
+      !(window.RTCPeerConnection) ||
+      !(window.WebAssembly)) {
+    hacks.browserunsupported = true
+    hacks.nosw = true
+    hacks.nowasm = true
+    console.log("quirks: browser not supported")
+    console.log(
+      "websocket:", !!window.WebSocket,
+      "webrtc:", !!window.RTCPeerConnection,
+      "wasm:", !!window.WebAssembly
+    )
+    return
+  }
+
+  // Polyfill for Safari WASM streaming.
+  if (!WebAssembly.instantiateStreaming) {
+    WebAssembly.instantiateStreaming = async (resp, importObject) => {
+      const source = await (await resp).arrayBuffer()
+      return await WebAssembly.instantiate(source, importObject)
     }
-  })
+    console.log("quirks: using wasm streaming polyfill")
+  }
+
+  // Safari cannot save files from service workers.
+  if (window.safari) {
+    hacks.nosw = true
+    console.log("quirks: serviceworkers disabled on safari")
+  }
+
+  if (!(navigator.serviceWorker)) {
+    hacks.nosw = true
+    console.log("quirks: no serviceworkers")
+  }
+
+  // Work around iOS Safari <= 12 not being able to download blob URLs.
+  // This can die when iOS Safari usage is less than 1% on this table:
+  // https://caniuse.com/usage-table
+  hacks.noblob = false
+  if (/^Mozilla\/5.0 \(iPhone; CPU iPhone OS 12_[0-9]_[0-9] like Mac OS X\)/.test(navigator.userAgent)) {
+    hacks.noblob = true
+    hacks.nosw = true
+    console.log("quirks: using ios12 dataurl hack")
+  }
+
+  // Work around iOS trying to connect when the link is previewed.
+  // You never saw this.
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent) &&
+      ![320, 375, 414, 768, 1024].includes(window.innerWidth)) {
+    hacks.noautoconnect = true
+    console.log("quirks: detected preview, ")
+  }
+
+  // Detect for features we need for this to work.
+  if (!(window.WebSocket) ||
+      !(window.RTCPeerConnection) ||
+      !(window.WebAssembly)) {
+    hacks.browserunsupported = true
+  }
+}
+
+const domready = async () => {
+  return new Promise(resolve => { document.addEventListener('DOMContentLoaded', resolve) })
+}
+
+const swready = async () => {
+  if (!hacks.nosw) {
+    const registration = await navigator.serviceWorker.register('sw.js', {scope: `/_/`})
+    // TODO handle updates to service workers.
+    serviceworker = registration.active || registration.waiting || registration.installing
+    console.log("service worker registered:", registration)
+  }
+}
+
+const wasmready = async () => {
+  if (!hacks.nowasm) {
+    const go = new Go()
+    const wasm = await WebAssembly.instantiateStreaming(fetch('util.wasm'), go.importObject)
+    go.run(wasm.instance)
+  }
+}
+
+(async () => {
+  // Detect Browser Quirks.
+  browserhacks()
+
+  // Wait for the ServiceWorker, WebAssembly, and DOM to be ready.
+  await Promise.all([domready(), swready(), wasmready()])
+
+  if (hacks.browserunsupported) {
+    document.getElementById('info').innerHTML = 'Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.'
+    document.body.classList.add('error')
+    return
+  }
+
+  // Install event handlers. If we start to allow queueing files before
+  // connections we might want to move these into domready so as to not
+  // block them.
+  window.addEventListener('hashchange', hashchange)
+  document.getElementById('magiccode').addEventListener('input', codechange)
   document.getElementById('filepicker').addEventListener('change', pick)
   document.getElementById('dialog').addEventListener('submit', preventdefault)
   document.getElementById('dialog').addEventListener('submit', connect)
@@ -360,16 +445,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.body.addEventListener('dragover', preventdefault)
   document.body.addEventListener('drop', preventdefault)
   document.body.addEventListener('dragleave', preventdefault)
-  window.addEventListener('hashchange', hashchange)
-  await goready
-  if (document.getElementById('magiccode').value === '') {
-    document.getElementById('dial').value = 'NEW WORMHOLE'
-  } else {
-    document.getElementById('dial').value = 'JOIN WORMHOLE'
-  }
+
   if (location.hash.substring(1) !== '') {
-    joining()
-  } else {
-    document.getElementById('dial').disabled = false
+    document.getElementById('magiccode').value = location.hash.substring(1)
   }
-})
+  codechange() // User might have typed something while we were loading.
+  document.getElementById('dial').disabled = false
+
+  if (!hacks.noautoconnect && document.getElementById('magiccode').value !== '') {
+    connect()
+  }
+})()

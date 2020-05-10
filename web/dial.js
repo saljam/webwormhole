@@ -2,14 +2,6 @@ import { genpassword } from './wordlist.js'
 
 const signalserver = ((location.protocol === 'https:') ? 'wss://' : 'ws://') + location.host + '/s/'
 
-export const goready = new Promise(resolve => {
-  const go = new Go()
-  WebAssembly.instantiateStreaming(fetch('util.wasm'), go.importObject).then(wasm => {
-    go.run(wasm.instance)
-    resolve()
-  })
-})
-
 // newwormhole creates wormhole, the A side.
 export const newwormhole = async (pc) => {
   const ws = new WebSocket(signalserver)
