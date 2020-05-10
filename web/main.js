@@ -212,17 +212,38 @@ const receive = e => {
 
 const connect = async e => {
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
+  pc.onconnectionstatechange = e => {
+    switch (pc.connectionState) {
+    case "connected":
+      // Handled in datachannel.onopen.
+      console.log('webrtc connected')
+      break
+    case "failed":
+      disconnected()
+      console.log('webrtc connection failed connectionState:', pc.connectionState, 'iceConnectionState',  pc.iceConnectionState)
+      document.getElementById('info').innerHTML = 'NETWORK ERROR TRY AGAIN'
+      break
+    case "disconnected":
+    case "closed":
+      disconnected()
+      console.log('webrtc connection closed')
+      document.getElementById('info').innerHTML = 'DISCONNECTED'
+      pc.onconnectionstatechange = null
+      break
+    }
+  }
   datachannel = pc.createDataChannel('data', { negotiated: true, id: 0 })
   datachannel.onopen = connected
   datachannel.onmessage = receive
   datachannel.binaryType = 'arraybuffer'
   datachannel.onclose = e => {
     disconnected()
+    console.log('datachannel closed')
     document.getElementById('info').innerHTML = 'DISCONNECTED'
   }
   datachannel.onerror = e => {
-    console.log('datachannel error:', e)
     disconnected()
+    console.log('datachannel error:', e)
     document.getElementById('info').innerHTML = 'NETWORK ERROR TRY AGAIN'
   }
   try {
@@ -406,7 +427,7 @@ const swready = async () => {
     const registration = await navigator.serviceWorker.register('sw.js', {scope: `/_/`})
     // TODO handle updates to service workers.
     serviceworker = registration.active || registration.waiting || registration.installing
-    console.log("service worker registered:", registration)
+    console.log("service worker registered:", serviceworker.state)
   }
 }
 

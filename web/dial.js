@@ -80,7 +80,7 @@ export const newwormhole = async (pc) => {
     } else if (e.code === 4002) {
       connC.reject("couldn't get slot")
     } else {
-      console.log('websocket session closed', e)
+      console.log('websocket session closed', e.reason)
     }
   }
 
@@ -163,7 +163,7 @@ export const dial = async (pc, code) => {
     } else if (e.code === 4002) {
       connC.reject("couldn't get slot")
     } else {
-      console.log('websocket session closed', e)
+      console.log('websocket session closed', e.reason)
     }
   }
   return connP
