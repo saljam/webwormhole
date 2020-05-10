@@ -81,6 +81,10 @@ var rtcapi *webrtc.API
 func init() {
 	s := webrtc.SettingEngine{}
 	s.DetachDataChannels()
+	// Disable mDNS so it works in more environments. IP address privacy less
+	// of a concern on command line, but might want to enable it anyway later
+	// and disable with a flag.
+	s.GenerateMulticastDNSCandidates(false)
 	rtcapi = webrtc.NewAPI(webrtc.WithSettingEngine(s))
 }
 
