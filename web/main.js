@@ -327,7 +327,6 @@ const hashchange = e => {
 }
 
 const codechange = e => {
-  console.log("code changed")
   if (document.getElementById('magiccode').value === '') {
     document.getElementById('dial').value = 'NEW WORMHOLE'
   } else {
