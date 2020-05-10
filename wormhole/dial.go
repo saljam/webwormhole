@@ -29,6 +29,7 @@
 package wormhole
 
 import (
+	"context"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -42,16 +43,30 @@ import (
 	"time"
 
 	"filippo.io/cpace"
-	"github.com/gorilla/websocket"
-	"github.com/pion/webrtc/v2"
+	webrtc "github.com/pion/webrtc/v2"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/nacl/secretbox"
+	"nhooyr.io/websocket"
 )
 
-// protocolVersion is an identifier for the current signalling scheme.
-// It's intended to help clients print a friendlier message urging them
-// to upgrade if the signalling server has a diffect version.
-const protocolVersion = "3"
+// Protocol is an identifier for the current signalling scheme. It's
+// intended to help clients print a friendlier message urging them to
+// upgrade if the signalling server has a diffect version.
+const Protocol = "3"
+
+const (
+	// CloseNoSuchSlot is the WebSocket status returned if the slot is not valid.
+	CloseNoSuchSlot = 4000 + iota
+	// CloseSlotTimedOut is the WebSocket status returned when the slot times out.
+	CloseSlotTimedOut
+	// CloseNoMoreSlots is the WebSocket status returned when the signalling server
+	// cannot allocate any new slots at the time.
+	CloseNoMoreSlots
+)
+
+// DefaultSTUNServer to use.
+const DefaultSTUNServer = "stun:stun.l.google.com:19302"
+
 
 // ErrBadVersion is returned when the signalling server runs an incompatible
 // version of the signalling protocol.
@@ -67,11 +82,15 @@ func init() {
 	rtcapi = webrtc.NewAPI(webrtc.WithSettingEngine(s))
 }
 
-// Conn is a WebRTC data channel connection. It is wraps webrtc.DataChannel.
-type Conn struct {
-	io.ReadWriteCloser
-	d  *webrtc.DataChannel
-	pc *webrtc.PeerConnection
+// A Wormhole is a WebRTC connection established via the WebWormhole signalling
+// protocol. It is wraps webrtc.PeerConnection and webrtc.DataChannel.
+//
+// BUG(s): A PeerConnection established via Wormhole will always have a DataChannel
+// created for it, with the name "data" and id 0.
+type Wormhole struct {
+	rwc io.ReadWriteCloser
+	d   *webrtc.DataChannel
+	pc  *webrtc.PeerConnection
 
 	// wsaddr is the url to the signalling websocket.
 	wsaddr string
@@ -86,7 +105,8 @@ type Conn struct {
 	flushc *sync.Cond
 }
 
-func (c *Conn) Write(p []byte) (n int, err error) {
+// Read writes a message to the default DataChannel.
+func (c *Wormhole) Write(p []byte) (n int, err error) {
 	// The webrtc package's channel does not have a blocking Write, so
 	// we can't just use io.Copy until the issue is fixed upsteam.
 	// Work around this by blocking here and waiting for flushes.
@@ -96,21 +116,28 @@ func (c *Conn) Write(p []byte) (n int, err error) {
 		c.flushc.Wait()
 	}
 	c.flushc.L.Unlock()
-	return c.ReadWriteCloser.Write(p)
+	return c.rwc.Write(p)
+}
+
+// Read read a message from the default DataChannel.
+func (c *Wormhole) Read(p []byte) (n int, err error) {
+	return c.rwc.Read(p)
 }
 
 // TODO benchmark this buffer madness.
-func (c *Conn) flushed() {
+func (c *Wormhole) flushed() {
 	c.flushc.L.Lock()
 	c.flushc.Signal()
 	c.flushc.L.Unlock()
 }
 
-func (c *Conn) Close() (err error) {
+// Close attempts to flush the DataChannel buffers then close it
+// and its PeerConnection.
+func (c *Wormhole) Close() (err error) {
 	for c.d.BufferedAmount() != 0 {
 		// SetBufferedAmountLowThreshold does not seem to take effect
 		// when after the last Write().
-		time.Sleep(time.Second) // ew.
+		time.Sleep(time.Second) // eww.
 	}
 	tryclose := func(c io.Closer) {
 		e := c.Close()
@@ -120,13 +147,13 @@ func (c *Conn) Close() (err error) {
 	}
 	defer tryclose(c.pc)
 	defer tryclose(c.d)
-	defer tryclose(c.ReadWriteCloser)
+	defer tryclose(c.rwc)
 	return nil
 }
 
-func (c *Conn) open() {
+func (c *Wormhole) open() {
 	var err error
-	c.ReadWriteCloser, err = c.d.Detach()
+	c.rwc, err = c.d.Detach()
 	if err != nil {
 		c.err <- err
 		return
@@ -135,13 +162,13 @@ func (c *Conn) open() {
 }
 
 // It's not really clear to me when this will be invoked.
-func (c *Conn) error(err error) {
+func (c *Wormhole) error(err error) {
 	log.Printf("debug: %v", err)
 	c.err <- err
 }
 
 func readEncJSON(ws *websocket.Conn, key *[32]byte, v interface{}) error {
-	_, buf, err := ws.ReadMessage()
+	_, buf, err := ws.Read(context.TODO())
 	if err != nil {
 		return err
 	}
@@ -167,8 +194,9 @@ func writeEncJSON(ws *websocket.Conn, key *[32]byte, v interface{}) error {
 	if _, err := io.ReadFull(crand.Reader, nonce[:]); err != nil {
 		return err
 	}
-	return ws.WriteMessage(
-		websocket.TextMessage,
+	return ws.Write(
+		context.TODO(),
+		websocket.MessageText,
 		[]byte(base64.URLEncoding.EncodeToString(
 			secretbox.Seal(nonce[:], jsonmsg, &nonce, key),
 		)),
@@ -176,7 +204,7 @@ func writeEncJSON(ws *websocket.Conn, key *[32]byte, v interface{}) error {
 }
 
 func readBase64(ws *websocket.Conn) ([]byte, error) {
-	_, buf, err := ws.ReadMessage()
+	_, buf, err := ws.Read(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -184,18 +212,22 @@ func readBase64(ws *websocket.Conn) ([]byte, error) {
 }
 
 func writeBase64(ws *websocket.Conn, p []byte) error {
-	return ws.WriteMessage(websocket.TextMessage, []byte(base64.URLEncoding.EncodeToString(p)))
+	return ws.Write(
+		context.TODO(),
+		websocket.MessageText,
+		[]byte(base64.URLEncoding.EncodeToString(p)),
+	)
 }
 
 func readString(ws *websocket.Conn) (string, error) {
-	_, buf, err := ws.ReadMessage()
+	_, buf, err := ws.Read(context.TODO())
 	return string(buf), err
 }
 
 // addCandidates waits for candidate to trickle in. We close the websocket
 // when we get a successful connection so this should fail and exit at some
 // point.
-func (c *Conn) addCandidates(ws *websocket.Conn, key *[32]byte) {
+func (c *Wormhole) addCandidates(ws *websocket.Conn, key *[32]byte) {
 	for {
 		var candidate webrtc.ICECandidateInit
 		err := readEncJSON(ws, key, &candidate)
@@ -209,11 +241,12 @@ func (c *Conn) addCandidates(ws *websocket.Conn, key *[32]byte) {
 	}
 }
 
-func newConn(sigserv string, iceserv []string) (*Conn, error) {
-	c := &Conn{
+func newWormhole(sigserv string, pc *webrtc.PeerConnection) (*Wormhole, error) {
+	c := &Wormhole{
 		opened: make(chan struct{}),
 		err:    make(chan error),
 		flushc: sync.NewCond(&sync.Mutex{}),
+		pc:     pc,
 	}
 
 	u, err := url.Parse(sigserv)
@@ -228,16 +261,15 @@ func newConn(sigserv string, iceserv []string) (*Conn, error) {
 	u.Path = path.Join(u.Path, "/s/")
 	c.wsaddr = u.String()
 
-	rtccfg := webrtc.Configuration{}
-	for i := range iceserv {
-		if iceserv[i] != "" {
-			rtccfg.ICEServers = append(rtccfg.ICEServers, webrtc.ICEServer{URLs: []string{iceserv[i]}})
+	if pc == nil {
+		c.pc, err = rtcapi.NewPeerConnection(webrtc.Configuration{
+			ICEServers: []webrtc.ICEServer{{URLs: []string{DefaultSTUNServer}}},
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
-	c.pc, err = rtcapi.NewPeerConnection(rtccfg)
-	if err != nil {
-		return nil, err
-	}
+
 	sigh := true
 	c.d, err = c.pc.CreateDataChannel("data", &webrtc.DataChannelInit{
 		Negotiated: &sigh,
@@ -256,16 +288,24 @@ func newConn(sigserv string, iceserv []string) (*Conn, error) {
 	return c, nil
 }
 
-// Wormhole is like Dial, but asks the signalling server to assign it a slot
-// and writes it to slotc as soon as it gets it.
-func Wormhole(pass string, sigserv string, iceserv []string, slotc chan string) (*Conn, error) {
-	c, err := newConn(sigserv, iceserv)
+// New starts a new signalling handshake after asking the server to allocate
+// a new slot.
+//
+// The slot is used to synchronise with the remote peer on signalling server
+// sigserv, and pass is used as the PAKE password authenticate the WebRTC
+// offer and answer.
+//
+// The server generated slot identifier is written on slotc.
+//
+// If pc is nil it initialises ones using the default STUN server.
+func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnection) (*Wormhole, error) {
+	c, err := newWormhole(sigserv, pc)
 	if err != nil {
 		return nil, err
 	}
-	ws, r, err := websocket.DefaultDialer.Dial(c.wsaddr+"/", nil)
+	ws, r, err := websocket.Dial(context.TODO(), c.wsaddr+"/", nil)
 	if err != nil {
-		if r != nil && r.Header.Get("X-Version") != protocolVersion {
+		if r != nil && r.Header.Get("X-Version") != Protocol {
 			return nil, ErrBadVersion
 		}
 		return nil, err
@@ -327,31 +367,27 @@ func Wormhole(pass string, sigserv string, iceserv []string, slotc chan string) 
 	case err = <-c.err:
 	}
 
-	ws.WriteControl(
-		websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "done"),
-		time.Now().Add(10*time.Second),
-	)
+	ws.Close(websocket.StatusNormalClosure, "done")
 	return c, err
 }
 
-// Dial returns an established WebRTC data channel to a peer.
+// Join performs the signalling handshare to join an existing slot.
 //
 // slot is used to synchronise with the remote peer on signalling server
 // sigserv, and pass is used as the PAKE password authenticate the WebRTC
 // offer and answer.
 //
-// iceserv is an optional list of STUN and TURN URLs to use for NAT traversal.
-func Dial(slot, pass string, sigserv string, iceserv []string) (*Conn, error) {
-	c, err := newConn(sigserv, iceserv)
+// If pc is nil it initialises ones using the default STUN server.
+func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormhole, error) {
+	c, err := newWormhole(sigserv, pc)
 	if err != nil {
 		return nil, err
 	}
 
-	// Start the handshake
-	ws, r, err := websocket.DefaultDialer.Dial(c.wsaddr+"/"+slot, nil)
+	// Start the handshake.
+	ws, r, err := websocket.Dial(context.TODO(), c.wsaddr+"/"+slot, nil)
 	if err != nil {
-		if r != nil && r.Header.Get("X-Version") != protocolVersion {
+		if r != nil && r.Header.Get("X-Version") != Protocol {
 			return nil, ErrBadVersion
 		}
 		return nil, err
@@ -418,10 +454,6 @@ func Dial(slot, pass string, sigserv string, iceserv []string) (*Conn, error) {
 	case err = <-c.err:
 	}
 
-	ws.WriteControl(
-		websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "done"),
-		time.Now().Add(10*time.Second),
-	)
+	ws.Close(websocket.StatusNormalClosure, "done")
 	return c, err
 }

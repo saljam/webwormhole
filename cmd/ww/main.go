@@ -23,7 +23,6 @@ var subcmds = map[string]func(args ...string){
 }
 
 var (
-	iceserv = flag.String("ice", "stun:stun.l.google.com:19302", "stun or turn servers to use")
 	sigserv = flag.String("signal", "https://wrmhl.link/", "signalling server to use")
 )
 
@@ -60,11 +59,11 @@ func fatalf(format string, v ...interface{}) {
 	os.Exit(1)
 }
 
-func newConn(code string, length int) *wormhole.Conn {
+func newConn(code string, length int) *wormhole.Wormhole {
 	if code != "" {
 		// Join wormhole.
 		parts := strings.Split(code, "-")
-		c, err := wormhole.Dial(parts[0], strings.Join(parts[1:], "-"), *sigserv, strings.Split(*iceserv, ","))
+		c, err := wormhole.Join(parts[0], strings.Join(parts[1:], "-"), *sigserv, nil)
 		if err == wormhole.ErrBadVersion {
 			fatalf(
 				"%s%s%s",
@@ -88,7 +87,7 @@ func newConn(code string, length int) *wormhole.Conn {
 	go func() {
 		printcode(<-slotc + "-" + password)
 	}()
-	c, err := wormhole.Wormhole(password, *sigserv, strings.Split(*iceserv, ","), slotc)
+	c, err := wormhole.New(password, *sigserv, slotc, nil)
 	if err == wormhole.ErrBadVersion {
 		fatalf(
 			"%s%s%s",

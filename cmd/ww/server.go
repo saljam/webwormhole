@@ -17,30 +17,20 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
-	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/acme/autocert"
+	"nhooyr.io/websocket"
+	"webwormhole.io/wormhole"
 )
 
 // slotTimeout is the the maximum amount of time a client is allowed to
 // hold a slot.
 const slotTimeout = 30 * time.Minute
 
-// protocolVersion is an identifier for the current signalling scheme.
-// It's intended to help clients print a friendlier message urging them
-// to upgrade.
-const protocolVersion = "3"
-
 const importMeta = `<!doctype html>
 <meta charset=utf-8>
 <meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole">
 <meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">
 `
-
-const (
-	CloseNoSuchSlot = 4000 + iota
-	CloseSlotTimedOut
-	CloseNoMoreSlots
-)
 
 // slots is a map of allocated slot numbers.
 var slots = struct {
@@ -83,18 +73,11 @@ func freeslot() (slot string, ok bool) {
 	return "", false
 }
 
-// upgrader is a used to start WebSocket connections.
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1 << 10,
-	WriteBufferSize: 1 << 10,
-	CheckOrigin:     func(*http.Request) bool { return true },
-}
-
 // relay sets up a rendezvous on a slot and pipes the two websockets together.
 func relay(w http.ResponseWriter, r *http.Request) {
 	slotkey := r.URL.Path[len("/s/"):]
 	var rconn *websocket.Conn
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
@@ -109,12 +92,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			newslot, ok := freeslot()
 			if !ok {
 				slots.Unlock()
-				conn.WriteControl(
-					websocket.CloseMessage,
-					websocket.FormatCloseMessage(CloseNoMoreSlots, "cannot allocate slots"),
-					time.Now().Add(10*time.Second),
-				)
-				conn.Close()
+				conn.Close(wormhole.CloseNoMoreSlots, "cannot allocate slots")
 				return
 			}
 			slotkey = newslot
@@ -122,7 +100,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			slots.m[slotkey] = sc
 			slots.Unlock()
 			log.Printf("%s book", slotkey)
-			err = conn.WriteMessage(websocket.TextMessage, []byte(slotkey))
+			err = conn.Write(ctx, websocket.MessageText, []byte(slotkey))
 			if err != nil {
 				log.Println(err)
 				return
@@ -133,12 +111,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 				slots.Lock()
 				delete(slots.m, slotkey)
 				slots.Unlock()
-				conn.WriteControl(
-					websocket.CloseMessage,
-					websocket.FormatCloseMessage(CloseSlotTimedOut, "timed out"),
-					time.Now().Add(10*time.Second),
-				)
-				conn.Close()
+				conn.Close(wormhole.CloseSlotTimedOut, "timed out")
 				return
 			case sc <- conn:
 			}
@@ -151,12 +124,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		sc, ok := slots.m[slotkey]
 		if !ok {
 			slots.Unlock()
-			conn.WriteControl(
-				websocket.CloseMessage,
-				websocket.FormatCloseMessage(CloseNoSuchSlot, "no such slot"),
-				time.Now().Add(10*time.Second),
-			)
-			conn.Close()
+			conn.Close(wormhole.CloseNoSuchSlot, "no such slot")
 			return
 		}
 		delete(slots.m, slotkey)
@@ -164,12 +132,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s visit", slotkey)
 		select {
 		case <-ctx.Done():
-			conn.WriteControl(
-				websocket.CloseMessage,
-				websocket.FormatCloseMessage(CloseSlotTimedOut, "timed out"),
-				time.Now().Add(10*time.Second),
-			)
-			conn.Close()
+			conn.Close(wormhole.CloseSlotTimedOut, "timed out")
 		case rconn = <-sc:
 		}
 		sc <- conn
@@ -177,7 +140,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 
 	defer cancel()
 	for {
-		messageType, p, err := conn.ReadMessage()
+		msgType, p, err := conn.Read(ctx)
 		if err != nil {
 			return
 		}
@@ -187,7 +150,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			// so we should just bail out.
 			return
 		}
-		err = rconn.WriteMessage(messageType, p)
+		err = rconn.Write(ctx, msgType, p)
 		if err != nil {
 			return
 		}
@@ -215,7 +178,7 @@ func server(args ...string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/s/", relay)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Version", protocolVersion)
+		w.Header().Set("X-Version", wormhole.Protocol)
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			w.Write([]byte(importMeta))
 			return
