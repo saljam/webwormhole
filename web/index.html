@@ -1,21 +1,23 @@
 <!doctype html>
+<html lang="en">
 <meta charset=utf-8>
+<meta name="description" content="SEND FILES FROM ONE PLACE TO ANOTHER">
 <meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole">
-<meta name="viewport" content="width=device-width, height=device-height, user-scalable=no">
+<meta name="viewport" content="width=device-width, height=device-height">
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>🕳️</text></svg>">
 <link rel="stylesheet" href="style.css">
 <script defer src="wasm_exec.js"></script>
 <script type="module" src="main.js"></script>
 <title>WEBWORMHOLE</title>
 <body>
-<form id="dialog">
+<form id="dialog" role="main">
 <div>
 <label id="filepicker-wrap" class="button"><input type="file" id="filepicker">OPEN</label>
 <p id="info">WEB WORMHOLE LETS YOU SEND FILES FROM ONE PLACE TO ANOTHER</p></div>
 <ul id="transfers"></ul>
 <img id="qr">
 <input type="submit" id="dial" class="button" value="LOADING..." disabled>
-<input type="text" id="magiccode" autocomplete="off" placeholder="GOT A CODE? TYPE HERE">
+<input type="text" id="magiccode" autocomplete="off" title="WORMHOLE CODE" placeholder="GOT A CODE? TYPE HERE">
 </form>
 <footer>
 <span>source: <a href="https://github.com/saljam/webwormhole">github.com/saljam/webwormhole</a></span>
