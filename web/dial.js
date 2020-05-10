@@ -32,11 +32,13 @@ export const newwormhole = async (pc) => {
       console.log('generated key')
       ws.send(msgB)
       pc.onicecandidate = e => {
-        if (e.candidate) {
+        if (e.candidate && e.candidate.candidate !== "") {
+          console.log('got local candidate:', e.candidate.candidate)
           ws.send(util.seal(key, JSON.stringify(e.candidate)))
         }
       }
       await pc.setLocalDescription(await pc.createOffer())
+      console.log('created offer:', pc.localDescription.sdp)
       ws.send(util.seal(key, JSON.stringify(pc.localDescription)))
       return
     }
@@ -49,18 +51,14 @@ export const newwormhole = async (pc) => {
       return
     }
     const msg = JSON.parse(jsonmsg)
-    if (msg.type === 'offer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(msg))
-      await pc.setLocalDescription(await pc.createAnswer())
-      ws.send(util.seal(key, JSON.stringify(pc.localDescription)))
-      return
-    }
     if (msg.type === 'answer') {
       await pc.setRemoteDescription(new RTCSessionDescription(msg))
+      console.log('got answer:', pc.remoteDescription.sdp)
       return
     }
     if (msg.candidate) {
       pc.addIceCandidate(new RTCIceCandidate(msg))
+      console.log('got remote candidate:', msg.candidate)
       return
     }
     console.log('unknown message type', msg)
@@ -111,7 +109,8 @@ export const dial = async (pc, code) => {
       }
       console.log('generated key')
       pc.onicecandidate = e => {
-        if (e.candidate) {
+        if (e.candidate && e.candidate.candidate !== "") {
+          console.log('got local candidate:', e.candidate.candidate)
           ws.send(util.seal(key, JSON.stringify(e.candidate)))
         }
       }
@@ -128,16 +127,15 @@ export const dial = async (pc, code) => {
     const msg = JSON.parse(jmsg)
     if (msg.type === 'offer') {
       await pc.setRemoteDescription(new RTCSessionDescription(msg))
+      console.log('got offer:', pc.remoteDescription.sdp)
       await pc.setLocalDescription(await pc.createAnswer())
+      console.log('created answer:', pc.localDescription.sdp)
       ws.send(util.seal(key, JSON.stringify(pc.localDescription)))
-      return
-    }
-    if (msg.type === 'answer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(msg))
       return
     }
     if (msg.candidate) {
       pc.addIceCandidate(new RTCIceCandidate(msg))
+      console.log('got remote candidate:', msg.candidate)
       return
     }
     console.log('unknown message type', msg)

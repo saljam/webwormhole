@@ -67,6 +67,8 @@ const (
 // DefaultSTUNServer to use.
 const DefaultSTUNServer = "stun:stun.l.google.com:19302"
 
+// Verbose logging.
+var Verbose = false
 
 // ErrBadVersion is returned when the signalling server runs an incompatible
 // version of the signalling protocol.
@@ -134,6 +136,9 @@ func (c *Wormhole) flushed() {
 // Close attempts to flush the DataChannel buffers then close it
 // and its PeerConnection.
 func (c *Wormhole) Close() (err error) {
+	if Verbose {
+		log.Printf("closing")
+	}
 	for c.d.BufferedAmount() != 0 {
 		// SetBufferedAmountLowThreshold does not seem to take effect
 		// when after the last Write().
@@ -232,10 +237,19 @@ func (c *Wormhole) addCandidates(ws *websocket.Conn, key *[32]byte) {
 		var candidate webrtc.ICECandidateInit
 		err := readEncJSON(ws, key, &candidate)
 		if err != nil {
+			if Verbose {
+				log.Printf("cannot read remote candidate: %v", err)
+			}
 			return
+		}
+		if Verbose {
+			log.Printf("got new remote candidate: %v", candidate)
 		}
 		err = c.pc.AddICECandidate(candidate)
 		if err != nil {
+			if Verbose {
+				log.Printf("cannot add candidate: %v", err)
+			}
 			return
 		}
 	}
@@ -315,11 +329,17 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	if err != nil {
 		return nil, err
 	}
+	if Verbose {
+		log.Printf("connected to signalling server, got slot: %v", slot)
+	}
 	slotc <- slot
 
 	msgA, err := readBase64(ws)
 	if err != nil {
 		return nil, err
+	}
+	if Verbose {
+		log.Printf("got A pake msg (%v bytes)", len(msgA))
 	}
 
 	msgB, mk, err := cpace.Exchange(pass, cpace.NewContextInfo("", "", nil), msgA)
@@ -335,6 +355,9 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	if err != nil {
 		return nil, err
 	}
+	if Verbose {
+		log.Printf("have key, sent B pake msg (%v bytes)", len(msgB))
+	}
 
 	offer, err := c.pc.CreateOffer(nil)
 	if err != nil {
@@ -348,6 +371,9 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	if err != nil {
 		return nil, err
 	}
+	if Verbose {
+		log.Printf("sent offer:\n%v", c.pc.LocalDescription().SDP)
+	}
 
 	var answer webrtc.SessionDescription
 	err = readEncJSON(ws, &key, &answer)
@@ -357,6 +383,9 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	err = c.pc.SetRemoteDescription(answer)
 	if err != nil {
 		return nil, err
+	}
+	if Verbose {
+		log.Printf("got answer:\n%v", c.pc.RemoteDescription().SDP)
 	}
 
 	go c.addCandidates(ws, &key)
@@ -368,6 +397,9 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	}
 
 	ws.Close(websocket.StatusNormalClosure, "done")
+	if Verbose {
+		log.Printf("wenrtc connection succeeded, closing signalling channel")
+	}
 	return c, err
 }
 
@@ -393,6 +425,10 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 		return nil, err
 	}
 
+	if Verbose {
+		log.Printf("connected to signalling server on slot: %v", slot)
+	}
+
 	// The identity arguments are to bind endpoint identities in PAKE. Cf. Unknown
 	// Key-Share Attack. https://tools.ietf.org/html/draft-ietf-mmusic-sdp-uks-03
 	//
@@ -408,6 +444,9 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	if err != nil {
 		return nil, err
 	}
+	if Verbose {
+		log.Printf("sent A pake msg (%v bytes)", len(msgA))
+	}
 
 	msgB, err := readBase64(ws)
 	if err != nil {
@@ -422,6 +461,9 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	if err != nil {
 		return nil, err
 	}
+	if Verbose {
+		log.Printf("have key, got B msg (%v bytes)", len(msgB))
+	}
 
 	var offer webrtc.SessionDescription
 	err = readEncJSON(ws, &key, &offer)
@@ -432,6 +474,9 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	if err != nil {
 		return nil, err
 	}
+	if Verbose {
+		log.Printf("got offer:\n%v", c.pc.RemoteDescription().SDP)
+	}
 	answer, err := c.pc.CreateAnswer(nil)
 	if err != nil {
 		return nil, err
@@ -440,10 +485,12 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	if err != nil {
 		return nil, err
 	}
-
 	err = writeEncJSON(ws, &key, answer)
 	if err != nil {
 		return nil, err
+	}
+	if Verbose {
+		log.Printf("sent answer:\n%v", c.pc.LocalDescription().SDP)
 	}
 
 	go c.addCandidates(ws, &key)
@@ -455,5 +502,8 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	}
 
 	ws.Close(websocket.StatusNormalClosure, "done")
+	if Verbose {
+		log.Printf("wenrtc connection succeeded, closing signalling channel")
+	}
 	return c, err
 }

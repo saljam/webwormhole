@@ -23,6 +23,7 @@ var subcmds = map[string]func(args ...string){
 }
 
 var (
+	verbose = flag.Bool("verbose", false, "verbose logging")
 	sigserv = flag.String("signal", "https://wrmhl.link/", "signalling server to use")
 )
 
@@ -45,6 +46,9 @@ func main() {
 	if flag.NArg() < 1 {
 		usage()
 		os.Exit(2)
+	}
+	if *verbose {
+		wormhole.Verbose = true
 	}
 	cmd, ok := subcmds[flag.Arg(0)]
 	if !ok {
