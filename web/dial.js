@@ -32,14 +32,15 @@ export const newwormhole = async (pc) => {
       console.log('generated key')
       ws.send(msgB)
       pc.onicecandidate = e => {
-        if (e.candidate && e.candidate.candidate !== "") {
-          console.log('got local candidate:', e.candidate.candidate)
+        if (e.candidate && e.candidate.candidate !== '') {
+          console.log('got local candidate')
           ws.send(util.seal(key, JSON.stringify(e.candidate)))
+        } else if (!e.candidate) {
+          logNAT(pc.localDescription.sdp)
         }
-        candidateStatsAdd(e.candidate)
       }
       await pc.setLocalDescription(await pc.createOffer())
-      console.log('created offer:', pc.localDescription.sdp)
+      console.log('created offer')
       ws.send(util.seal(key, JSON.stringify(pc.localDescription)))
       return
     }
@@ -54,12 +55,12 @@ export const newwormhole = async (pc) => {
     const msg = JSON.parse(jsonmsg)
     if (msg.type === 'answer') {
       await pc.setRemoteDescription(new RTCSessionDescription(msg))
-      console.log('got answer:', pc.remoteDescription.sdp)
+      console.log('got answer')
       return
     }
     if (msg.candidate) {
       pc.addIceCandidate(new RTCIceCandidate(msg))
-      console.log('got remote candidate:', msg.candidate)
+      console.log('got remote candidate')
       return
     }
     console.log('unknown message type', msg)
@@ -81,7 +82,7 @@ export const newwormhole = async (pc) => {
     } else if (e.code === 4002) {
       connC.reject("couldn't get slot")
     } else {
-      console.log('websocket session closed', e.reason)
+      console.log('websocket session closed', e.reason ? e.reason : '')
     }
   }
 
@@ -110,11 +111,12 @@ export const dial = async (pc, code) => {
       }
       console.log('generated key')
       pc.onicecandidate = e => {
-        if (e.candidate && e.candidate.candidate !== "") {
-          console.log('got local candidate:', e.candidate.candidate)
+        if (e.candidate && e.candidate.candidate !== '') {
+          console.log('got local candidate')
           ws.send(util.seal(key, JSON.stringify(e.candidate)))
+        } else if (!e.candidate) {
+          logNAT(pc.localDescription.sdp)
         }
-        candidateStatsAdd(e.candidate)
       }
       return
     }
@@ -129,15 +131,15 @@ export const dial = async (pc, code) => {
     const msg = JSON.parse(jmsg)
     if (msg.type === 'offer') {
       await pc.setRemoteDescription(new RTCSessionDescription(msg))
-      console.log('got offer:', pc.remoteDescription.sdp)
+      console.log('got offer')
       await pc.setLocalDescription(await pc.createAnswer())
-      console.log('created answer:', pc.localDescription.sdp)
+      console.log('created answer')
       ws.send(util.seal(key, JSON.stringify(pc.localDescription)))
       return
     }
     if (msg.candidate) {
       pc.addIceCandidate(new RTCIceCandidate(msg))
-      console.log('got remote candidate:', msg.candidate)
+      console.log('got remote candidate')
       return
     }
     console.log('unknown message type', msg)
@@ -165,86 +167,60 @@ export const dial = async (pc, code) => {
     } else if (e.code === 4002) {
       connC.reject("couldn't get slot")
     } else {
-      console.log('websocket session closed', e.reason)
+      console.log('websocket session closed', e.reason ? e.reason : '')
     }
   }
   return connP
 }
 
-// candidateStats tries to collect statistics about candidates to help
-// diagnose NAT issues.
-let candidateStats = []
-const candidateStatsAdd = candidate => {
-  if (candidate) {
-    if (candidate.candidate !== "") {
-      candidateStats.push(parseCandidate(candidate.candidate))
+// logNAT tries to guess the type of NAT based on candidates and log it.
+const logNAT = sdp => {
+  let count = 0; let host = 0; let srflx = 0
+  const portmap = new Map()
+
+  const lines = sdp.replace(/\r/g, '').split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].startsWith('a=candidate:')) {
+      continue
     }
-    return
+    const parts = lines[i].substring('a=candidate:'.length).split(' ')
+    const proto = parts[2].toLowerCase()
+    const port = parts[5]
+    const typ = parts[7]
+    if (proto !== 'udp') {
+      continue
+    }
+    count++
+    if (typ === 'host') {
+      host++
+    } else if (typ === 'srflx') {
+      srflx++
+      let rport = ''
+      for (let j = 8; j < parts.length; j += 2) {
+        if (parts[j] === 'rport') {
+          rport = parts[j + 1]
+        }
+      }
+      if (!portmap.get(rport)) {
+        portmap.set(rport, new Set())
+      }
+      portmap.get(rport).add(port)
+    }
   }
-  // We're done collecting candidates. Log a summary.
-  let udp = candidateStats.filter(c => c.protocol === 'udp')
-  let srflx = candidateStats.filter(c => c.type === 'srflx')
-  
-  console.log(`CANDIDATES SUMMARY`)
-  console.log(`total: ${candidateStats.length}`)
-  console.log(`udp: ${udp.length}`)
-  console.log(`stun: ${srflx.length}`)
-  if (srflx.length === 0) {
-    console.log(`nat: unknown: ice disabled or stun blocked`)
-  } else if (srflx.length === 1) {
-    console.log(`nat: cone or none`)
-  } else if (srflx.length === 2) {
-    if (srflx[0].relatedPort === srflx[1].relatedPort &&
-        srflx[0].port !== srflx[1].port) {
-      console.log(`nat: symmetric (bad news)`)
-    } else if (srflx[0].relatedPort === srflx[1].relatedPort &&
-        srflx[0].port === srflx[1].port) {
-      console.log(`nat: cone or none`)
-    } else {
-      console.log(`nat: unknown: stun results for different internal source ports`)
+  console.log(`local udp candidates: ${count} (host: ${host} stun: ${srflx})`)
+  let maxmapping = 0
+  portmap.forEach(v => {
+    if (v.size > maxmapping) {
+      maxmapping = v.size
     }
+  })
+  if (maxmapping === 0) {
+    console.log('nat: unknown: ice disabled or stun blocked')
+  } else if (maxmapping === 1) {
+    console.log('nat: cone or none: 1:1 port mapping')
+  } else if (maxmapping > 1) {
+    console.log('nat: symmetric: 1:n port mapping (bad news)')
   } else {
-    console.log(`nat: unknown: more stun results than expected`)
+    console.log('nat: failed to estimate nat type')
   }
-  console.log(`------------------`)
-  candidateStats = []
-}
-
-// parseCandidate based on https://github.com/fippo/sdp
-const parseCandidate = line => {
-  var parts;
-  // Parse both variants.
-  if (line.indexOf('a=candidate:') === 0) {
-    parts = line.substring(12).split(' ');
-  } else {
-    parts = line.substring(10).split(' ');
-  }
-
-  var candidate = {
-    foundation: parts[0],
-    component: parts[1],
-    protocol: parts[2].toLowerCase(),
-    priority: parseInt(parts[3], 10),
-    ip: parts[4],
-    port: parseInt(parts[5], 10),
-    // skip parts[6] == 'typ'
-    type: parts[7]
-  };
-
-  for (var i = 8; i < parts.length; i += 2) {
-    switch (parts[i]) {
-      case 'raddr':
-        candidate.relatedAddress = parts[i + 1];
-        break;
-      case 'rport':
-        candidate.relatedPort = parseInt(parts[i + 1], 10);
-        break;
-      case 'tcptype':
-        candidate.tcpType = parts[i + 1];
-        break;
-      default: // Unknown extensions are silently ignored.
-        break;
-    }
-  }
-  return candidate;
 }

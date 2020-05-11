@@ -4,7 +4,7 @@ let receiving
 let sending
 let datachannel
 let serviceworker
-let hacks = {}
+const hacks = {}
 
 const pick = e => {
   const files = document.getElementById('filepicker').files
@@ -125,15 +125,15 @@ const triggerDownload = receiving => {
     //   But if `postMessage` didn't throw we should be safe.
     window.location = `/_/${receiving.id}`
   } else if (hacks.noblob) {
-    const blob = new Blob([receiving.data], {type: receiving.type})
-    let reader = new FileReader()
+    const blob = new Blob([receiving.data], { type: receiving.type })
+    const reader = new FileReader()
     reader.onloadend = () => {
       receiving.a.href = reader.result
       receiving.a.download = receiving.name
     }
     reader.readAsDataURL(blob)
   } else {
-    const blob = new Blob([receiving.data], {type: receiving.type})
+    const blob = new Blob([receiving.data], { type: receiving.type })
     receiving.a.href = URL.createObjectURL(blob)
     receiving.a.download = receiving.name
     receiving.a.click()
@@ -213,28 +213,28 @@ const receive = e => {
 const connect = async e => {
   const pc = new RTCPeerConnection({
     iceServers: [
-      {urls: 'stun:stun1.l.google.com:19302'},
-      {urls: 'stun:stun2.l.google.com:19302'}
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' }
     ]
   })
   pc.onconnectionstatechange = e => {
     switch (pc.connectionState) {
-    case "connected":
+      case 'connected':
       // Handled in datachannel.onopen.
-      console.log('webrtc connected')
-      break
-    case "failed":
-      disconnected()
-      console.log('webrtc connection failed connectionState:', pc.connectionState, 'iceConnectionState',  pc.iceConnectionState)
-      document.getElementById('info').innerHTML = 'NETWORK ERROR TRY AGAIN'
-      break
-    case "disconnected":
-    case "closed":
-      disconnected()
-      console.log('webrtc connection closed')
-      document.getElementById('info').innerHTML = 'DISCONNECTED'
-      pc.onconnectionstatechange = null
-      break
+        console.log('webrtc connected')
+        break
+      case 'failed':
+        disconnected()
+        console.log('webrtc connection failed connectionState:', pc.connectionState, 'iceConnectionState', pc.iceConnectionState)
+        document.getElementById('info').innerHTML = 'NETWORK ERROR TRY AGAIN'
+        break
+      case 'disconnected':
+      case 'closed':
+        disconnected()
+        console.log('webrtc connection closed')
+        document.getElementById('info').innerHTML = 'DISCONNECTED'
+        pc.onconnectionstatechange = null
+        break
     }
   }
   datachannel = pc.createDataChannel('data', { negotiated: true, id: 0 })
@@ -345,7 +345,7 @@ const preventdefault = e => {
 const hashchange = e => {
   const newhash = location.hash.substring(1)
   if (newhash !== '' && newhash !== document.getElementById('magiccode').value) {
-    console.log("hash changed dialling new code")
+    console.log('hash changed dialling new code')
     document.getElementById('magiccode').value = newhash
     codechange()
     connect()
@@ -368,11 +368,11 @@ const browserhacks = () => {
     hacks.browserunsupported = true
     hacks.nosw = true
     hacks.nowasm = true
-    console.log("quirks: browser not supported")
+    console.log('quirks: browser not supported')
     console.log(
-      "websocket:", !!window.WebSocket,
-      "webrtc:", !!window.RTCPeerConnection,
-      "wasm:", !!window.WebAssembly
+      'websocket:', !!window.WebSocket,
+      'webrtc:', !!window.RTCPeerConnection,
+      'wasm:', !!window.WebAssembly
     )
     return
   }
@@ -383,18 +383,18 @@ const browserhacks = () => {
       const source = await (await resp).arrayBuffer()
       return await WebAssembly.instantiate(source, importObject)
     }
-    console.log("quirks: using wasm streaming polyfill")
+    console.log('quirks: using wasm streaming polyfill')
   }
 
   // Safari cannot save files from service workers.
   if (window.safari) {
     hacks.nosw = true
-    console.log("quirks: serviceworkers disabled on safari")
+    console.log('quirks: serviceworkers disabled on safari')
   }
 
   if (!(navigator.serviceWorker)) {
     hacks.nosw = true
-    console.log("quirks: no serviceworkers")
+    console.log('quirks: no serviceworkers')
   }
 
   // Work around iOS Safari <= 12 not being able to download blob URLs.
@@ -404,7 +404,7 @@ const browserhacks = () => {
   if (/^Mozilla\/5.0 \(iPhone; CPU iPhone OS 12_[0-9]_[0-9] like Mac OS X\)/.test(navigator.userAgent)) {
     hacks.noblob = true
     hacks.nosw = true
-    console.log("quirks: using ios12 dataurl hack")
+    console.log('quirks: using ios12 dataurl hack')
   }
 
   // Work around iOS trying to connect when the link is previewed.
@@ -412,7 +412,7 @@ const browserhacks = () => {
   if (/iPad|iPhone|iPod/.test(navigator.userAgent) &&
       ![320, 375, 414, 768, 1024].includes(window.innerWidth)) {
     hacks.noautoconnect = true
-    console.log("quirks: detected preview, ")
+    console.log('quirks: detected preview, ')
   }
 
   // Detect for features we need for this to work.
@@ -429,10 +429,10 @@ const domready = async () => {
 
 const swready = async () => {
   if (!hacks.nosw) {
-    const registration = await navigator.serviceWorker.register('sw.js', {scope: `/_/`})
+    const registration = await navigator.serviceWorker.register('sw.js', { scope: '/_/' })
     // TODO handle updates to service workers.
     serviceworker = registration.active || registration.waiting || registration.installing
-    console.log("service worker registered:", serviceworker.state)
+    console.log('service worker registered:', serviceworker.state)
   }
 }
 

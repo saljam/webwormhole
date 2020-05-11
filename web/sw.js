@@ -38,7 +38,7 @@ self.addEventListener('message', event => {
 
     // TODO propagate cancellation back to main window and sender.
     const onCancel = cancelReason => console.warn('stream cancelled', cancelReason)
-    const streamInfo = { name, size, filetype, offset:0, ...createStream(onCancel) }
+    const streamInfo = { name, size, filetype, offset: 0, ...createStream(onCancel) }
 
     // Resolve promise if GET request arrived first.
     signalMetadataReady(id, streamInfo)
