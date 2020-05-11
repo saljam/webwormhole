@@ -291,6 +291,7 @@ const dialling = () => {
 
   document.getElementById('dial').disabled = true
   document.getElementById('magiccode').readOnly = true
+  document.getElementById('filepicker').disabled = true
 }
 
 const connected = () => {
@@ -303,6 +304,7 @@ const connected = () => {
   document.body.addEventListener('dragover', highlight)
   document.body.addEventListener('drop', unhighlight)
   document.body.addEventListener('dragleave', unhighlight)
+  document.getElementById('filepicker').disabled = false
 
   document.getElementById('info').innerHTML = 'OR DRAG FILES TO SEND'
 
@@ -317,6 +319,7 @@ const disconnected = () => {
   document.getElementById('dial').disabled = false
   document.getElementById('magiccode').readOnly = false
   document.getElementById('magiccode').value = ''
+  document.getElementById('filepicker').disabled = true
 
   document.body.removeEventListener('drop', drop)
   document.body.removeEventListener('dragenter', highlight)
