@@ -68,6 +68,9 @@ const (
 // Verbose logging.
 var Verbose = false
 
+// Very Verbose logging. (This will go away.)
+var VeryVerbose = false
+
 // ErrBadVersion is returned when the signalling server runs an incompatible
 // version of the signalling protocol.
 var ErrBadVersion = errors.New("bad version")
@@ -245,6 +248,9 @@ func (c *Wormhole) addCandidates(ws *websocket.Conn, key *[32]byte) {
 		}
 		if Verbose {
 			log.Printf("received new remote candidate")
+		}
+		if VeryVerbose {
+			log.Printf("%v", candidate)
 		}
 		err = c.pc.AddICECandidate(candidate)
 		if err != nil {
@@ -429,6 +435,9 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	if Verbose {
 		log.Printf("sent offer")
 	}
+	if VeryVerbose {
+		log.Printf("%v", c.pc.LocalDescription().SDP)
+	}
 
 	var answer webrtc.SessionDescription
 	err = readEncJSON(ws, &key, &answer)
@@ -441,6 +450,9 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	}
 	if Verbose {
 		log.Printf("got answer")
+	}
+	if VeryVerbose {
+		log.Printf("%v", c.pc.RemoteDescription().SDP)
 	}
 
 	go c.addCandidates(ws, &key)
@@ -536,6 +548,9 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	if Verbose {
 		log.Printf("got offer")
 	}
+	if VeryVerbose {
+		log.Printf("%v", c.pc.RemoteDescription().SDP)
+	}
 	answer, err := c.pc.CreateAnswer(nil)
 	if err != nil {
 		return nil, err
@@ -550,6 +565,9 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	}
 	if Verbose {
 		log.Printf("sent answer")
+	}
+	if VeryVerbose {
+		log.Printf("%v", c.pc.LocalDescription().SDP)
 	}
 
 	go c.addCandidates(ws, &key)
