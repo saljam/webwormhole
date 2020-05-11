@@ -211,7 +211,12 @@ const receive = e => {
 }
 
 const connect = async e => {
-  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      {urls: 'stun:stun1.l.google.com:19302'},
+      {urls: 'stun:stun2.l.google.com:19302'}
+    ]
+  })
   pc.onconnectionstatechange = e => {
     switch (pc.connectionState) {
     case "connected":
@@ -243,7 +248,7 @@ const connect = async e => {
   }
   datachannel.onerror = e => {
     disconnected()
-    console.log('datachannel error:', e)
+    console.log('datachannel error:', e.error)
     document.getElementById('info').innerHTML = 'NETWORK ERROR TRY AGAIN'
   }
   try {

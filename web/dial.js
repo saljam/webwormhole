@@ -36,6 +36,7 @@ export const newwormhole = async (pc) => {
           console.log('got local candidate:', e.candidate.candidate)
           ws.send(util.seal(key, JSON.stringify(e.candidate)))
         }
+        candidateStatsAdd(e.candidate)
       }
       await pc.setLocalDescription(await pc.createOffer())
       console.log('created offer:', pc.localDescription.sdp)
@@ -113,6 +114,7 @@ export const dial = async (pc, code) => {
           console.log('got local candidate:', e.candidate.candidate)
           ws.send(util.seal(key, JSON.stringify(e.candidate)))
         }
+        candidateStatsAdd(e.candidate)
       }
       return
     }
@@ -167,4 +169,82 @@ export const dial = async (pc, code) => {
     }
   }
   return connP
+}
+
+// candidateStats tries to collect statistics about candidates to help
+// diagnose NAT issues.
+let candidateStats = []
+const candidateStatsAdd = candidate => {
+  if (candidate) {
+    if (candidate.candidate !== "") {
+      candidateStats.push(parseCandidate(candidate.candidate))
+    }
+    return
+  }
+  // We're done collecting candidates. Log a summary.
+  let udp = candidateStats.filter(c => c.protocol === 'udp')
+  let srflx = candidateStats.filter(c => c.type === 'srflx')
+  
+  console.log(`CANDIDATES SUMMARY`)
+  console.log(`total: ${candidateStats.length}`)
+  console.log(`udp: ${udp.length}`)
+  console.log(`stun: ${srflx.length}`)
+  if (srflx.length === 0) {
+    console.log(`nat: unknown: ice disabled or stun blocked`)
+  } else if (srflx.length === 1) {
+    console.log(`nat: cone or none`)
+  } else if (srflx.length === 2) {
+    if (srflx[0].relatedPort === srflx[1].relatedPort &&
+        srflx[0].port !== srflx[1].port) {
+      console.log(`nat: symmetric (bad news)`)
+    } else if (srflx[0].relatedPort === srflx[1].relatedPort &&
+        srflx[0].port === srflx[1].port) {
+      console.log(`nat: cone or none`)
+    } else {
+      console.log(`nat: unknown: stun results for different internal source ports`)
+    }
+  } else {
+    console.log(`nat: unknown: more stun results than expected`)
+  }
+  console.log(`------------------`)
+  candidateStats = []
+}
+
+// parseCandidate based on https://github.com/fippo/sdp
+const parseCandidate = line => {
+  var parts;
+  // Parse both variants.
+  if (line.indexOf('a=candidate:') === 0) {
+    parts = line.substring(12).split(' ');
+  } else {
+    parts = line.substring(10).split(' ');
+  }
+
+  var candidate = {
+    foundation: parts[0],
+    component: parts[1],
+    protocol: parts[2].toLowerCase(),
+    priority: parseInt(parts[3], 10),
+    ip: parts[4],
+    port: parseInt(parts[5], 10),
+    // skip parts[6] == 'typ'
+    type: parts[7]
+  };
+
+  for (var i = 8; i < parts.length; i += 2) {
+    switch (parts[i]) {
+      case 'raddr':
+        candidate.relatedAddress = parts[i + 1];
+        break;
+      case 'rport':
+        candidate.relatedPort = parseInt(parts[i + 1], 10);
+        break;
+      case 'tcptype':
+        candidate.tcpType = parts[i + 1];
+        break;
+      default: // Unknown extensions are silently ignored.
+        break;
+    }
+  }
+  return candidate;
 }
