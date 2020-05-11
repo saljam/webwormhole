@@ -32,6 +32,13 @@ const importMeta = `<!doctype html>
 <meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">
 `
 
+const serviceWorkerPage = `Oops. You're not supposed to end up here.
+
+This URL is used by WebWormhole to efficiently download data from
+a web page.  It is usually handled by a ServiceWorker running in
+your browser.
+`
+
 // slots is a map of allocated slot numbers.
 var slots = struct {
 	m map[string]chan *websocket.Conn
@@ -181,6 +188,10 @@ func server(args ...string) {
 		w.Header().Set("X-Version", wormhole.Protocol)
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			w.Write([]byte(importMeta))
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/_/") {
+			http.Error(w, serviceWorkerPage, http.StatusNotFound)
 			return
 		}
 		fs.ServeHTTP(w, r)
