@@ -39,6 +39,7 @@ import (
 	"log"
 	"net/url"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,9 +64,6 @@ const (
 	// cannot allocate any new slots at the time.
 	CloseNoMoreSlots
 )
-
-// DefaultSTUNServer to use.
-const DefaultSTUNServer = "stun:stun.l.google.com:19302"
 
 // Verbose logging.
 var Verbose = false
@@ -236,6 +234,9 @@ func (c *Wormhole) addCandidates(ws *websocket.Conn, key *[32]byte) {
 	for {
 		var candidate webrtc.ICECandidateInit
 		err := readEncJSON(ws, key, &candidate)
+		if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+			return
+		}
 		if err != nil {
 			if Verbose {
 				log.Printf("cannot read remote candidate: %v", err)
@@ -243,7 +244,7 @@ func (c *Wormhole) addCandidates(ws *websocket.Conn, key *[32]byte) {
 			return
 		}
 		if Verbose {
-			log.Printf("got new remote candidate: %v", candidate)
+			log.Printf("received new remote candidate")
 		}
 		err = c.pc.AddICECandidate(candidate)
 		if err != nil {
@@ -252,6 +253,57 @@ func (c *Wormhole) addCandidates(ws *websocket.Conn, key *[32]byte) {
 			}
 			return
 		}
+	}
+}
+
+// logNAT tries to guess the type of NAT based on candidates and log it.
+func logNAT(sdp string) {
+	count, host, srflx := 0, 0, 0
+	portmap := map[string]map[string]bool{}
+	lines := strings.Split(strings.ReplaceAll(sdp, "\r", ""), "\n")
+	for _, l := range lines {
+		if !strings.HasPrefix(l, "a=candidate:") {
+			continue
+		}
+		parts := strings.Split(l[len("a=candidate:"):], " ")
+		proto := strings.ToLower(parts[2])
+		port := parts[5]
+		typ := parts[7]
+		if proto != "udp" {
+			continue
+		}
+		count++
+		if typ == "host" {
+			host++
+		} else if typ == "srflx" {
+			srflx++
+			var rport string
+			for i := 8; i < len(parts); i += 2 {
+				if parts[i] == "rport" {
+					rport = parts[i+1]
+					break
+				}
+			}
+			if portmap[rport] == nil {
+				portmap[rport] = map[string]bool{}
+			}
+			portmap[rport][port] = true
+		}
+	}
+	log.Printf("local udp candidates: %d (host: %d stun: %d)", count, host, srflx)
+	maxmapping := 0
+	for _, v := range portmap {
+		if len(v) > maxmapping {
+			maxmapping = len(v)
+		}
+	}
+	switch maxmapping {
+	case 0:
+		log.Printf("nat: unknown: ice disabled or stun blocked")
+	case 1:
+		log.Printf("nat: cone or none: 1:1 port mapping")
+	default:
+		log.Printf("nat: symmetric: 1:n port mapping (bad news)")
 	}
 }
 
@@ -277,7 +329,10 @@ func newWormhole(sigserv string, pc *webrtc.PeerConnection) (*Wormhole, error) {
 
 	if pc == nil {
 		c.pc, err = rtcapi.NewPeerConnection(webrtc.Configuration{
-			ICEServers: []webrtc.ICEServer{{URLs: []string{DefaultSTUNServer}}},
+			ICEServers: []webrtc.ICEServer{
+				{URLs: []string{"stun:stun1.l.google.com:19302"}},
+				{URLs: []string{"stun:stun2.l.google.com:19302"}},
+			},
 		})
 		if err != nil {
 			return nil, err
@@ -372,7 +427,7 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 		return nil, err
 	}
 	if Verbose {
-		log.Printf("sent offer:\n%v", c.pc.LocalDescription().SDP)
+		log.Printf("sent offer")
 	}
 
 	var answer webrtc.SessionDescription
@@ -385,10 +440,14 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 		return nil, err
 	}
 	if Verbose {
-		log.Printf("got answer:\n%v", c.pc.RemoteDescription().SDP)
+		log.Printf("got answer")
 	}
 
 	go c.addCandidates(ws, &key)
+
+	if Verbose {
+		logNAT(c.pc.LocalDescription().SDP)
+	}
 
 	// TODO put a timeout here.
 	select {
@@ -398,7 +457,7 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 
 	ws.Close(websocket.StatusNormalClosure, "done")
 	if Verbose {
-		log.Printf("wenrtc connection succeeded, closing signalling channel")
+		log.Printf("webrtc connection succeeded, closing signalling channel")
 	}
 	return c, err
 }
@@ -475,7 +534,7 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 		return nil, err
 	}
 	if Verbose {
-		log.Printf("got offer:\n%v", c.pc.RemoteDescription().SDP)
+		log.Printf("got offer")
 	}
 	answer, err := c.pc.CreateAnswer(nil)
 	if err != nil {
@@ -490,10 +549,14 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 		return nil, err
 	}
 	if Verbose {
-		log.Printf("sent answer:\n%v", c.pc.LocalDescription().SDP)
+		log.Printf("sent answer")
 	}
 
 	go c.addCandidates(ws, &key)
+
+	if Verbose {
+		logNAT(c.pc.LocalDescription().SDP)
+	}
 
 	// TODO put a timeout here.
 	select {
@@ -503,7 +566,7 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 
 	ws.Close(websocket.StatusNormalClosure, "done")
 	if Verbose {
-		log.Printf("wenrtc connection succeeded, closing signalling channel")
+		log.Printf("webrtc connection succeeded, closing signalling channel")
 	}
 	return c, err
 }

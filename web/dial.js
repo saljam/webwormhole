@@ -223,4 +223,5 @@ const logNAT = sdp => {
   } else {
     console.log('nat: failed to estimate nat type')
   }
+  console.log('for more webrtc troubleshooting try https://test.webrtc.org/ and your browser webrtc logs (about:webrtc or chrome://webrtc-internals/)')
 }
