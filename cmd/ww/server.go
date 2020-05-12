@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"expvar"
 	"flag"
 	"fmt"
 	"log"
@@ -38,6 +39,24 @@ This URL is used by WebWormhole to efficiently download data from
 a web page.  It is usually handled by a ServiceWorker running in
 your browser.
 `
+
+var stats = struct {
+	timeout          *expvar.Int
+	rendezvous       *expvar.Int
+	serviceworkererr *expvar.Int
+	goget            *expvar.Int
+	nosuchslot       *expvar.Int
+	nomoreslots      *expvar.Int
+	usedslots        *expvar.Int
+}{
+	timeout:          expvar.NewInt("timeout"),
+	rendezvous:       expvar.NewInt("rendezvous"),
+	serviceworkererr: expvar.NewInt("serviceworkererr"),
+	goget:            expvar.NewInt("goget"),
+	nosuchslot:       expvar.NewInt("nosuchslot"),
+	nomoreslots:      expvar.NewInt("nomoreslots"),
+	usedslots:        expvar.NewInt("usedslots"),
+}
 
 // slots is a map of allocated slot numbers.
 var slots = struct {
@@ -99,14 +118,15 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			newslot, ok := freeslot()
 			if !ok {
 				slots.Unlock()
+				stats.nomoreslots.Add(1)
 				conn.Close(wormhole.CloseNoMoreSlots, "cannot allocate slots")
 				return
 			}
 			slotkey = newslot
 			sc := make(chan *websocket.Conn)
 			slots.m[slotkey] = sc
+			stats.usedslots.Set(int64(len(slots.m)))
 			slots.Unlock()
-			log.Printf("%s book", slotkey)
 			err = conn.Write(ctx, websocket.MessageText, []byte(slotkey))
 			if err != nil {
 				log.Println(err)
@@ -114,16 +134,17 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			}
 			select {
 			case <-ctx.Done():
-				log.Printf("%s timeout", slotkey)
+				stats.timeout.Add(1)
 				slots.Lock()
 				delete(slots.m, slotkey)
+				stats.usedslots.Set(int64(len(slots.m)))
 				slots.Unlock()
 				conn.Close(wormhole.CloseSlotTimedOut, "timed out")
 				return
 			case sc <- conn:
 			}
 			rconn = <-sc
-			log.Printf("%s rendezvous", slotkey)
+			stats.rendezvous.Add(1)
 			return
 		}
 		// Join an existing slot.
@@ -131,10 +152,12 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		sc, ok := slots.m[slotkey]
 		if !ok {
 			slots.Unlock()
+			stats.nosuchslot.Add(1)
 			conn.Close(wormhole.CloseNoSuchSlot, "no such slot")
 			return
 		}
 		delete(slots.m, slotkey)
+		stats.usedslots.Set(int64(len(slots.m)))
 		slots.Unlock()
 		log.Printf("%s visit", slotkey)
 		select {
@@ -184,13 +207,16 @@ func server(args ...string) {
 	fs := gziphandler.GzipHandler(http.FileServer(http.Dir(*html)))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/s/", relay)
+	mux.Handle("/metrics", expvar.Handler())
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Version", wormhole.Protocol)
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
+			stats.goget.Add(1)
 			w.Write([]byte(importMeta))
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/_/") {
+			stats.serviceworkererr.Add(1)
 			http.Error(w, serviceWorkerPage, http.StatusNotFound)
 			return
 		}
