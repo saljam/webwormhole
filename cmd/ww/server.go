@@ -103,7 +103,12 @@ func freeslot() (slot string, ok bool) {
 func relay(w http.ResponseWriter, r *http.Request) {
 	slotkey := r.URL.Path[len("/s/"):]
 	var rconn *websocket.Conn
-	conn, err := websocket.Accept(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		// This sounds nasty but checking origin only matters if requests
+		// change any user state on the server, aka CSRF. We don't have any
+		// user state other than this ephemeral connection. So it's fine.
+		InsecureSkipVerify: true,
+	})
 	if err != nil {
 		log.Println(err)
 		return
@@ -159,7 +164,6 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		delete(slots.m, slotkey)
 		stats.usedslots.Set(int64(len(slots.m)))
 		slots.Unlock()
-		log.Printf("%s visit", slotkey)
 		select {
 		case <-ctx.Done():
 			conn.Close(wormhole.CloseSlotTimedOut, "timed out")
@@ -210,6 +214,7 @@ func server(args ...string) {
 	mux.Handle("/metrics", expvar.Handler())
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Version", wormhole.Protocol)
+		w.Header().Set("Access-Control-Allow-Origin", "*") // to allow loading js modules
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			stats.goget.Add(1)
 			w.Write([]byte(importMeta))

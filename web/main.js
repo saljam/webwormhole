@@ -255,7 +255,7 @@ const connect = async e => {
     if (document.getElementById('magiccode').value === '') {
       dialling()
       document.getElementById('info').innerHTML = 'WAITING FOR THE OTHER SIDE - SHARE CODE OR URL'
-      const [code, finish] = await newwormhole(pc)
+      const [code, finish] = await newwormhole(location.href, pc)
       document.getElementById('magiccode').value = code
       location.hash = code
       const qr = util.qrencode(location.href)
@@ -268,7 +268,7 @@ const connect = async e => {
     } else {
       dialling()
       document.getElementById('info').innerHTML = 'CONNECTING'
-      await dial(pc, document.getElementById('magiccode').value)
+      await dial(location.href, pc, document.getElementById('magiccode').value)
     }
   } catch (err) {
     disconnected()
@@ -280,6 +280,7 @@ const connect = async e => {
       document.getElementById('info').innerHTML = 'CODE TIMED OUT GENERATE ANOTHER'
     } else {
       document.getElementById('info').innerHTML = 'COULD NOT CONNECT TRY AGAIN'
+      console.log(err)
     }
   }
 }

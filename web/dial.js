@@ -1,10 +1,21 @@
 import { genpassword } from './wordlist.js'
 
-const signalserver = ((location.protocol === 'https:') ? 'wss://' : 'ws://') + location.host + '/s/'
+const wsserver = (url, slot) => {
+  const u = new URL(url)
+  let protocol = 'wss:'
+  if (u.protocol === 'http:') {
+    protocol = 'ws:'
+  }
+  let path = u.pathname + 's/' + slot
+  if (!path.startsWith("/")) {
+    path = "/" + path
+  }
+  return protocol + "//" + u.host + path
+}
 
 // newwormhole creates wormhole, the A side.
-export const newwormhole = async (pc) => {
-  const ws = new WebSocket(signalserver)
+export const newwormhole = async (signal, pc) => {
+  const ws = new WebSocket(wsserver(signal, ""))
   let key, slot, pass
   let slotC, connC
   const slotP = new Promise((resolve, reject) => {
@@ -90,13 +101,13 @@ export const newwormhole = async (pc) => {
 }
 
 // dial joins a wormhole, the B side.
-export const dial = async (pc, code) => {
+export const dial = async (signal, pc, code) => {
   const [slot, ...passparts] = code.split('-')
   const pass = passparts.join('-')
 
   console.log('dialling slot:', slot)
 
-  const ws = new WebSocket(signalserver + slot)
+  const ws = new WebSocket(wsserver(signal, slot))
   let key
   let connC
   const connP = new Promise((resolve, reject) => {
