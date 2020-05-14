@@ -35,9 +35,10 @@ var state *cpace.State
 
 // start(pass string) (base64msgA string)
 func start(_ js.Value, args []js.Value) interface{} {
-	pass := args[0].String()
+	pass := make([]byte, args[0].Length())
+	js.CopyBytesToGo(pass, args[0])
 
-	msgA, s, err := cpace.Start(pass, cpace.NewContextInfo("", "", nil))
+	msgA, s, err := cpace.Start(string(pass), cpace.NewContextInfo("", "", nil))
 	if err != nil {
 		return nil
 	}
@@ -72,13 +73,14 @@ func finish(_ js.Value, args []js.Value) interface{} {
 
 // finish(pass, base64msgA string) (key []byte, base64msgB string)
 func exchange(_ js.Value, args []js.Value) interface{} {
-	pass := args[0].String()
+	pass := make([]byte, args[0].Length())
+	js.CopyBytesToGo(pass, args[0])
 	msgA, err := base64.URLEncoding.DecodeString(args[1].String())
 	if err != nil {
 		return []interface{}{nil, nil}
 	}
 
-	msgB, mk, err := cpace.Exchange(pass, cpace.NewContextInfo("", "", nil), msgA)
+	msgB, mk, err := cpace.Exchange(string(pass), cpace.NewContextInfo("", "", nil), msgA)
 	if err != nil {
 		return []interface{}{nil, nil}
 	}

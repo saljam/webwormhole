@@ -1,4 +1,4 @@
-import { genpassword } from './wordlist.js'
+import { encode, decode } from './wordlist.js'
 
 const wsserver = (url, slot) => {
   const u = new URL(url)
@@ -27,9 +27,9 @@ export const newwormhole = async (signal, pc) => {
   ws.onmessage = async m => {
     if (!slot) {
       slot = m.data
-      pass = genpassword(2)
+      pass = crypto.getRandomValues(new Uint8Array(2))
       console.log('assigned slot:', slot)
-      slotC.resolve(slot + '-' + pass)
+      slotC.resolve(slot + '-' + encode(pass))
       return
     }
     if (!key) {
@@ -103,7 +103,7 @@ export const newwormhole = async (signal, pc) => {
 // dial joins a wormhole, the B side.
 export const dial = async (signal, pc, code) => {
   const [slot, ...passparts] = code.split('-')
-  const pass = passparts.join('-')
+  const pass = decode(passparts)
 
   console.log('dialling slot:', slot)
 
