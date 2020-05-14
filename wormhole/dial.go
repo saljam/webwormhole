@@ -38,7 +38,6 @@ import (
 	"io"
 	"log"
 	"net/url"
-	"path"
 	"strings"
 	"sync"
 	"time"
@@ -52,8 +51,8 @@ import (
 
 // Protocol is an identifier for the current signalling scheme. It's
 // intended to help clients print a friendlier message urging them to
-// upgrade if the signalling server has a diffect version.
-const Protocol = "3"
+// upgrade if the signalling server has a different version.
+const Protocol = "4"
 
 const (
 	// CloseNoSuchSlot is the WebSocket status returned if the slot is not valid.
@@ -63,6 +62,9 @@ const (
 	// CloseNoMoreSlots is the WebSocket status returned when the signalling server
 	// cannot allocate any new slots at the time.
 	CloseNoMoreSlots
+	// CloseWrongProto is the WebSocket status returned when the signalling server
+	// runs a different version of the signalling protocol.
+	CloseWrongProto
 )
 
 // Verbose logging.
@@ -330,7 +332,6 @@ func newWormhole(sigserv string, pc *webrtc.PeerConnection) (*Wormhole, error) {
 	} else {
 		u.Scheme = "wss"
 	}
-	u.Path = path.Join(u.Path, "/s/")
 	c.wsaddr = u.String()
 
 	if pc == nil {
@@ -378,15 +379,20 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	if err != nil {
 		return nil, err
 	}
-	ws, r, err := websocket.Dial(context.TODO(), c.wsaddr+"/", nil)
+	ws, _, err := websocket.Dial(context.TODO(), c.wsaddr, &websocket.DialOptions{
+		Subprotocols: []string{Protocol},
+	})
+	if websocket.CloseStatus(err) == CloseWrongProto {
+		return nil, ErrBadVersion
+	}
 	if err != nil {
-		if r != nil && r.Header.Get("X-Version") != Protocol {
-			return nil, ErrBadVersion
-		}
 		return nil, err
 	}
 
 	slot, err := readString(ws)
+	if websocket.CloseStatus(err) == CloseWrongProto {
+		return nil, ErrBadVersion
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -488,11 +494,13 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	}
 
 	// Start the handshake.
-	ws, r, err := websocket.Dial(context.TODO(), c.wsaddr+"/"+slot, nil)
+	ws, _, err := websocket.Dial(context.TODO(), c.wsaddr+"/"+slot, &websocket.DialOptions{
+		Subprotocols: []string{Protocol},
+	})
+	if websocket.CloseStatus(err) == CloseWrongProto {
+		return nil, ErrBadVersion
+	}
 	if err != nil {
-		if r != nil && r.Header.Get("X-Version") != Protocol {
-			return nil, ErrBadVersion
-		}
 		return nil, err
 	}
 
@@ -523,6 +531,9 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	}
 
 	msgB, err := readBase64(ws)
+	if websocket.CloseStatus(err) == CloseWrongProto {
+		return nil, ErrBadVersion
+	}
 	if err != nil {
 		return nil, err
 	}

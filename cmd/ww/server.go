@@ -48,6 +48,7 @@ var stats = struct {
 	nosuchslot       *expvar.Int
 	nomoreslots      *expvar.Int
 	usedslots        *expvar.Int
+	badproto         *expvar.Int
 }{
 	timeout:          expvar.NewInt("timeout"),
 	rendezvous:       expvar.NewInt("rendezvous"),
@@ -56,6 +57,7 @@ var stats = struct {
 	nosuchslot:       expvar.NewInt("nosuchslot"),
 	nomoreslots:      expvar.NewInt("nomoreslots"),
 	usedslots:        expvar.NewInt("usedslots"),
+	badproto:         expvar.NewInt("badproto"),
 }
 
 // slots is a map of allocated slot numbers.
@@ -101,17 +103,24 @@ func freeslot() (slot string, ok bool) {
 
 // relay sets up a rendezvous on a slot and pipes the two websockets together.
 func relay(w http.ResponseWriter, r *http.Request) {
-	slotkey := r.URL.Path[len("/s/"):]
+	slotkey := r.URL.Path[1:] // strip leading slash
 	var rconn *websocket.Conn
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		// This sounds nasty but checking origin only matters if requests
 		// change any user state on the server, aka CSRF. We don't have any
 		// user state other than this ephemeral connection. So it's fine.
 		InsecureSkipVerify: true,
+		Subprotocols:       []string{wormhole.Protocol},
 	})
 	if err != nil {
 		log.Println(err)
 		return
+	}
+	if conn.Subprotocol() != wormhole.Protocol {
+		// Make sure we negotiated the right protocol, since "blank" is also a
+		// default one.
+		stats.badproto.Add(1)
+		conn.Close(wormhole.CloseWrongProto, "wrong protocol, please upgrade client")
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), slotTimeout)
@@ -209,11 +218,15 @@ func server(args ...string) {
 	set.Parse(args[1:])
 
 	fs := gziphandler.GzipHandler(http.FileServer(http.Dir(*html)))
-	mux := http.NewServeMux()
-	mux.HandleFunc("/s/", relay)
-	mux.Handle("/metrics", expvar.Handler())
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Version", wormhole.Protocol)
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/s/") {
+			http.Error(w, "old protocol version please upgrade client", http.StatusNotFound)
+			return
+		}
+		if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+			relay(w, r)
+			return
+		}
 		w.Header().Set("Access-Control-Allow-Origin", "*") // to allow loading js modules
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			stats.goget.Add(1)
@@ -226,7 +239,7 @@ func server(args ...string) {
 			return
 		}
 		fs.ServeHTTP(w, r)
-	})
+	}
 
 	m := &autocert.Manager{
 		Cache:      autocert.DirCache(*secretpath),
@@ -238,7 +251,7 @@ func server(args ...string) {
 		WriteTimeout: 60 * time.Minute,
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpsaddr,
-		Handler:      mux,
+		Handler:      http.HandlerFunc(handler),
 		TLSConfig:    &tls.Config{GetCertificate: m.GetCertificate},
 	}
 	srv := &http.Server{
@@ -246,7 +259,7 @@ func server(args ...string) {
 		WriteTimeout: 60 * time.Minute,
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpaddr,
-		Handler:      m.HTTPHandler(mux),
+		Handler:      m.HTTPHandler(http.HandlerFunc(handler)),
 	}
 
 	if *httpsaddr != "" {

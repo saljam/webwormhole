@@ -6,7 +6,7 @@ const wsserver = (url, slot) => {
   if (u.protocol === 'http:') {
     protocol = 'ws:'
   }
-  let path = u.pathname + 's/' + slot
+  let path = u.pathname + slot
   if (!path.startsWith("/")) {
     path = "/" + path
   }
@@ -15,7 +15,7 @@ const wsserver = (url, slot) => {
 
 // newwormhole creates wormhole, the A side.
 export const newwormhole = async (signal, pc) => {
-  const ws = new WebSocket(wsserver(signal, ""))
+  const ws = new WebSocket(wsserver(signal, ""), "4")
   let key, slot, pass
   let slotC, connC
   const slotP = new Promise((resolve, reject) => {
@@ -92,8 +92,11 @@ export const newwormhole = async (signal, pc) => {
       connC.reject('timed out')
     } else if (e.code === 4002) {
       connC.reject("couldn't get slot")
+    } else if (e.reason !== "") {
+      console.log('websocket session closed:', e.reason)
+      connC.reject("session ended")
     } else {
-      console.log('websocket session closed', e.reason ? e.reason : '')
+      console.log('websocket session closed')
     }
   }
 
@@ -107,7 +110,7 @@ export const dial = async (signal, pc, code) => {
 
   console.log('dialling slot:', slot)
 
-  const ws = new WebSocket(wsserver(signal, slot))
+  const ws = new WebSocket(wsserver(signal, slot), "4")
   let key
   let connC
   const connP = new Promise((resolve, reject) => {
@@ -177,8 +180,11 @@ export const dial = async (signal, pc, code) => {
       connC.reject('timed out')
     } else if (e.code === 4002) {
       connC.reject("couldn't get slot")
+    } else if (e.reason !== "") {
+      console.log('websocket session closed:', e.reason)
+      connC.reject("session ended")
     } else {
-      console.log('websocket session closed', e.reason ? e.reason : '')
+      console.log('websocket session closed')
     }
   }
   return connP
