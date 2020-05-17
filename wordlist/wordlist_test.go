@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestEncodeWords(t *testing.T) {
+func TestEncode(t *testing.T) {
 	cases := []struct {
 		in  []byte
 		out []string
@@ -14,35 +14,33 @@ func TestEncodeWords(t *testing.T) {
 		{[]byte{0}, []string{"aardvark"}},
 		{[]byte{1}, []string{"absurd"}},
 		{[]byte{8, 8}, []string{"aimless", "antenna"}},
-		{[]byte{19, 52}, []string{"Aztec", "confidence"}},
+		{[]byte{19, 52}, []string{"aztec", "confidence"}},
 	}
 	for i := range cases {
-		if out := EncodeWords(cases[i].in); reflect.DeepEqual(out, cases[i].out) != true {
+		if out := Encode(cases[i].in); reflect.DeepEqual(out, cases[i].out) != true {
 			t.Errorf("testcase %v got %v want %v", i, out, cases[i].out)
 		}
 	}
 
 }
 
-func TestDecodeWords(t *testing.T) {
+func TestDecode(t *testing.T) {
 	cases := []struct {
 		words  []string
 		bytes  []byte
 		parity []byte
-		ok     bool
 	}{
-		{[]string{}, []byte{}, []byte{}, true},
-		{[]string{"aardvark"}, []byte{0}, []byte{0}, true},
-		{[]string{"ADRoitness"}, []byte{0}, []byte{1}, true},
-		{[]string{"aimless", "antenna", "cleanup"}, []byte{8, 8, 58}, []byte{0, 1, 0}, true},
-		{[]string{"Aztec", "confidence", "notaword"}, []byte{19, 52}, []byte{0, 1}, false},
+		{[]string{}, []byte{}, []byte{}},
+		{[]string{"aardvark"}, []byte{0}, []byte{0}},
+		{[]string{"ADRoitness"}, []byte{0}, []byte{1}},
+		{[]string{"aimless", "antenna", "cleanup"}, []byte{8, 8, 58}, []byte{0, 1, 0}},
+		{[]string{"Aztec", "confidence", "notaword"}, nil, nil},
 	}
 	for i := range cases {
-		bytes, parity, ok := DecodeWords(cases[i].words)
+		bytes, parity := Decode(cases[i].words)
 		if reflect.DeepEqual(bytes, cases[i].bytes) != true ||
-			reflect.DeepEqual(parity, cases[i].parity) != true ||
-			cases[i].ok != ok {
-			t.Errorf("testcase %v got %v,%v,%v want %v,%v,%v", i, bytes, parity, ok, cases[i].bytes, cases[i].parity, cases[i].ok)
+			reflect.DeepEqual(parity, cases[i].parity) != true {
+			t.Errorf("testcase %v got %v,%v want %v,%v", i, bytes, parity, cases[i].bytes, cases[i].parity)
 		}
 	}
 

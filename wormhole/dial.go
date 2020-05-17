@@ -1,7 +1,7 @@
 // Package wormhole implements a signalling protocol to establish password protected
 // WebRTC connections between peers.
 //
-// WebRTC uses DTLS-RSTP (https://tools.ietf.org/html/rfc5764) to secure its
+// WebRTC uses DTLS-SRTP (https://tools.ietf.org/html/rfc5764) to secure its
 // data. The mechanism it uses to exchange keys relies on exchanging metadata
 // that includes both endpoints' certificate fingerprints via some trusted channel,
 // typically a signalling server over https and websockets. More in RFC5763
@@ -474,7 +474,7 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 	return c, err
 }
 
-// Join performs the signalling handshare to join an existing slot.
+// Join performs the signalling handshake to join an existing slot.
 //
 // slot is used to synchronise with the remote peer on signalling server
 // sigserv, and pass is used as the PAKE password authenticate the WebRTC
@@ -511,6 +511,9 @@ func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormho
 	// An unintended destination is likely going to fail PAKE.
 
 	msgA, pake, err := cpace.Start(pass, cpace.NewContextInfo("", "", nil))
+	if err != nil {
+		return nil, err
+	}
 	err = writeBase64(ws, msgA)
 	if err != nil {
 		return nil, err

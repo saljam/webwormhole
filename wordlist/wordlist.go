@@ -36,7 +36,7 @@ func Decode(words []string) (bytes []byte, parity []byte) {
 
 func index(word string) (i int, ok bool) {
 	for i := range pgpWords {
-		if strings.ToLower(word) == strings.ToLower(pgpWords[i]) {
+		if strings.EqualFold(word, pgpWords[i]) {
 			return i, true
 		}
 	}
