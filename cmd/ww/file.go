@@ -106,6 +106,9 @@ func send(args ...string) {
 			Name: filepath.Base(filepath.Clean(filename)),
 			Size: int(info.Size()),
 		})
+		if err != nil {
+			fatalf("failed to marshal json: %v", err)
+		}
 		_, err = c.Write(h)
 		if err != nil {
 			fatalf("could not send file header: %v", err)
