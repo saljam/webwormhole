@@ -4,7 +4,11 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
 	"expvar"
 	"flag"
 	"fmt"
@@ -18,6 +22,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	webrtc "github.com/pion/webrtc/v2"
 	"golang.org/x/crypto/acme/autocert"
 	"nhooyr.io/websocket"
 	"webwormhole.io/wormhole"
@@ -66,6 +71,12 @@ var slots = struct {
 	sync.RWMutex
 }{m: make(map[string]chan *websocket.Conn)}
 
+// turnSecret, turnServer, and stunServers are used to generate ICE config
+// and send it to clients as soon as they connect.
+var turnSecret string
+var turnServer string
+var stunServers []webrtc.ICEServer
+
 // freeslot tries to find an available numeric slot, favouring smaller numbers.
 // This assume slots is locked.
 func freeslot() (slot string, ok bool) {
@@ -101,6 +112,23 @@ func freeslot() (slot string, ok bool) {
 	return "", false
 }
 
+// turnServers return the configured TURN server with HMAC-based ephemeral
+// credentials generated as described in:
+// https://tools.ietf.org/html/draft-uberti-behave-turn-rest-00
+func turnServers() []webrtc.ICEServer {
+	if turnServer == "" {
+		return nil
+	}
+	username := fmt.Sprintf("%d:wormhole", time.Now().Add(slotTimeout).Unix())
+	mac := hmac.New(sha1.New, []byte(turnSecret))
+	mac.Write([]byte(username))
+	return []webrtc.ICEServer{{
+		URLs:       []string{turnServer},
+		Username:   username,
+		Credential: base64.StdEncoding.EncodeToString(mac.Sum(nil)),
+	}}
+}
+
 // relay sets up a rendezvous on a slot and pipes the two websockets together.
 func relay(w http.ResponseWriter, r *http.Request) {
 	slotkey := r.URL.Path[1:] // strip leading slash
@@ -121,9 +149,24 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		// default one.
 		stats.badproto.Add(1)
 		conn.Close(wormhole.CloseWrongProto, "wrong protocol, please upgrade client")
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), slotTimeout)
+
+	initmsg := struct {
+		Slot       string             `json:"slot",omitempty`
+		ICEServers []webrtc.ICEServer `json:"iceServers",omitempty`
+	}{}
+
+	// Ideas to limit (but none can eliminate) abuse of TURN:
+	// TODO limit TURN tickets to a conservative quota of monthly bandwidth.
+	// TODO only issue ticket when both peers have rendezvoused.
+	// TODO disallow CORS TURN, i.e. check origin is in the hosts argument.
+	// TODO delay TURN ticket by ~5 seconds to make it less convenient?
+	// TODO rate limit by client address.
+	// TODO make auth tickets only valid within the slot. Probably need to implement TURN within this server to make this. pion/turn seems feasable.
+	initmsg.ICEServers = append(turnServers(), stunServers...)
 
 	go func() {
 		if slotkey == "" {
@@ -141,9 +184,23 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			slots.m[slotkey] = sc
 			stats.usedslots.Set(int64(len(slots.m)))
 			slots.Unlock()
-			err = conn.Write(ctx, websocket.MessageText, []byte(slotkey))
+			initmsg.Slot = slotkey
+			buf, err := json.Marshal(initmsg)
 			if err != nil {
 				log.Println(err)
+				slots.Lock()
+				delete(slots.m, slotkey)
+				stats.usedslots.Set(int64(len(slots.m)))
+				slots.Unlock()
+				return
+			}
+			err = conn.Write(ctx, websocket.MessageText, buf)
+			if err != nil {
+				log.Println(err)
+				slots.Lock()
+				delete(slots.m, slotkey)
+				stats.usedslots.Set(int64(len(slots.m)))
+				slots.Unlock()
 				return
 			}
 			select {
@@ -173,6 +230,17 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		delete(slots.m, slotkey)
 		stats.usedslots.Set(int64(len(slots.m)))
 		slots.Unlock()
+		initmsg.Slot = slotkey
+		buf, err := json.Marshal(initmsg)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		err = conn.Write(ctx, websocket.MessageText, buf)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 		select {
 		case <-ctx.Done():
 			conn.Close(wormhole.CloseSlotTimedOut, "timed out")
@@ -215,7 +283,17 @@ func server(args ...string) {
 	whitelist := set.String("hosts", "", "comma separated list of hosts for which to request let's encrypt certs")
 	secretpath := set.String("secrets", os.Getenv("HOME")+"/keys", "path to put let's encrypt cache")
 	html := set.String("ui", "./web", "path to the web interface files")
+	stunservers := set.String("stun", "stun:relay.webwormhole.io", "list of STUN server addresses to tell clients to use")
+	set.StringVar(&turnServer, "turn", "", "TURN server to use for relaying")
+	set.StringVar(&turnSecret, "turn-secret", "", "secret for HMAC-based authentication in TURN server")
 	set.Parse(args[1:])
+
+	if turnServer != "" && turnSecret == "" {
+		log.Fatal("cannot use a TURN server without a secret")
+	}
+	for _, s := range strings.Split(*stunservers, ",") {
+		stunServers = append(stunServers, webrtc.ICEServer{URLs: []string{s}})
+	}
 
 	fs := gziphandler.GzipHandler(http.FileServer(http.Dir(*html)))
 	handler := func(w http.ResponseWriter, r *http.Request) {

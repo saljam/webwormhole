@@ -18,14 +18,16 @@
 // Rough sketch of the handshake:
 //
 //	Peer               Signalling Server                Peer
-//	----open------------------>
-//	<---new_slot---------------
-//	<-----------------------------------------pake_msg_a----
-//	----pake_msg_b----------------------------------------->
-//	----sbox(offer)---------------------------------------->
-//	<---------------------------------------sbox(answer)----
-//	----sbox(candidates...)-------------------------------->
-//	<--------------------------------sbox(candidates...)----
+//	----open------------------> |
+//	<---new_slot,TURN_ticket--- |
+//	                            | <------------------open----
+//	                            | ------------TURN_ticket--->
+//	<---------------------------|--------------pake_msg_a----
+//	----pake_msg_b--------------|--------------------------->
+//	----sbox(offer)-------------|--------------------------->
+//	<---------------------------|------------sbox(answer)----
+//	----sbox(candidates...)-----|--------------------------->
+//	<---------------------------|-----sbox(candidates...)----
 package wormhole
 
 import (
@@ -227,9 +229,20 @@ func writeBase64(ws *websocket.Conn, p []byte) error {
 	)
 }
 
-func readString(ws *websocket.Conn) (string, error) {
+// initmsg is the first message the signalling server sends over
+// the WebSocket connection.
+type initmsg struct {
+	Slot       string             `json:"slot",omitempty`
+	ICEServers []webrtc.ICEServer `json:"iceServers",omitempty`
+}
+
+func readInitMsg(ws *websocket.Conn) (m initmsg, err error) {
 	_, buf, err := ws.Read(context.TODO())
-	return string(buf), err
+	if err != nil {
+		return m, err
+	}
+	err = json.Unmarshal(buf, &m)
+	return m, err
 }
 
 // addCandidates waits for candidate to trickle in. We close the websocket
@@ -309,18 +322,57 @@ func logNAT(sdp string) {
 	case 0:
 		log.Printf("nat: unknown: ice disabled or stun blocked")
 	case 1:
-		log.Printf("nat: cone or none: 1:1 port mapping")
+		if srflx == 1 {
+			log.Printf("nat: not enough stun servers to tell")
+		} else {
+			log.Printf("nat: 1:1 port mapping")
+		}
 	default:
 		log.Printf("nat: symmetric: 1:n port mapping (bad news)")
 	}
 }
 
-func newWormhole(sigserv string, pc *webrtc.PeerConnection) (*Wormhole, error) {
+func (c *Wormhole) newPeerConnection(ice []webrtc.ICEServer) error {
+	var err error
+	c.pc, err = rtcapi.NewPeerConnection(webrtc.Configuration{
+		ICEServers: ice,
+	})
+	if err != nil {
+		return err
+	}
+
+	sigh := true
+	c.d, err = c.pc.CreateDataChannel("data", &webrtc.DataChannelInit{
+		Negotiated: &sigh,
+		ID:         new(uint16),
+	})
+	if err != nil {
+		return err
+	}
+	c.d.OnOpen(c.open)
+	c.d.OnError(c.error)
+	c.d.OnBufferedAmountLow(c.flushed)
+	// Any threshold amount >= 1MiB seems to occasionally lock up pion.
+	// Choose 512 KiB as a safe default.
+	c.d.SetBufferedAmountLowThreshold(512 << 10)
+	return nil
+}
+
+// New starts a new signalling handshake after asking the server to allocate
+// a new slot.
+//
+// The slot is used to synchronise with the remote peer on signalling server
+// sigserv, and pass is used as the PAKE password authenticate the WebRTC
+// offer and answer.
+//
+// The server generated slot identifier is written on slotc.
+//
+// If pc is nil it initialises ones using the default STUN server.
+func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 	c := &Wormhole{
 		opened: make(chan struct{}),
 		err:    make(chan error),
 		flushc: sync.NewCond(&sync.Mutex{}),
-		pc:     pc,
 	}
 
 	u, err := url.Parse(sigserv)
@@ -334,62 +386,14 @@ func newWormhole(sigserv string, pc *webrtc.PeerConnection) (*Wormhole, error) {
 	}
 	c.wsaddr = u.String()
 
-	if pc == nil {
-		c.pc, err = rtcapi.NewPeerConnection(webrtc.Configuration{
-			ICEServers: []webrtc.ICEServer{
-				{URLs: []string{"stun:stun1.l.google.com:19302"}},
-				{URLs: []string{"stun:stun2.l.google.com:19302"}},
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	sigh := true
-	c.d, err = c.pc.CreateDataChannel("data", &webrtc.DataChannelInit{
-		Negotiated: &sigh,
-		ID:         new(uint16),
-	})
-	if err != nil {
-		return nil, err
-	}
-	c.d.OnOpen(c.open)
-	c.d.OnError(c.error)
-	c.d.OnBufferedAmountLow(c.flushed)
-	// Any threshold amount >= 1MiB seems to occasionally lock up pion.
-	// Choose 512 KiB as a safe default.
-	c.d.SetBufferedAmountLowThreshold(512 << 10)
-
-	return c, nil
-}
-
-// New starts a new signalling handshake after asking the server to allocate
-// a new slot.
-//
-// The slot is used to synchronise with the remote peer on signalling server
-// sigserv, and pass is used as the PAKE password authenticate the WebRTC
-// offer and answer.
-//
-// The server generated slot identifier is written on slotc.
-//
-// If pc is nil it initialises ones using the default STUN server.
-func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnection) (*Wormhole, error) {
-	c, err := newWormhole(sigserv, pc)
-	if err != nil {
-		return nil, err
-	}
 	ws, _, err := websocket.Dial(context.TODO(), c.wsaddr, &websocket.DialOptions{
 		Subprotocols: []string{Protocol},
 	})
-	if websocket.CloseStatus(err) == CloseWrongProto {
-		return nil, ErrBadVersion
-	}
 	if err != nil {
 		return nil, err
 	}
 
-	slot, err := readString(ws)
+	m, err := readInitMsg(ws)
 	if websocket.CloseStatus(err) == CloseWrongProto {
 		return nil, ErrBadVersion
 	}
@@ -397,9 +401,13 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 		return nil, err
 	}
 	if Verbose {
-		log.Printf("connected to signalling server, got slot: %v", slot)
+		log.Printf("connected to signalling server, got slot: %v", m.Slot)
 	}
-	slotc <- slot
+	slotc <- m.Slot
+	err = c.newPeerConnection(m.ICEServers)
+	if err != nil {
+		return nil, err
+	}
 
 	msgA, err := readBase64(ws)
 	if err != nil {
@@ -487,25 +495,45 @@ func New(pass string, sigserv string, slotc chan string, pc *webrtc.PeerConnecti
 // offer and answer.
 //
 // If pc is nil it initialises ones using the default STUN server.
-func Join(slot, pass string, sigserv string, pc *webrtc.PeerConnection) (*Wormhole, error) {
-	c, err := newWormhole(sigserv, pc)
+func Join(slot, pass string, sigserv string) (*Wormhole, error) {
+	c := &Wormhole{
+		opened: make(chan struct{}),
+		err:    make(chan error),
+		flushc: sync.NewCond(&sync.Mutex{}),
+	}
+
+	u, err := url.Parse(sigserv)
 	if err != nil {
 		return nil, err
 	}
+	if u.Scheme == "http" || u.Scheme == "ws" {
+		u.Scheme = "ws"
+	} else {
+		u.Scheme = "wss"
+	}
+	c.wsaddr = u.String()
 
 	// Start the handshake.
 	ws, _, err := websocket.Dial(context.TODO(), c.wsaddr+"/"+slot, &websocket.DialOptions{
 		Subprotocols: []string{Protocol},
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	m, err := readInitMsg(ws)
 	if websocket.CloseStatus(err) == CloseWrongProto {
 		return nil, ErrBadVersion
 	}
 	if err != nil {
 		return nil, err
 	}
-
 	if Verbose {
 		log.Printf("connected to signalling server on slot: %v", slot)
+	}
+	err = c.newPeerConnection(m.ICEServers)
+	if err != nil {
+		return nil, err
 	}
 
 	// The identity arguments are to bind endpoint identities in PAKE. Cf. Unknown

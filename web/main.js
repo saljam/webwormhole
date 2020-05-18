@@ -210,12 +210,19 @@ const receive = e => {
   }
 }
 
-const connect = async e => {
+// initPeerConnection initialises a PeerConnection object.
+const initPeerConnection = (iceServers) => {
+  // TODO fix the case in json object in pion/webrtc
+  let normalisedICEServers = []
+  for (let i=0; i<iceServers.length; i++) {
+    normalisedICEServers.push({
+      urls: iceServers[i].URLs,
+      username: iceServers[i].Username,
+      credential: iceServers[i].Credential
+    })
+  }
   const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
-    ]
+    iceServers: normalisedICEServers
   })
   pc.onconnectionstatechange = e => {
     switch (pc.connectionState) {
@@ -251,11 +258,15 @@ const connect = async e => {
     console.log('datachannel error:', e.error)
     document.getElementById('info').innerHTML = 'NETWORK ERROR TRY AGAIN'
   }
+  return pc
+}
+
+const connect = async e => {
   try {
     if (document.getElementById('magiccode').value === '') {
       dialling()
       document.getElementById('info').innerHTML = 'WAITING FOR THE OTHER SIDE - SHARE CODE OR URL'
-      const [code, finish] = await newwormhole(location.href, pc)
+      const [code, finish] = await newwormhole(location.href, initPeerConnection)
       document.getElementById('magiccode').value = code
       location.hash = code
       const qr = util.qrencode(location.href)
@@ -268,7 +279,7 @@ const connect = async e => {
     } else {
       dialling()
       document.getElementById('info').innerHTML = 'CONNECTING'
-      await dial(location.href, pc, document.getElementById('magiccode').value)
+      await dial(location.href, document.getElementById('magiccode').value, initPeerConnection)
     }
   } catch (err) {
     disconnected()

@@ -76,7 +76,7 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		if passbytes == nil {
 			fatalf("could not decode password")
 		}
-		c, err := wormhole.Join(parts[0], string(passbytes), *sigserv, nil)
+		c, err := wormhole.Join(parts[0], string(passbytes), *sigserv)
 		if err == wormhole.ErrBadVersion {
 			fatalf(
 				"%s%s%s",
@@ -100,7 +100,7 @@ func newConn(code string, length int) *wormhole.Wormhole {
 	go func() {
 		printcode(<-slotc + "-" + password)
 	}()
-	c, err := wormhole.New(string(passbytes), *sigserv, slotc, nil)
+	c, err := wormhole.New(string(passbytes), *sigserv, slotc)
 	if err == wormhole.ErrBadVersion {
 		fatalf(
 			"%s%s%s",

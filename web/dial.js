@@ -14,9 +14,9 @@ const wsserver = (url, slot) => {
 }
 
 // newwormhole creates wormhole, the A side.
-export const newwormhole = async (signal, pc) => {
+export const newwormhole = async (signal, pccb) => {
   const ws = new WebSocket(wsserver(signal, ""), "4")
-  let key, slot, pass
+  let key, pass, pc
   let slotC, connC
   const slotP = new Promise((resolve, reject) => {
     slotC = { resolve, reject }
@@ -25,11 +25,15 @@ export const newwormhole = async (signal, pc) => {
     connC = { resolve, reject }
   })
   ws.onmessage = async m => {
-    if (!slot) {
-      slot = m.data
+    if (!pc) {
+      const initmsg = JSON.parse(m.data)
       pass = crypto.getRandomValues(new Uint8Array(2))
-      console.log('assigned slot:', slot)
-      slotC.resolve(slot + '-' + encode(pass))
+      console.log('assigned slot:', initmsg.slot)
+      // Initialise pc *before* passing the code back guarantees us that the B message
+      // will not arrive while we're initialising pc.
+      // This API is garbage.
+      pc = await pccb(initmsg.iceServers)
+      slotC.resolve(initmsg.slot + '-' + encode(pass))
       return
     }
     if (!key) {
@@ -104,19 +108,24 @@ export const newwormhole = async (signal, pc) => {
 }
 
 // dial joins a wormhole, the B side.
-export const dial = async (signal, pc, code) => {
+export const dial = async (signal, code, pccb) => {
   const [slot, ...passparts] = code.split('-')
   const pass = decode(passparts)
 
   console.log('dialling slot:', slot)
 
   const ws = new WebSocket(wsserver(signal, slot), "4")
-  let key
+  let key, pc
   let connC
   const connP = new Promise((resolve, reject) => {
     connC = { resolve, reject }
   })
   ws.onmessage = async m => {
+    if (!pc) {
+      const initmsg = JSON.parse(m.data)
+      pc = await pccb(initmsg.iceServers)
+      return
+    }
     if (!key) {
       console.log('got pake message b:', m.data)
       key = util.finish(m.data)
