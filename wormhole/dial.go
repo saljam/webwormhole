@@ -99,9 +99,6 @@ type Wormhole struct {
 	d   *webrtc.DataChannel
 	pc  *webrtc.PeerConnection
 
-	// wsaddr is the url to the signalling websocket.
-	wsaddr string
-
 	// opened signals that the underlying DataChannel is open and ready
 	// to handle data.
 	opened chan struct{}
@@ -384,9 +381,9 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 	} else {
 		u.Scheme = "wss"
 	}
-	c.wsaddr = u.String()
+	wsaddr := u.String()
 
-	ws, _, err := websocket.Dial(context.TODO(), c.wsaddr, &websocket.DialOptions{
+	ws, _, err := websocket.Dial(context.TODO(), wsaddr, &websocket.DialOptions{
 		Subprotocols: []string{Protocol},
 	})
 	if err != nil {
@@ -511,10 +508,11 @@ func Join(slot, pass string, sigserv string) (*Wormhole, error) {
 	} else {
 		u.Scheme = "wss"
 	}
-	c.wsaddr = u.String()
+	u.Path += slot
+	wsaddr := u.String()
 
 	// Start the handshake.
-	ws, _, err := websocket.Dial(context.TODO(), c.wsaddr+"/"+slot, &websocket.DialOptions{
+	ws, _, err := websocket.Dial(context.TODO(), wsaddr, &websocket.DialOptions{
 		Subprotocols: []string{Protocol},
 	})
 	if err != nil {
