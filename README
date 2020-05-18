@@ -2,7 +2,7 @@ THIS PROJECT IS STILL IN EARLY DEVELOPMENT, IT USES EXPERIMENTAL
 CRYPTOGRAPHIC LIBRARIES, AND IT HAS NOT HAD ANY KIND OF SECURITY
 OR CRYPTOGRAPHY REVIEWS. BEWARE THIS MIGHT BE BROKEN AND UNSAFE.
 
-	https://imgs.xkcd.com/comics/file_transfer.png
+	https://xkcd.com/949/
 
 WebWormhole creates ephemeral pipes between computers to send files
 or other data. Try it at https://webwormhole.io or on the command
