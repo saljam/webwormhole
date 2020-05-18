@@ -38,19 +38,18 @@ commands to do that:
 	$ go generate ./web
 	$ ww server -https= -http=localhost:8000
 
-It is inspired by and uses a model very similar to that of Magic
-Wormhole. Thanks Brian!
+WebWormhole is inspired by and uses a model very similar to that
+of Magic Wormhole. Thanks Brian!
 
 	https://github.com/warner/magic-wormhole
 
-WebWormhole differs from Magic Wormhole in that it uses WebRTC
-to make the direct peer connections. This allows us to make use of
-WebRTC's NAT traversal tricks, as well as the fact that it can be
-used in browsers. The exchange of session descriptions (offers and
-answers) is protected by PAKE and a generated random password,
-similar to Magic Wormhole. The session descriptions include the
-fingerprints of the DTLS certificates that WebRTC uses to secure
-its communications.
+It differs from Magic Wormhole in that it uses WebRTC to make the
+direct peer connections. This allows us to make use of WebRTC's NAT
+traversal tricks, as well as the fact that it can be used in browsers.
+The exchange of session descriptions (offers and answers) is protected
+by PAKE and a generated random password, similar to Magic Wormhole.
+The session descriptions include the fingerprints of the DTLS
+certificates that WebRTC uses to secure its communications.
 
-Unless otherwise noted, the source files are distributed under the
-BSD-style license found in the LICENSE file.
+Unless otherwise noted, the source files in this repository are
+distributed under the BSD-style license found in the LICENSE file.
