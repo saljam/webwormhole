@@ -158,14 +158,6 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		Slot       string             `json:"slot",omitempty`
 		ICEServers []webrtc.ICEServer `json:"iceServers",omitempty`
 	}{}
-
-	// Ideas to limit (but none can eliminate) abuse of TURN:
-	// TODO limit TURN tickets to a conservative quota of monthly bandwidth.
-	// TODO only issue ticket when both peers have rendezvoused.
-	// TODO disallow CORS TURN, i.e. check origin is in the hosts argument.
-	// TODO delay TURN ticket by ~5 seconds to make it less convenient?
-	// TODO rate limit by client address.
-	// TODO make auth tickets only valid within the slot. Probably need to implement TURN within this server to make this. pion/turn seems feasable.
 	initmsg.ICEServers = append(turnServers(), stunServers...)
 
 	go func() {
