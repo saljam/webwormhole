@@ -1,4 +1,5 @@
 import { newwormhole, dial } from './dial.js'
+import { autocomplete } from './wordlist.js'
 
 let receiving
 let sending
@@ -477,6 +478,7 @@ const wasmready = async () => {
   // block them.
   window.addEventListener('hashchange', hashchange)
   document.getElementById('magiccode').addEventListener('input', codechange)
+  document.getElementById('magiccode').addEventListener('keydown', autocomplete)
   document.getElementById('filepicker').addEventListener('change', pick)
   document.getElementById('dialog').addEventListener('submit', preventdefault)
   document.getElementById('dialog').addEventListener('submit', connect)

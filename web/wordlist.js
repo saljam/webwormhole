@@ -18,6 +18,41 @@ export const decode = words => {
   return bytes
 }
 
+var currentHint = "";
+
+export const autocomplete = e => {
+  const input = e.keyCode >= 48 ? (e.target.value + e.key).split("-") : e.target.value.split("-");
+  const lastSegment = input.length > 0 ? input[input.length-1] : ""
+
+  var hintFound = false;
+  for (let i=0; i < wordlist.length; i++) {
+    if (wordlist[i].startsWith(lastSegment)) {
+      currentHint = wordlist[i];
+      hintFound = true;
+      break;
+    }
+  }
+
+  if (hintFound) {
+    document.querySelector("#autocomplete").innerText = currentHint;
+    if (e.keyCode == 9) {
+      if (input.length <= 3) {
+        document.forms.dialog.magiccode.value += currentHint.substring(lastSegment.length);
+        if (input.length <= 2) {
+          document.forms.dialog.magiccode.value += "-";
+        }
+        e.preventDefault();
+        document.querySelector("#autocomplete").innerHTML = "&nbsp;";
+      }
+    }
+  } else {
+    document.querySelector("#autocomplete").innerHTML = "&nbsp;";
+    if (e.keyCode == 9) {
+      e.preventDefault();
+    }
+  }
+}
+
 const wordlist = [
   'aardvark', 'adroitness',
   'absurd', 'adviser',
