@@ -122,6 +122,10 @@ footer span {
 	display: none;
 }
 
+#autocomplete {
+	font-style: italic;
+}
+
 .button {
 	-webkit-appearance: none;
 	appearance: none;
