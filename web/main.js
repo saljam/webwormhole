@@ -269,6 +269,7 @@ const connect = async e => {
       document.getElementById('info').innerHTML = 'WAITING FOR THE OTHER SIDE - SHARE CODE OR URL'
       const [code, finish] = await newwormhole(location.href, initPeerConnection)
       document.getElementById('magiccode').value = code
+      codechange()
       location.hash = code
       const qr = util.qrencode(location.href)
       if (qr === null) {
@@ -332,6 +333,7 @@ const disconnected = () => {
   document.getElementById('dial').disabled = false
   document.getElementById('magiccode').readOnly = false
   document.getElementById('magiccode').value = ''
+  codechange()
   document.getElementById('filepicker').disabled = true
 
   document.body.removeEventListener('drop', drop)

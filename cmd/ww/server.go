@@ -245,11 +245,15 @@ func relay(w http.ResponseWriter, r *http.Request) {
 	for {
 		msgType, p, err := conn.Read(ctx)
 		if websocket.CloseStatus(err) == wormhole.CloseBadKey {
-			rconn.Close(wormhole.CloseBadKey, "bad key")
+			if rconn != nil {
+				rconn.Close(wormhole.CloseBadKey, "bad key")
+			}
 			return
 		}
 		if err != nil {
-			rconn.Close(wormhole.ClosePeerHungUp, "peer hung up")
+			if rconn != nil {
+				rconn.Close(wormhole.ClosePeerHungUp, "peer hung up")
+			}
 			return
 		}
 		if rconn == nil {
