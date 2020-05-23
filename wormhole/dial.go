@@ -78,9 +78,6 @@ const (
 // Verbose logging.
 var Verbose = false
 
-// Very Verbose logging. (This will go away.)
-var VeryVerbose = false
-
 // ErrBadVersion is returned when the signalling server runs an incompatible
 // version of the signalling protocol.
 var ErrBadVersion = errors.New("bad version")
@@ -96,6 +93,7 @@ var rtcapi *webrtc.API
 func init() {
 	s := webrtc.SettingEngine{}
 	s.DetachDataChannels()
+	s.SetTrickle(true)
 	rtcapi = webrtc.NewAPI(webrtc.WithSettingEngine(s))
 }
 
@@ -271,9 +269,6 @@ func (c *Wormhole) addCandidates(ws *websocket.Conn, key *[32]byte) {
 		if Verbose {
 			log.Printf("received new remote candidate")
 		}
-		if VeryVerbose {
-			log.Printf("%v", candidate)
-		}
 		err = c.pc.AddICECandidate(candidate)
 		if err != nil {
 			if Verbose {
@@ -365,6 +360,32 @@ func (c *Wormhole) newPeerConnection(ice []webrtc.ICEServer) error {
 	return nil
 }
 
+func (c *Wormhole) IsRelay() bool {
+	stats := c.pc.GetStats()
+	for _, s := range stats {
+		pairstats, ok := s.(webrtc.ICECandidatePairStats)
+		if !ok {
+			continue
+		}
+		if !pairstats.Nominated {
+			continue
+		}
+		local, ok := stats[pairstats.LocalCandidateID].(webrtc.ICECandidateStats)
+		if !ok {
+			continue
+		}
+		remote, ok := stats[pairstats.LocalCandidateID].(webrtc.ICECandidateStats)
+		if !ok {
+			continue
+		}
+		if remote.CandidateType == webrtc.ICECandidateTypeRelay ||
+			local.CandidateType == webrtc.ICECandidateTypeRelay {
+			return true
+		}
+	}
+	return false
+}
+
 // New starts a new signalling handshake after asking the server to allocate
 // a new slot.
 //
@@ -441,6 +462,28 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 		log.Printf("have key, sent B pake msg (%v bytes)", len(msgB))
 	}
 
+	c.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate == nil {
+			if Verbose {
+				logNAT(c.pc.LocalDescription().SDP)
+			}
+			return
+		}
+		err := writeEncJSON(ws, &key, candidate.ToJSON())
+		if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+			return
+		}
+		if err != nil {
+			if Verbose {
+				log.Printf("cannot send local candidate: %v", err)
+			}
+			return
+		}
+		if Verbose {
+			log.Printf("sent new local candidate")
+		}
+	})
+
 	offer, err := c.pc.CreateOffer(nil)
 	if err != nil {
 		return nil, err
@@ -455,9 +498,6 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 	}
 	if Verbose {
 		log.Printf("sent offer")
-	}
-	if VeryVerbose {
-		log.Printf("%v", c.pc.LocalDescription().SDP)
 	}
 
 	var answer webrtc.SessionDescription
@@ -475,26 +515,18 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 	if Verbose {
 		log.Printf("got answer")
 	}
-	if VeryVerbose {
-		log.Printf("%v", c.pc.RemoteDescription().SDP)
-	}
 
 	go c.addCandidates(ws, &key)
-
-	if Verbose {
-		logNAT(c.pc.LocalDescription().SDP)
-	}
 
 	// TODO put a timeout here.
 	select {
 	case <-c.opened:
+		if Verbose {
+			log.Printf("webrtc connection succeeded, closing signalling channel")
+		}
 	case err = <-c.err:
 	}
-
 	ws.Close(websocket.StatusNormalClosure, "done")
-	if Verbose {
-		log.Printf("webrtc connection succeeded, closing signalling channel")
-	}
 	return c, err
 }
 
@@ -599,15 +631,35 @@ func Join(slot, pass string, sigserv string) (*Wormhole, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	c.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate == nil {
+			if Verbose {
+				logNAT(c.pc.LocalDescription().SDP)
+			}
+			return
+		}
+		err := writeEncJSON(ws, &key, candidate.ToJSON())
+		if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+			return
+		}
+		if err != nil {
+			if Verbose {
+				log.Printf("cannot send local candidate: %v", err)
+			}
+			return
+		}
+		if Verbose {
+			log.Printf("sent new local candidate")
+		}
+	})
+
 	err = c.pc.SetRemoteDescription(offer)
 	if err != nil {
 		return nil, err
 	}
 	if Verbose {
 		log.Printf("got offer")
-	}
-	if VeryVerbose {
-		log.Printf("%v", c.pc.RemoteDescription().SDP)
 	}
 	answer, err := c.pc.CreateAnswer(nil)
 	if err != nil {
@@ -624,25 +676,18 @@ func Join(slot, pass string, sigserv string) (*Wormhole, error) {
 	if Verbose {
 		log.Printf("sent answer")
 	}
-	if VeryVerbose {
-		log.Printf("%v", c.pc.LocalDescription().SDP)
-	}
 
 	go c.addCandidates(ws, &key)
-
-	if Verbose {
-		logNAT(c.pc.LocalDescription().SDP)
-	}
 
 	// TODO put a timeout here.
 	select {
 	case <-c.opened:
+		if Verbose {
+			log.Printf("webrtc connection succeeded, closing signalling channel")
+		}
 	case err = <-c.err:
 	}
 
 	ws.Close(websocket.StatusNormalClosure, "done")
-	if Verbose {
-		log.Printf("webrtc connection succeeded, closing signalling channel")
-	}
 	return c, err
 }

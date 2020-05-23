@@ -24,7 +24,6 @@ var subcmds = map[string]func(args ...string){
 
 var (
 	verbose = flag.Bool("verbose", false, "verbose logging")
-	veryverbose = flag.Bool("very-verbose", false, "very verbose logging")
 	sigserv = flag.String("signal", "https://wrmhl.link/", "signalling server to use")
 )
 
@@ -50,10 +49,6 @@ func main() {
 	}
 	if *verbose {
 		wormhole.Verbose = true
-	}
-	if *veryverbose {
-		wormhole.Verbose = true
-		wormhole.VeryVerbose = true
 	}
 	cmd, ok := subcmds[flag.Arg(0)]
 	if !ok {
@@ -88,6 +83,11 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		if err != nil {
 			fatalf("could not dial: %v", err)
 		}
+		if c.IsRelay() {
+			fmt.Fprintf(flag.CommandLine.Output(), "connected: relay\n")
+		} else {
+			fmt.Fprintf(flag.CommandLine.Output(), "connected: direct\n")
+		}
 		return c
 	}
 	// New wormhole.
@@ -111,6 +111,11 @@ func newConn(code string, length int) *wormhole.Wormhole {
 	}
 	if err != nil {
 		fatalf("could not dial: %v", err)
+	}
+	if c.IsRelay() {
+		fmt.Fprintf(flag.CommandLine.Output(), "connected: relay\n")
+	} else {
+		fmt.Fprintf(flag.CommandLine.Output(), "connected: direct\n")
 	}
 	return c
 }
