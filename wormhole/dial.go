@@ -67,6 +67,12 @@ const (
 	// CloseWrongProto is the WebSocket status returned when the signalling server
 	// runs a different version of the signalling protocol.
 	CloseWrongProto
+	// ClosePeerHungUp is the WebSocket status returned when the peer has closed
+	// its connection.
+	ClosePeerHungUp
+	// CloseBadKey is the WebSocket status returned when the peer has closed its
+	// connection because the key it derived is bad.
+	CloseBadKey
 )
 
 // Verbose logging.
@@ -78,6 +84,10 @@ var VeryVerbose = false
 // ErrBadVersion is returned when the signalling server runs an incompatible
 // version of the signalling protocol.
 var ErrBadVersion = errors.New("bad version")
+
+// ErrBadVersion is returned when the the peer on the same slot uses a different
+// password.
+var ErrBadKey = errors.New("bad key")
 
 // Accessing pion/webrtc APIs like DataChannel.Detach() requires
 // that we do this voodoo.
@@ -187,7 +197,7 @@ func readEncJSON(ws *websocket.Conn, key *[32]byte, v interface{}) error {
 	copy(nonce[:], encrypted[:24])
 	jsonmsg, ok := secretbox.Open(nil, encrypted[24:], &nonce, key)
 	if !ok {
-		return errors.New("bad key")
+		return ErrBadKey
 	}
 	return json.Unmarshal(jsonmsg, v)
 }
@@ -452,6 +462,9 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 
 	var answer webrtc.SessionDescription
 	err = readEncJSON(ws, &key, &answer)
+	if websocket.CloseStatus(err) == CloseBadKey {
+		return nil, ErrBadKey
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -578,6 +591,11 @@ func Join(slot, pass string, sigserv string) (*Wormhole, error) {
 
 	var offer webrtc.SessionDescription
 	err = readEncJSON(ws, &key, &offer)
+	if err == ErrBadKey {
+		// Close with the right status so the other side knows to quit immediately.
+		ws.Close(CloseBadKey, "bad key")
+		return nil, err
+	}
 	if err != nil {
 		return nil, err
 	}
