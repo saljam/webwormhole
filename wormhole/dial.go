@@ -374,7 +374,7 @@ func (c *Wormhole) IsRelay() bool {
 		if !ok {
 			continue
 		}
-		remote, ok := stats[pairstats.LocalCandidateID].(webrtc.ICECandidateStats)
+		remote, ok := stats[pairstats.RemoteCandidateID].(webrtc.ICECandidateStats)
 		if !ok {
 			continue
 		}
@@ -488,11 +488,11 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = c.pc.SetLocalDescription(offer)
+	err = writeEncJSON(ws, &key, offer)
 	if err != nil {
 		return nil, err
 	}
-	err = writeEncJSON(ws, &key, offer)
+	err = c.pc.SetLocalDescription(offer)
 	if err != nil {
 		return nil, err
 	}
@@ -665,11 +665,11 @@ func Join(slot, pass string, sigserv string) (*Wormhole, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = c.pc.SetLocalDescription(answer)
+	err = writeEncJSON(ws, &key, answer)
 	if err != nil {
 		return nil, err
 	}
-	err = writeEncJSON(ws, &key, answer)
+	err = c.pc.SetLocalDescription(answer)
 	if err != nil {
 		return nil, err
 	}
