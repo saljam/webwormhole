@@ -5,6 +5,7 @@ let receiving
 let sending
 let datachannel
 let serviceworker
+let signalserver = new URL(location.href)
 const hacks = {}
 
 const pick = e => {
@@ -267,11 +268,12 @@ const connect = async e => {
     if (document.getElementById('magiccode').value === '') {
       dialling()
       document.getElementById('info').innerHTML = 'WAITING FOR THE OTHER SIDE - SHARE CODE OR URL'
-      const [code, finish] = await newwormhole(location.href, initPeerConnection)
+      const [code, finish] = await newwormhole(signalserver.href, initPeerConnection)
       document.getElementById('magiccode').value = code
       codechange()
       location.hash = code
-      const qr = util.qrencode(location.href)
+      signalserver.hash = code
+      const qr = util.qrencode(signalserver.href)
       if (qr === null) {
         document.getElementById('qr').src = ''
       } else {
@@ -281,7 +283,7 @@ const connect = async e => {
     } else {
       dialling()
       document.getElementById('info').innerHTML = 'CONNECTING'
-      await dial(location.href, document.getElementById('magiccode').value, initPeerConnection)
+      await dial(signalserver.href, document.getElementById('magiccode').value, initPeerConnection)
     }
   } catch (err) {
     disconnected()
@@ -439,6 +441,21 @@ const browserhacks = () => {
       !(window.WebAssembly)) {
     hacks.browserunsupported = true
   }
+
+  // Are we in an extension?
+  if (window.browser || window.chrome){
+    const resourceURL = chrome.runtime.getURL("")
+    if (resourceURL.startsWith("moz")) {
+      console.log('quirks: firefox extension, no serviceworkers')
+      hacks.nosw = true
+    } else if (resourceURL.startsWith("chrome")) {
+      console.log('quirks: chrome extension')
+      hacks.wasmURL = chrome.runtime.getURL("util.wasm")
+    } else {
+      console.log('quirks: unknown browser extension')
+    }
+    signalserver = new URL('https://webwormhole.io/')
+  }
 }
 
 const domready = async () => {
@@ -456,8 +473,9 @@ const swready = async () => {
 
 const wasmready = async () => {
   if (!hacks.nowasm) {
+    const url = hacks.wasmURL || 'util.wasm'
     const go = new Go()
-    const wasm = await WebAssembly.instantiateStreaming(fetch('util.wasm'), go.importObject)
+    const wasm = await WebAssembly.instantiateStreaming(fetch(url), go.importObject)
     go.run(wasm.instance)
   }
 }
