@@ -122,8 +122,9 @@ footer span {
 	display: none;
 }
 
-#autocomplete {
-	font-style: italic;
+.connected #autocomplete,
+.dialling #autocomplete {
+	display: none;
 }
 
 .button {
