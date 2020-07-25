@@ -181,21 +181,21 @@ a:visited:hover {
 	body.disconnected,
 	body.dialling,
 	body.error {
+		background: #801384;
+		background: radial-gradient(ellipse at bottom, #801384 0%, #170926 100%);
 		background-image: url(stars.svg);
 		background-position: center center;
 		background-repeat: no-repeat;
 		background-size: cover;
-		background: #801384;
-		background: radial-gradient(ellipse at bottom, #801384 0%, #170926 100%);
 		color: #80d5d7;
 	}
 
 	body.connected {
+		background: radial-gradient(#170926 0%, #3a0c3c 100%);
 		background-image: url(wormhole.svg);
 		background-position: center center;
 		background-repeat: no-repeat;
 		background-size: cover;
-		background: radial-gradient(#170926 0%, #3a0c3c 100%);
 		border-radius: 20px;
 		border: 4px dashed #ccc;
 	}
