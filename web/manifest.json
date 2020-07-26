@@ -4,7 +4,9 @@
 	"version": "0.1",
 	"description": "WebWormhole lets you send files from one place to another.",
 	"icons": {
-		"160": "hole.png"
+		"16": "hole32.png",
+		"48": "hole.png",
+		"128": "hole.png"
 	},
 	"browser_action": {
 		"default_icon": "hole.png",
