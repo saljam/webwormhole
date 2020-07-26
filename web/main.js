@@ -443,7 +443,7 @@ const browserhacks = () => {
   }
 
   // Are we in an extension?
-  if (window.browser || window.chrome){
+  if (window.chrome && chrome.runtime && chrome.runtime.getURL){
     const resourceURL = chrome.runtime.getURL("")
     if (resourceURL.startsWith("moz")) {
       console.log('quirks: firefox extension, no serviceworkers')
