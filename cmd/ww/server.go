@@ -293,6 +293,9 @@ func server(args ...string) {
 		log.Fatal("cannot use a TURN server without a secret")
 	}
 	for _, s := range strings.Split(*stunservers, ",") {
+		if s == "" {
+			continue
+		}
 		stunServers = append(stunServers, webrtc.ICEServer{URLs: []string{s}})
 	}
 
