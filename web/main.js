@@ -223,20 +223,19 @@ const initPeerConnection = (iceServers) => {
       credential: iceServers[i].Credential
     })
   }
-  console.log(normalisedICEServers) //DEBUG
   const pc = new RTCPeerConnection({
     iceServers: normalisedICEServers
   })
   pc.onconnectionstatechange = e => {
     switch (pc.connectionState) {
       case 'connected':
-      // Handled in datachannel.onopen.
+        // Handled in datachannel.onopen.
         console.log('webrtc connected')
         break
       case 'failed':
         disconnected()
         console.log('webrtc connection failed connectionState:', pc.connectionState, 'iceConnectionState', pc.iceConnectionState)
-        document.getElementById('info').innerHTML = 'NETWORK ERROR TRY AGAIN'
+        document.getElementById('info').innerHTML = 'NETWORK ERROR'
         break
       case 'disconnected':
       case 'closed':
@@ -259,7 +258,7 @@ const initPeerConnection = (iceServers) => {
   datachannel.onerror = e => {
     disconnected()
     console.log('datachannel error:', e.error)
-    document.getElementById('info').innerHTML = 'NETWORK ERROR TRY AGAIN'
+    document.getElementById('info').innerHTML = 'NETWORK ERROR'
   }
   return pc
 }
@@ -289,13 +288,13 @@ const connect = async e => {
   } catch (err) {
     disconnected()
     if (err === 'bad key') {
-      document.getElementById('info').innerHTML = 'BAD KEY TRY AGAIN'
+      document.getElementById('info').innerHTML = 'BAD KEY'
     } else if (err === 'no such slot') {
       document.getElementById('info').innerHTML = 'NO SUCH SLOT'
     } else if (err === 'timed out') {
       document.getElementById('info').innerHTML = 'CODE TIMED OUT GENERATE ANOTHER'
     } else {
-      document.getElementById('info').innerHTML = 'COULD NOT CONNECT TRY AGAIN'
+      document.getElementById('info').innerHTML = 'COULD NOT CONNECT'
       console.log(err)
     }
   }

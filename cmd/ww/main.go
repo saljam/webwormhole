@@ -1,4 +1,4 @@
-// Command ww is a tool to move files and other data over WebRTC.
+// Command ww moves files and other data over WebRTC.
 package main
 
 import (
@@ -27,16 +27,17 @@ var (
 	sigserv = flag.String("signal", "https://wrmhl.link/", "signalling server to use")
 )
 
+var stderr = flag.CommandLine.Output()
+
 func usage() {
-	w := flag.CommandLine.Output()
-	fmt.Fprintf(w, "webwormhole creates ephemeral pipes between computers.\n\n")
-	fmt.Fprintf(w, "usage:\n\n")
-	fmt.Fprintf(w, "  %s [flags] <command> [arguments]\n\n", os.Args[0])
-	fmt.Fprintf(w, "commands:\n")
+	fmt.Fprintf(stderr, "webwormhole creates ephemeral pipes between computers.\n\n")
+	fmt.Fprintf(stderr, "usage:\n\n")
+	fmt.Fprintf(stderr, "  %s [flags] <command> [arguments]\n\n", os.Args[0])
+	fmt.Fprintf(stderr, "commands:\n")
 	for key := range subcmds {
-		fmt.Fprintf(w, "  %s\n", key)
+		fmt.Fprintf(stderr, "  %s\n", key)
 	}
-	fmt.Fprintf(w, "\nflags:\n")
+	fmt.Fprintf(stderr, "\nflags:\n")
 	flag.PrintDefaults()
 }
 
@@ -59,7 +60,7 @@ func main() {
 }
 
 func fatalf(format string, v ...interface{}) {
-	fmt.Fprintf(flag.CommandLine.Output(), format+"\n", v...)
+	fmt.Fprintf(stderr, format+"\n", v...)
 	os.Exit(1)
 }
 
@@ -84,9 +85,9 @@ func newConn(code string, length int) *wormhole.Wormhole {
 			fatalf("could not dial: %v", err)
 		}
 		if c.IsRelay() {
-			fmt.Fprintf(flag.CommandLine.Output(), "connected: relay\n")
+			fmt.Fprintf(stderr, "connected: relay\n")
 		} else {
-			fmt.Fprintf(flag.CommandLine.Output(), "connected: direct\n")
+			fmt.Fprintf(stderr, "connected: direct\n")
 		}
 		return c
 	}
@@ -113,16 +114,15 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		fatalf("could not dial: %v", err)
 	}
 	if c.IsRelay() {
-		fmt.Fprintf(flag.CommandLine.Output(), "connected: relay\n")
+		fmt.Fprintf(stderr, "connected: relay\n")
 	} else {
-		fmt.Fprintf(flag.CommandLine.Output(), "connected: direct\n")
+		fmt.Fprintf(stderr, "connected: direct\n")
 	}
 	return c
 }
 
 func printcode(code string) {
-	out := flag.CommandLine.Output()
-	fmt.Fprintf(out, "%s\n", code)
+	fmt.Fprintf(stderr, "%s\n", code)
 	u, err := url.Parse(*sigserv)
 	if err != nil {
 		return
@@ -133,36 +133,36 @@ func printcode(code string) {
 		return
 	}
 	for x := 0; x < qrcode.Size; x++ {
-		fmt.Fprintf(out, "█")
+		fmt.Fprintf(stderr, "█")
 	}
-	fmt.Fprintf(out, "████████\n")
+	fmt.Fprintf(stderr, "████████\n")
 	for x := 0; x < qrcode.Size; x++ {
-		fmt.Fprintf(out, "█")
+		fmt.Fprintf(stderr, "█")
 	}
-	fmt.Fprintf(out, "████████\n")
+	fmt.Fprintf(stderr, "████████\n")
 	for y := 0; y < qrcode.Size; y += 2 {
-		fmt.Fprintf(out, "████")
+		fmt.Fprintf(stderr, "████")
 		for x := 0; x < qrcode.Size; x++ {
 			switch {
 			case qrcode.Black(x, y) && qrcode.Black(x, y+1):
-				fmt.Fprintf(out, " ")
+				fmt.Fprintf(stderr, " ")
 			case qrcode.Black(x, y):
-				fmt.Fprintf(out, "▄")
+				fmt.Fprintf(stderr, "▄")
 			case qrcode.Black(x, y+1):
-				fmt.Fprintf(out, "▀")
+				fmt.Fprintf(stderr, "▀")
 			default:
-				fmt.Fprintf(out, "█")
+				fmt.Fprintf(stderr, "█")
 			}
 		}
-		fmt.Fprintf(out, "████\n")
+		fmt.Fprintf(stderr, "████\n")
 	}
 	for x := 0; x < qrcode.Size; x++ {
-		fmt.Fprintf(out, "█")
+		fmt.Fprintf(stderr, "█")
 	}
-	fmt.Fprintf(out, "████████\n")
+	fmt.Fprintf(stderr, "████████\n")
 	for x := 0; x < qrcode.Size; x++ {
-		fmt.Fprintf(out, "█")
+		fmt.Fprintf(stderr, "█")
 	}
-	fmt.Fprintf(out, "████████\n")
-	fmt.Fprintf(out, "%s\n", u.String())
+	fmt.Fprintf(stderr, "████████\n")
+	fmt.Fprintf(stderr, "%s\n", u.String())
 }

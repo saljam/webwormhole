@@ -1,9 +1,9 @@
 // +build js,wasm
 
- // WebAssembly program webwormhole is a set of wrappers for webwormhole and
+// WebAssembly program webwormhole is a set of wrappers for webwormhole and
 // related packages in order to run in browser.
 //
-// All functions are added to the webwormhole global object. 
+// All functions are added to the webwormhole global object.
 package main
 
 import (
@@ -11,12 +11,15 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"io"
+	"log"
+	"strings"
 	"syscall/js"
 
 	"filippo.io/cpace"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/nacl/secretbox"
 	"rsc.io/qr"
+	"webwormhole.io/wordlist"
 )
 
 // state is the PAKE state so far.
