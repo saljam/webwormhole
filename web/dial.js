@@ -39,7 +39,7 @@ export const newwormhole = async (signal, pccb) => {
     if (!key) {
       console.log('got pake message a:', m.data)
       let msgB;
-      [key, msgB] = util.exchange(pass, m.data)
+      [key, msgB] = webwormhole.exchange(pass, m.data)
       console.log('message b:', msgB)
       if (key == null) {
         connC.reject("couldn't generate key")
@@ -49,20 +49,20 @@ export const newwormhole = async (signal, pccb) => {
       pc.onicecandidate = e => {
         if (e.candidate && e.candidate.candidate !== '') {
           console.log('got local candidate')
-          ws.send(util.seal(key, JSON.stringify(e.candidate)))
+          ws.send(webwormhole.seal(key, JSON.stringify(e.candidate)))
         } else if (!e.candidate) {
           logNAT(pc.localDescription.sdp)
         }
       }
       await pc.setLocalDescription(await pc.createOffer())
       console.log('created offer')
-      ws.send(util.seal(key, JSON.stringify(pc.localDescription)))
+      ws.send(webwormhole.seal(key, JSON.stringify(pc.localDescription)))
       return
     }
-    const jsonmsg = util.open(key, m.data)
+    const jsonmsg = webwormhole.open(key, m.data)
     if (jsonmsg === null) {
       // Auth failed. Send something so B knows.
-      ws.send(util.seal(key, 'bye'))
+      ws.send(webwormhole.seal(key, 'bye'))
       ws.close()
       connC.reject('bad key')
       return
@@ -128,7 +128,7 @@ export const dial = async (signal, code, pccb) => {
     }
     if (!key) {
       console.log('got pake message b:', m.data)
-      key = util.finish(m.data)
+      key = webwormhole.finish(m.data)
       if (key == null) {
         connC.reject("couldn't generate key")
       }
@@ -136,17 +136,17 @@ export const dial = async (signal, code, pccb) => {
       pc.onicecandidate = e => {
         if (e.candidate && e.candidate.candidate !== '') {
           console.log('got local candidate')
-          ws.send(util.seal(key, JSON.stringify(e.candidate)))
+          ws.send(webwormhole.seal(key, JSON.stringify(e.candidate)))
         } else if (!e.candidate) {
           logNAT(pc.localDescription.sdp)
         }
       }
       return
     }
-    const jmsg = util.open(key, m.data)
+    const jmsg = webwormhole.open(key, m.data)
     if (jmsg == null) {
       // Auth failed. Send something so A knows.
-      ws.send(util.seal(key, 'bye'))
+      ws.send(webwormhole.seal(key, 'bye'))
       ws.close()
       connC.reject('bad key')
       return
@@ -157,7 +157,7 @@ export const dial = async (signal, code, pccb) => {
       console.log('got offer')
       await pc.setLocalDescription(await pc.createAnswer())
       console.log('created answer')
-      ws.send(util.seal(key, JSON.stringify(pc.localDescription)))
+      ws.send(webwormhole.seal(key, JSON.stringify(pc.localDescription)))
       return
     }
     if (msg.candidate) {
@@ -169,7 +169,7 @@ export const dial = async (signal, code, pccb) => {
   }
   ws.onopen = async e => {
     console.log('websocket opened')
-    const msgA = util.start(pass)
+    const msgA = webwormhole.start(pass)
     if (msgA == null) {
       connC.reject("couldn't generate A's PAKE message")
     }

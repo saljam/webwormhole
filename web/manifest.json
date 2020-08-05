@@ -21,7 +21,7 @@
 		"dial.js",
 		"sw.js",
 		"wordlist.js",
-		"util.wasm",
+		"webwormhole.wasm",
 		"stars.svg",
 		"wormhole.svg"
 	],

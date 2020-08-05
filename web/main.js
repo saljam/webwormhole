@@ -223,6 +223,7 @@ const initPeerConnection = (iceServers) => {
       credential: iceServers[i].Credential
     })
   }
+  console.log(normalisedICEServers) //DEBUG
   const pc = new RTCPeerConnection({
     iceServers: normalisedICEServers
   })
@@ -273,7 +274,7 @@ const connect = async e => {
       codechange()
       location.hash = code
       signalserver.hash = code
-      const qr = util.qrencode(signalserver.href)
+      const qr = webwormhole.qrencode(signalserver.href)
       if (qr === null) {
         document.getElementById('qr').src = ''
       } else {
@@ -443,14 +444,15 @@ const browserhacks = () => {
   }
 
   // Are we in an extension?
+  hacks.wasmURL = 'webwormhole.wasm'
   if (window.chrome && chrome.runtime && chrome.runtime.getURL){
-    const resourceURL = chrome.runtime.getURL("")
-    if (resourceURL.startsWith("moz")) {
+    const resourceURL = chrome.runtime.getURL('')
+    if (resourceURL.startsWith('moz')) {
       console.log('quirks: firefox extension, no serviceworkers')
       hacks.nosw = true
-    } else if (resourceURL.startsWith("chrome")) {
+    } else if (resourceURL.startsWith('chrome')) {
       console.log('quirks: chrome extension')
-      hacks.wasmURL = chrome.runtime.getURL("util.wasm")
+      hacks.wasmURL = chrome.runtime.getURL('webwormhole.wasm')
     } else {
       console.log('quirks: unknown browser extension')
     }
@@ -473,9 +475,8 @@ const swready = async () => {
 
 const wasmready = async () => {
   if (!hacks.nowasm) {
-    const url = hacks.wasmURL || 'util.wasm'
     const go = new Go()
-    const wasm = await WebAssembly.instantiateStreaming(fetch(url), go.importObject)
+    const wasm = await WebAssembly.instantiateStreaming(fetch(hacks.wasmURL), go.importObject)
     go.run(wasm.instance)
   }
 }

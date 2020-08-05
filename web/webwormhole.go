@@ -1,14 +1,9 @@
 // +build js,wasm
 
-// Package util is a set of wrappers for crypto (and other) functions to be
-// invoked via Web Assembly.
+ // WebAssembly program webwormhole is a set of wrappers for webwormhole and
+// related packages in order to run in browser.
 //
-// All functions return nil/null on error.
-//
-//	msgA = util.start("some pass")
-//	[keyB, msgB] = util.exchange("some pass", msgA)
-//	keyA = util.finish(msgB)
-//	util.open(keyA, util.seal(keyB, "hello"))
+// All functions are added to the webwormhole global object. 
 package main
 
 import (
@@ -146,16 +141,36 @@ func qrencode(_ js.Value, args []js.Value) interface{} {
 	return dst
 }
 
+func encode(_ js.Value, args []js.Value) interface{} {
+	pass := make([]byte, args[0].Length())
+	js.CopyBytesToGo(pass, args[0])
+	return strings.Join(wordlist.Encode(pass), "-")
+}
+
+func decode(_ js.Value, args []js.Value) interface{} {
+	pass := args[0].String()
+	buf, _ := wordlist.Decode(strings.Split(pass, "-"))
+	log.Println(buf)
+	if buf == nil {
+		return nil
+	}
+	dst := js.Global().Get("Uint8Array").New(len(buf))
+	js.CopyBytesToJS(dst, buf)
+	return dst
+}
+
 func main() {
-	js.Global().Set("util", map[string]interface{}{
+	js.Global().Set("webwormhole", map[string]interface{}{
 		"start":    js.FuncOf(start),
 		"finish":   js.FuncOf(finish),
 		"exchange": js.FuncOf(exchange),
 		"open":     js.FuncOf(open),
 		"seal":     js.FuncOf(seal),
 		"qrencode": js.FuncOf(qrencode),
+		"encode":   js.FuncOf(encode),
+		"decode":   js.FuncOf(decode),
 	})
 
-	// TODO release functions and exit when done.
+	// Go wasm executables must remain running. Block indefinitely.
 	select {}
 }
