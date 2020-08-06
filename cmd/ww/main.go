@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"strconv"
@@ -72,7 +71,6 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		if pass == nil {
 			fatalf("could not decode password")
 		}
-		log.Println("DEBUG", slot, pass)
 		c, err := wormhole.Join(strconv.Itoa(slot), string(pass), *sigserv)
 		if err == wormhole.ErrBadVersion {
 			fatalf(
@@ -105,7 +103,6 @@ func newConn(code string, length int) *wormhole.Wormhole {
 			fatalf("got invalid slot from signalling server: %v", s)
 		}
 		printcode(wordlist.EnWords.Encode(slot, pass))
-		log.Println("DEBUG", slot, pass)
 	}()
 	c, err := wormhole.New(string(pass), *sigserv, slotc)
 	if err == wormhole.ErrBadVersion {
