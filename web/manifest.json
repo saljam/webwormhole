@@ -1,12 +1,12 @@
 {
 	"manifest_version": 2,
 	"name": "WebWormhole",
-	"version": "0.1",
+	"version": "0.2",
 	"description": "WebWormhole lets you send files from one place to another.",
 	"icons": {
-		"16": "hole32.png",
-		"48": "hole.png",
-		"128": "hole.png"
+		"16": "hole16.png",
+		"48": "hole48.png",
+		"128": "hole128.png"
 	},
 	"browser_action": {
 		"default_icon": "hole.png",
