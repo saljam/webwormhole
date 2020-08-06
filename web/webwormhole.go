@@ -11,7 +11,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"io"
-	"log"
 	"strings"
 	"syscall/js"
 
@@ -152,14 +151,18 @@ func encode(_ js.Value, args []js.Value) interface{} {
 
 func decode(_ js.Value, args []js.Value) interface{} {
 	pass := args[0].String()
+	pass = strings.TrimSuffix(pass, "-")
 	buf, _ := wordlist.Decode(strings.Split(pass, "-"))
-	log.Println(buf)
 	if buf == nil {
 		return nil
 	}
 	dst := js.Global().Get("Uint8Array").New(len(buf))
 	js.CopyBytesToJS(dst, buf)
 	return dst
+}
+
+func match(_ js.Value, args []js.Value) interface{} {
+	return wordlist.Match(args[0].String())
 }
 
 func main() {
@@ -172,6 +175,7 @@ func main() {
 		"qrencode": js.FuncOf(qrencode),
 		"encode":   js.FuncOf(encode),
 		"decode":   js.FuncOf(decode),
+		"match":    js.FuncOf(match),
 	})
 
 	// Go wasm executables must remain running. Block indefinitely.

@@ -34,6 +34,20 @@ func Decode(words []string) (bytes []byte, parity []byte) {
 	return bytes, parity
 }
 
+// Match returns the first word that begins with prefix, or the empty string
+// if none match.
+func Match(prefix string) string {
+	if prefix == "" {
+		return ""
+	}
+	for i := range pgpWords {
+		if strings.HasPrefix(pgpWords[i], prefix) {
+			return pgpWords[i]
+		}
+	}
+	return ""
+}
+
 func index(word string) (i int, ok bool) {
 	for i := range pgpWords {
 		if strings.EqualFold(word, pgpWords[i]) {

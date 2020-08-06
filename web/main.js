@@ -1,5 +1,4 @@
 import { newwormhole, dial } from './dial.js'
-import { autocomplete } from './wordlist.js'
 
 let receiving
 let sending
@@ -265,8 +264,8 @@ const initPeerConnection = (iceServers) => {
 
 const connect = async e => {
   try {
+    dialling()
     if (document.getElementById('magiccode').value === '') {
-      dialling()
       document.getElementById('info').innerHTML = 'WAITING FOR THE OTHER SIDE - SHARE CODE OR URL'
       const [code, finish] = await newwormhole(signalserver.href, initPeerConnection)
       document.getElementById('magiccode').value = code
@@ -281,7 +280,6 @@ const connect = async e => {
       }
       await finish
     } else {
-      dialling()
       document.getElementById('info').innerHTML = 'CONNECTING'
       await dial(signalserver.href, document.getElementById('magiccode').value, initPeerConnection)
     }
@@ -377,6 +375,28 @@ const codechange = e => {
     document.getElementById('dial').value = 'NEW WORMHOLE'
   } else {
     document.getElementById('dial').value = 'JOIN WORMHOLE'
+  }
+}
+
+const autocompletehint = e => {
+  const words = document.getElementById('magiccode').value.split('-');
+  const prefix = words[words.length-1]
+  const hint = webwormhole.match(prefix)
+  document.getElementById('autocomplete').innerText = hint
+}
+
+const autocomplete = e => {
+  // TODO repeated tabs cycle through all matches?
+  if (e.keyCode === 9) {
+    e.preventDefault() // Prevent tabs from doing tab things.
+    const words = document.getElementById('magiccode').value.split('-');
+    const prefix = words[words.length-1]
+    const hint = webwormhole.match(prefix)
+    if (hint === '') {
+      return
+    }
+    document.getElementById('magiccode').value += hint.substring(prefix.length) + '-'
+    document.getElementById('autocomplete').innerText = ''
   }
 }
 
@@ -499,6 +519,7 @@ const wasmready = async () => {
   window.addEventListener('hashchange', hashchange)
   document.getElementById('magiccode').addEventListener('input', codechange)
   document.getElementById('magiccode').addEventListener('keydown', autocomplete)
+  document.getElementById('magiccode').addEventListener('input', autocompletehint)
   document.getElementById('filepicker').addEventListener('change', pick)
   document.getElementById('dialog').addEventListener('submit', preventdefault)
   document.getElementById('dialog').addEventListener('submit', connect)

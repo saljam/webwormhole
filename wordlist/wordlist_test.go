@@ -45,3 +45,22 @@ func TestDecode(t *testing.T) {
 	}
 
 }
+
+func TestMatch(t *testing.T) {
+	cases := []struct {
+		prefix string
+		word   string
+	}{
+		{"", ""},
+		{"aa", "aardvark"},
+		{"aardvark-", ""},
+		{"aardvark-b", ""},
+		{"booksh", "bookshelf"},
+	}
+	for i, c := range cases {
+		if c.word != Match(c.prefix) {
+			t.Errorf("testcase %v (%v) got %v want %v", i, c.prefix, Match(c.prefix), c.word)
+		}
+	}
+
+}

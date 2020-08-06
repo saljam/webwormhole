@@ -127,6 +127,11 @@ footer span {
 	display: none;
 }
 
+#autocomplete{
+	height: 1em;
+	opacity: 0.5;
+}
+
 .button {
 	-webkit-appearance: none;
 	appearance: none;

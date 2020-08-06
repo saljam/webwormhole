@@ -1,5 +1,3 @@
-import { encode, decode } from './wordlist.js'
-
 const wsserver = (url, slot) => {
   const u = new URL(url)
   let protocol = 'wss:'
@@ -33,12 +31,12 @@ export const newwormhole = async (signal, pccb) => {
       // will not arrive while we're initialising pc.
       // This API is garbage.
       pc = await pccb(initmsg.iceServers)
-      slotC.resolve(initmsg.slot + '-' + encode(pass))
+      slotC.resolve(initmsg.slot + '-' + webwormhole.encode(pass))
       return
     }
     if (!key) {
       console.log('got pake message a:', m.data)
-      let msgB;
+      let msgB
       [key, msgB] = webwormhole.exchange(pass, m.data)
       console.log('message b:', msgB)
       if (key == null) {
@@ -95,12 +93,20 @@ export const newwormhole = async (signal, pccb) => {
     } else if (e.code === 4001) {
       connC.reject('timed out')
     } else if (e.code === 4002) {
-      connC.reject("couldn't get slot")
-    } else if (e.reason !== "") {
-      console.log('websocket session closed:', e.reason)
-      connC.reject("session ended")
+      connC.reject('could not get slot')
+    } else if (e.code === 4003) {
+      connC.reject('wrong protocol version, must update')
+    } else if (e.code === 4004 || e.code === 1001) {
+      // Workaround for regression introduced in firefox around version ~78.
+      // Usually the websocket connection stays open for the duration of the session, since
+      // it doesn't hurt and it make candidate trickling easier. We only do this here out of
+      // laziness. The go code has more disciplined websocket lifecycle management.
+      // Recent versions of Firefox introduced a bug where websocket connections are killed
+      // when a download begins. This would happen after the WebRTC connection is set up
+      // so it's not really an error we need to react to.
+      connC.resolve()
     } else {
-      console.log('websocket session closed')
+      connC.reject(`websocket session closed: ${e.reason} (${e.code})`)
     }
   }
 
@@ -110,7 +116,7 @@ export const newwormhole = async (signal, pccb) => {
 // dial joins a wormhole, the B side.
 export const dial = async (signal, code, pccb) => {
   const [slot, ...passparts] = code.split('-')
-  const pass = decode(passparts)
+  const pass = webwormhole.decode(passparts.join('-'))
 
   console.log('dialling slot:', slot)
 
@@ -188,12 +194,20 @@ export const dial = async (signal, code, pccb) => {
     } else if (e.code === 4001) {
       connC.reject('timed out')
     } else if (e.code === 4002) {
-      connC.reject("couldn't get slot")
-    } else if (e.reason !== "") {
-      console.log('websocket session closed:', e.reason)
-      connC.reject("session ended")
+      connC.reject('could not get slot')
+    } else if (e.code === 4003) {
+      connC.reject('wrong protocol version, must update')
+    } else if (e.code === 4004 || e.code === 1001) {
+      // Workaround for regression introduced in firefox around version ~78.
+      // Usually the websocket connection stays open for the duration of the session, since
+      // it doesn't hurt and it make candidate trickling easier. We only do this here out of
+      // laziness. The go code has more disciplined websocket lifecycle management.
+      // Recent versions of Firefox introduced a bug where websocket connections are killed
+      // when a download begins. This would happen after the WebRTC connection is set up
+      // so it's not really an error we need to react to.
+      connC.resolve()
     } else {
-      console.log('websocket session closed')
+      connC.reject(`websocket session closed: ${e.reason} (${e.code})`)
     }
   }
   return connP
