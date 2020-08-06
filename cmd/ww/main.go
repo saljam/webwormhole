@@ -6,9 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
-	"strings"
+	"strconv"
 
 	"rsc.io/qr"
 	"webwormhole.io/wordlist"
@@ -67,12 +68,12 @@ func fatalf(format string, v ...interface{}) {
 func newConn(code string, length int) *wormhole.Wormhole {
 	if code != "" {
 		// Join wormhole.
-		parts := strings.Split(code, "-")
-		passbytes, _ := wordlist.Decode(parts[1:])
-		if passbytes == nil {
+		slot, pass := wordlist.EnWords.Decode(code)
+		if pass == nil {
 			fatalf("could not decode password")
 		}
-		c, err := wormhole.Join(parts[0], string(passbytes), *sigserv)
+		log.Println("DEBUG", slot, pass)
+		c, err := wormhole.Join(strconv.Itoa(slot), string(pass), *sigserv)
 		if err == wormhole.ErrBadVersion {
 			fatalf(
 				"%s%s%s",
@@ -92,16 +93,21 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		return c
 	}
 	// New wormhole.
-	passbytes := make([]byte, length)
-	if _, err := io.ReadFull(crand.Reader, passbytes); err != nil {
+	pass := make([]byte, length)
+	if _, err := io.ReadFull(crand.Reader, pass); err != nil {
 		fatalf("could not generate password: %v", err)
 	}
-	password := strings.Join(wordlist.Encode(passbytes), "-")
 	slotc := make(chan string)
 	go func() {
-		printcode(<-slotc + "-" + password)
+		s := <-slotc
+		slot, err := strconv.Atoi(s)
+		if err != nil {
+			fatalf("got invalid slot from signalling server: %v", s)
+		}
+		printcode(wordlist.EnWords.Encode(slot, pass))
+		log.Println("DEBUG", slot, pass)
 	}()
-	c, err := wormhole.New(string(passbytes), *sigserv, slotc)
+	c, err := wormhole.New(string(pass), *sigserv, slotc)
 	if err == wormhole.ErrBadVersion {
 		fatalf(
 			"%s%s%s",

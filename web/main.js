@@ -287,6 +287,8 @@ const connect = async e => {
     disconnected()
     if (err === 'bad key') {
       document.getElementById('info').innerHTML = 'BAD KEY'
+    } else if (err === 'bad code') {
+      document.getElementById('info').innerHTML = 'INVALID CODE'
     } else if (err === 'no such slot') {
       document.getElementById('info').innerHTML = 'NO SUCH SLOT'
     } else if (err === 'timed out') {

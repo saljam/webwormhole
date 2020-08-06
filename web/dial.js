@@ -1,3 +1,5 @@
+const protocol = '4'
+
 const wsserver = (url, slot) => {
   const u = new URL(url)
   let protocol = 'wss:'
@@ -13,7 +15,7 @@ const wsserver = (url, slot) => {
 
 // newwormhole creates wormhole, the A side.
 export const newwormhole = async (signal, pccb) => {
-  const ws = new WebSocket(wsserver(signal, ""), "4")
+  const ws = new WebSocket(wsserver(signal, ''), protocol)
   let key, pass, pc
   let slotC, connC
   const slotP = new Promise((resolve, reject) => {
@@ -31,7 +33,12 @@ export const newwormhole = async (signal, pccb) => {
       // will not arrive while we're initialising pc.
       // This API is garbage.
       pc = await pccb(initmsg.iceServers)
-      slotC.resolve(initmsg.slot + '-' + webwormhole.encode(pass))
+      const slot = parseInt(initmsg.slot)
+      if (isNaN(slot)) {
+        slotC.reject('invalid slot')
+        return
+      }
+      slotC.resolve(webwormhole.encode(slot, pass))
       return
     }
     if (!key) {
@@ -40,7 +47,8 @@ export const newwormhole = async (signal, pccb) => {
       [key, msgB] = webwormhole.exchange(pass, m.data)
       console.log('message b:', msgB)
       if (key == null) {
-        connC.reject("couldn't generate key")
+        connC.reject('could not generate key')
+        return
       }
       console.log('generated key')
       ws.send(msgB)
@@ -115,17 +123,18 @@ export const newwormhole = async (signal, pccb) => {
 
 // dial joins a wormhole, the B side.
 export const dial = async (signal, code, pccb) => {
-  const [slot, ...passparts] = code.split('-')
-  const pass = webwormhole.decode(passparts.join('-'))
-
-  console.log('dialling slot:', slot)
-
-  const ws = new WebSocket(wsserver(signal, slot), "4")
   let key, pc
   let connC
   const connP = new Promise((resolve, reject) => {
     connC = { resolve, reject }
   })
+  const [slot, pass] = webwormhole.decode(code)
+  if (pass.length === 0) {
+    throw 'bad code'
+  }
+
+  console.log('dialling slot:', slot)
+  const ws = new WebSocket(wsserver(signal, slot), protocol)
   ws.onmessage = async m => {
     if (!pc) {
       const initmsg = JSON.parse(m.data)
@@ -136,7 +145,8 @@ export const dial = async (signal, code, pccb) => {
       console.log('got pake message b:', m.data)
       key = webwormhole.finish(m.data)
       if (key == null) {
-        connC.reject("couldn't generate key")
+        connC.reject('could not generate key')
+        return
       }
       console.log('generated key')
       pc.onicecandidate = e => {
@@ -178,6 +188,7 @@ export const dial = async (signal, code, pccb) => {
     const msgA = webwormhole.start(pass)
     if (msgA == null) {
       connC.reject("couldn't generate A's PAKE message")
+      return
     }
     console.log('message a:', msgA)
     ws.send(msgA)

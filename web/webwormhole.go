@@ -11,7 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"io"
-	"strings"
+	"strconv"
 	"syscall/js"
 
 	"filippo.io/cpace"
@@ -144,25 +144,25 @@ func qrencode(_ js.Value, args []js.Value) interface{} {
 }
 
 func encode(_ js.Value, args []js.Value) interface{} {
-	pass := make([]byte, args[0].Length())
-	js.CopyBytesToGo(pass, args[0])
-	return strings.Join(wordlist.Encode(pass), "-")
+	slot := args[0].Int()
+	pass := make([]byte, args[1].Length())
+	js.CopyBytesToGo(pass, args[1])
+	return wordlist.EnWords.Encode(slot, pass)
 }
 
 func decode(_ js.Value, args []js.Value) interface{} {
-	pass := args[0].String()
-	pass = strings.TrimSuffix(pass, "-")
-	buf, _ := wordlist.Decode(strings.Split(pass, "-"))
-	if buf == nil {
-		return nil
+	code := args[0].String()
+	slot, pass := wordlist.EnWords.Decode(code)
+	dst := js.Global().Get("Uint8Array").New(len(pass))
+	js.CopyBytesToJS(dst, pass)
+	return []interface{}{
+		strconv.Itoa(slot),
+		dst,
 	}
-	dst := js.Global().Get("Uint8Array").New(len(buf))
-	js.CopyBytesToJS(dst, buf)
-	return dst
 }
 
 func match(_ js.Value, args []js.Value) interface{} {
-	return wordlist.Match(args[0].String())
+	return wordlist.EnWords.Match(args[0].String())
 }
 
 func main() {

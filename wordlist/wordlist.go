@@ -1,63 +1,368 @@
-// Package wordlist provides an encoder and a decoder for the PGP Word List.
-//
-// PGP Word List is like NATO phonetic alphabet but for bytes.
-// https://en.wikipedia.org/wiki/PGP_Words
+// Package wordlist provides a encoders and a decoder for WebWormhole codes.
 package wordlist
 
-import "strings"
+import (
+	"encoding/binary"
+	"strings"
+)
+
+// Encoding is a string encoding for a vector of bytes.
+type Encoding interface {
+	// Encode returns the string encoding for slot and pass.
+	Encode(slot int, pass []byte) string
+	// Encode returns the slot and pass encoded by code.
+	Decode(code string) (slot int, pass []byte)
+	// Match returns the first word in the word list that has prefix prefix.
+	Match(prefix string) string
+}
+
+var (
+	// EnWords is based on the EFF short wordlist, filtered by unique soundex.
+	// https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases
+	// Credit to Nick Moore https://nick.zoic.org/art/shorter-words-list/
+	//
+	// TODO It's a global variable for now. We'll need to figure out an easier
+	// way to switch between multiple encoding for different languages etc.
+	EnWords Encoding = enWords
+)
+
+// wordEncodings map 512 words into the 256 values of bytes and a parity bit.
+type wordEncoding []string
 
 // Encode returns the words representing the bytes in buf.
-func Encode(buf []byte) []string {
-	words := make([]string, len(buf))
-	for i := range buf {
-		words[i] = pgpWords[int(buf[i])*2+i%2]
-	}
-	return words
-}
-
-// Decode decodes the array of words in words. It returns the bytes
-// it represents and the parity of each word.
-//
-// It does not perform any parity validation. If it encounters a word
-// not in its dictionary it returns nil.
-func Decode(words []string) (bytes []byte, parity []byte) {
-	bytes = make([]byte, len(words))
-	parity = make([]byte, len(words))
-	for i := range words {
-		j, ok := index(words[i])
-		if !ok {
-			return nil, nil
-		}
-		bytes[i] = byte(j / 2)
-		parity[i] = byte(j % 2)
-	}
-	return bytes, parity
-}
-
-// Match returns the first word that begins with prefix, or the empty string
-// if none match.
-func Match(prefix string) string {
-	if prefix == "" {
+func (list wordEncoding) Encode(slot int, pass []byte) string {
+	if len(pass) == 0 {
 		return ""
 	}
-	for i := range pgpWords {
-		if strings.HasPrefix(pgpWords[i], prefix) {
-			return pgpWords[i]
-		}
+	slotbytes := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(slotbytes, uint64(slot))
+	slotbytes = slotbytes[:n]
+
+	words := make([]string, n+len(pass))
+	for i := range slotbytes {
+		words[i] = list[int(slotbytes[i])*2+i%2]
 	}
-	return ""
+	for i := range pass {
+		words[n+i] = list[int(pass[i])*2+(n+i)%2]
+	}
+	return strings.Join(words, "-")
 }
 
-func index(word string) (i int, ok bool) {
-	for i := range pgpWords {
-		if strings.EqualFold(word, pgpWords[i]) {
+// Decode decodes the code of into a slot and a password. Invalid codes
+// return a 0 slot and a nil pass.
+func (list wordEncoding) Decode(code string) (slot int, pass []byte) {
+	// White space and - are interchangable.
+	code = strings.ReplaceAll(code, "-", " ")
+	// Space can turn into + in URLs.
+	code = strings.ReplaceAll(code, "+", " ")
+	parts := strings.Fields(code)
+
+	buf := make([]byte, len(parts))
+	parity := 1
+	for i := range parts {
+		j, ok := list.indexOf(parts[i])
+		if !ok {
+			return 0, nil
+		}
+		buf[i] = byte(j / 2)
+		if parity == i%2 {
+			return 0, nil
+		}
+		parity = i % 2
+	}
+
+	s, n := binary.Uvarint(buf)
+	if n <= 0 {
+		return 0, nil
+	}
+	return int(s), buf[n:]
+}
+
+func (list wordEncoding) indexOf(word string) (i int, ok bool) {
+	for i := range list {
+		if strings.EqualFold(word, list[i]) {
 			return i, true
 		}
 	}
 	return 0, false
 }
 
-var pgpWords = []string{
+// Match returns the first word that begins with prefix, or the empty string
+// if none match.
+func (list wordEncoding) Match(prefix string) string {
+	if prefix == "" {
+		return ""
+	}
+	for i := range list {
+		if strings.HasPrefix(list[i], prefix) {
+			return list[i]
+		}
+	}
+	return ""
+}
+
+var enWords = wordEncoding{
+	"acorn", "acre",
+	"acts", "afar",
+	"affix", "aged",
+	"agent", "agile",
+	"aging", "agony",
+	"aide", "aids",
+	"aim", "alarm",
+	"alike", "alive",
+	"aloe", "aloft",
+	"alone", "amend",
+	"ample", "amuse",
+	"angel", "anger",
+	"apple", "april",
+	"apron", "area",
+	"argue", "armed",
+	"armor", "army",
+	"arson", "art",
+	"atlas", "atom",
+	"avert", "avoid",
+	"axis", "bacon",
+	"baker", "balmy",
+	"barn", "basil",
+	"baton", "bats",
+	"blank", "blast",
+	"blend", "blimp",
+	"blob", "blog",
+	"blurt", "boil",
+	"bok", "bolt",
+	"bony", "bribe",
+	"bring", "broad",
+	"broil", "broke",
+	"bud", "bunch",
+	"bunt", "bust",
+	"calm", "canal",
+	"candy", "card",
+	"case", "cedar",
+	"chump", "civic",
+	"civil", "clamp",
+	"clasp", "class",
+	"clay", "clear",
+	"cleft", "clerk",
+	"cling", "clip",
+	"cold", "come",
+	"comic", "cork",
+	"cost", "cover",
+	"craft", "cramp",
+	"crank", "crisp",
+	"crop", "crown",
+	"crust", "cub",
+	"cupid", "cure",
+	"curl", "cut",
+	"cycle", "dab",
+	"dad", "dart",
+	"deal", "debt",
+	"debug", "decaf",
+	"decal", "decor",
+	"dent", "dig",
+	"dimly", "ditch",
+	"doing", "donor",
+	"down", "drab",
+	"drank", "dress",
+	"drift", "drill",
+	"drum", "dry",
+	"dust", "early",
+	"earth", "east",
+	"eaten", "ebony",
+	"echo", "edge",
+	"eel", "elder",
+	"elf", "elk",
+	"elm", "elude",
+	"elves", "email",
+	"emit", "empty",
+	"emu", "enter",
+	"envoy", "equal",
+	"erase", "error",
+	"erupt", "evade",
+	"even", "evict",
+	"evil", "evoke",
+	"fable", "fact",
+	"fall", "fang",
+	"femur", "fend",
+	"fetal", "fetch",
+	"fever", "fifth",
+	"film", "final",
+	"fit", "five",
+	"flag", "fled",
+	"fling", "flint",
+	"flip", "flirt",
+	"flyer", "foam",
+	"fox", "frail",
+	"fray", "fresh",
+	"from", "front",
+	"frost", "fruit",
+	"gap", "gas",
+	"gem", "genre",
+	"gift", "given",
+	"giver", "glad",
+	"glass", "goal",
+	"golf", "gong",
+	"grab", "grant",
+	"grasp", "grass",
+	"green", "grew",
+	"grid", "grill",
+	"gut", "habit",
+	"halt", "harm",
+	"hasty", "hatch",
+	"haven", "hazel",
+	"help", "herbs",
+	"hers", "hub",
+	"hug", "hull",
+	"human", "hump",
+	"hung", "hunt",
+	"hurry", "hurt",
+	"hut", "ice",
+	"icing", "icon",
+	"igloo", "image",
+	"ion", "iron",
+	"item", "ivory",
+	"ivy", "jam",
+	"jet", "job",
+	"jog", "jolt",
+	"judge", "july",
+	"jump", "junky",
+	"jury", "keep",
+	"keg", "kept",
+	"kilt", "king",
+	"kite", "knee",
+	"knelt", "koala",
+	"ladle", "lake",
+	"land", "last",
+	"latch", "left",
+	"legal", "lens",
+	"level", "lid",
+	"lilac", "lily",
+	"limb", "line",
+	"lip", "liver",
+	"lunar", "lure",
+	"lurk", "maker",
+	"mango", "manor",
+	"map", "march",
+	"mardi", "marry",
+	"match", "malt",
+	"mom", "most",
+	"motor", "mount",
+	"mud", "mug",
+	"mulch", "mule",
+	"mumbo", "mural",
+	"nag", "nail",
+	"name", "nap",
+	"near", "nerd",
+	"net", "next",
+	"ninth", "oak",
+	"oat", "ocean",
+	"oil", "old",
+	"olive", "omen",
+	"only", "open",
+	"opera", "opt",
+	"ounce", "outer",
+	"oval", "pagan",
+	"palm", "pants",
+	"paper", "park",
+	"party", "patch",
+	"pep", "perm",
+	"pest", "petal",
+	"petri", "plank",
+	"plant", "plot",
+	"plus", "pod",
+	"poem", "poker",
+	"polar", "pond",
+	"prank", "print",
+	"prism", "proof",
+	"props", "pry",
+	"pug", "pull",
+	"pulp", "punk",
+	"pupil", "quake",
+	"query", "quill",
+	"quit", "rabid",
+	"radar", "raft",
+	"ramp", "rank",
+	"rant", "recap",
+	"relax", "reply",
+	"rerun", "rigor",
+	"ritzy", "river",
+	"robin", "rope",
+	"rug", "ruin",
+	"rule", "rust",
+	"rut", "salt",
+	"same", "scale",
+	"scan", "scold",
+	"score", "scorn",
+	"scrap", "sect",
+	"self", "send",
+	"set", "seven",
+	"share", "shirt",
+	"shrug", "silk",
+	"silo", "sip",
+	"siren", "skip",
+	"skirt", "sky",
+	"slam", "slang",
+	"slept", "slurp",
+	"small", "smirk",
+	"smog", "snap",
+	"snare", "snarl",
+	"snort", "speak",
+	"spent", "spill",
+	"sport", "spot",
+	"spur", "stamp",
+	"stand", "stark",
+	"start", "stem",
+	"sting", "stir",
+	"stole", "stop",
+	"storm", "suds",
+	"surf", "swirl",
+	"tag", "tall",
+	"talon", "tamer",
+	"tank", "taper",
+	"taps", "tart",
+	"taste", "theft",
+	"thumb", "tidal",
+	"tidy", "tiger",
+	"tilt", "tint",
+	"tiny", "train",
+	"trap", "trek",
+	"trend", "trial",
+	"trunk", "try",
+	"tulip", "tutor",
+	"uncle", "uncut",
+	"unify", "union",
+	"unit", "upon",
+	"upper", "urban",
+	"used", "user",
+	"utter", "value",
+	"vapor", "vegan",
+	"venue", "vest",
+	"vice", "viral",
+	"virus", "visor",
+	"vocal", "void",
+	"volt", "voter",
+	"wad", "wafer",
+	"wager", "wagon",
+	"walk", "wasp",
+	"watch", "water",
+	"widen", "wife",
+	"wilt", "wind",
+	"wing", "wiry",
+	"wok", "wolf",
+	"womb", "wool",
+	"word", "work",
+	"woven", "wrist",
+	"xerox", "yam",
+	"yard", "year",
+	"yeast", "yelp",
+	"yield", "yodel",
+	"yoga", "zebra",
+	"zero", "zesty",
+	"zippy", "zone",
+}
+
+// pgpWords is the PGP word list encoding.
+// https://en.wikipedia.org/wiki/PGP_word_list
+var pgpWords = wordEncoding{
 	"aardvark", "adroitness",
 	"absurd", "adviser",
 	"accrue", "aftermath",
