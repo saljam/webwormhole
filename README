@@ -1,6 +1,6 @@
-THIS PROJECT IS STILL IN EARLY DEVELOPMENT, IT USES EXPERIMENTAL
-CRYPTOGRAPHIC LIBRARIES, AND IT HAS NOT HAD ANY KIND OF SECURITY
-OR CRYPTOGRAPHY REVIEWS. BEWARE THIS MIGHT BE BROKEN AND UNSAFE.
+THIS PROJECT IS STILL IN EARLY DEVELOPMENT IT USES EXPERIMENTAL
+CRYPTOGRAPHIC LIBRARIES AND IT HAS NOT HAD ANY KIND OF SECURITY
+OR CRYPTOGRAPHY REVIEW THIS SOFTWARE MIGHT BE BROKEN AND UNSAFE
 
 	https://xkcd.com/949/
 
@@ -8,48 +8,66 @@ WebWormhole creates ephemeral pipes between computers to send files
 or other data. Try it at https://webwormhole.io or on the command
 line.
 
-On one computer the tool generates a one-time code for us:
+On one computer the tool generates a one-time code:
 
 	$ cat hello.txt
 	hello, world
 	$ ww send hello.txt
 	8-enlist-decadence
 
-On another we use the code to establish a connection:
+On another use the code to establish a connection:
 
 	$ ww receive 8-enlist-decadence
 	$ cat hello.txt
 	hello, world
 
-To install:
+To install the command line tool:
 
 	$ go get webwormhole.io/cmd/ww
 
-Requires Go 1.13.
-
-The author runs an instance of the signalling server that is free to
-use at https://webwormhole.io. It comes with no SLAs or any guarantees
-of uptime.
+It requires Go 1.13 or newer.
 
 To run the signalling server you need to compile the WebAssembly
-files first.  Running go generate will execute the appropriate
+files first. Running go generate will execute the appropriate
 commands to do that:
 
 	$ go generate ./web
 	$ ww server -https= -http=localhost:8000
 
+To package the browser extension for Firefox or Chrome:
+
+	$ go generate ./web
+	$ zip -j webwormhole-ext.zip ./web/* -x '*.git*' '*.go'
+
 WebWormhole is inspired by and uses a model very similar to that
-of Magic Wormhole. Thanks Brian!
+of Magic Wormhole.
 
 	https://github.com/warner/magic-wormhole
 
-It differs from Magic Wormhole in that it uses WebRTC to make the
-direct peer connections. This allows us to make use of WebRTC's NAT
-traversal tricks, as well as the fact that it can be used in browsers.
-The exchange of session descriptions (offers and answers) is protected
-by PAKE and a generated random password, similar to Magic Wormhole.
-The session descriptions include the fingerprints of the DTLS
-certificates that WebRTC uses to secure its communications.
+It differs in that it uses WebRTC to make its connections. This
+allows us to make use of WebRTC's NAT traversal tricks, as well as
+the fact that it can be used in browsers. The exchange of session
+descriptions (offers and answers) is protected by PAKE and a generated
+random password, similar to Magic Wormhole. The session descriptions
+include the fingerprints of the DTLS certificates that WebRTC uses
+to secure its communications.
+
+The author operates the signalling server at webwormhole.io, its
+alias wrmhl.link, and a relay server. These are free to use but
+come with no SLAs or any guarantees of uptime. They facilitate
+establishing connections between peers, but do not handle any
+transferred data in cleartext.
+
+The protocol does not need to trust the signalling server to maintain
+the confidentiality of the files transferred. However, the convenience
+of using the web client directly on webwormhole.io comes at the
+cost of having to trust it. To mitigate this this you can have
+control over which version of the client you run by using the command
+line client or the browser extension. The extension is identical
+to the web client, but packaged for Chrome and Firefox:
+
+	https://addons.mozilla.org/firefox/addon/webwormhole/
+	https://chrome.google.com/webstore/detail/jhombkhjanncdalcbcahinpjoacaiidn
 
 Unless otherwise noted, the source files in this repository are
 distributed under the BSD-style license found in the LICENSE file.
