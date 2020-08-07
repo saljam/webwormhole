@@ -309,7 +309,15 @@ func server(args ...string) {
 			relay(w, r)
 			return
 		}
-		w.Header().Set("Access-Control-Allow-Origin", "*") // to allow loading js modules
+
+		// Allow 3rd parties to load JS modules, etc.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		// Disallow 3rd party code to run when we're the origin.
+		// unsafe-eval is required for wasm :(
+		// https://github.com/WebAssembly/content-security-policy/issues/7
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:")
+
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			stats.goget.Add(1)
 			w.Write([]byte(importMeta))

@@ -25,5 +25,5 @@
 		"stars.svg",
 		"wormhole.svg"
 	],
-	"content_security_policy": "default-src 'self'; script-src 'self' 'wasm-eval'; connect-src wss://webwormhole.io"
+	"content_security_policy": "default-src 'self'; script-src 'self' 'wasm-eval'; img-src 'self' blob:; connect-src wss://webwormhole.io"
 }
