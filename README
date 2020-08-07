@@ -59,10 +59,13 @@ transferred data in cleartext.
 The protocol does not need to trust the signalling server to maintain
 the confidentiality of the files transferred. However, the convenience
 of using the web client directly on webwormhole.io comes at the
-cost of having to trust it. To mitigate this this you can have
+cost of having to trust the code it serves. If the server is ever
+compromised it can be used inject malicious code that undermines
+the security of the client. To mitigate this, you can have more
 control over which version of the client you run by using the command
 line client or the browser extension. The extension is identical
-to the web client, but packaged for Chrome and Firefox:
+to the web client, but packaged for Chrome and Firefox, loads no
+remote code, and requires no permissions:
 
 	https://addons.mozilla.org/firefox/addon/webwormhole/
 	https://chrome.google.com/webstore/detail/jhombkhjanncdalcbcahinpjoacaiidn
