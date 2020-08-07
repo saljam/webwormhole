@@ -25,19 +25,17 @@ To install the command line tool:
 
 	$ go get webwormhole.io/cmd/ww
 
-It requires Go 1.13 or newer.
+This requires Go 1.13 or newer.
 
 To run the signalling server you need to compile the WebAssembly
-files first. Running go generate will execute the appropriate
-commands to do that:
+files first.
 
-	$ go generate ./web
+	$ make wasm
 	$ ww server -https= -http=localhost:8000
 
 To package the browser extension for Firefox or Chrome:
 
-	$ go generate ./web
-	$ zip -j webwormhole-ext.zip ./web/* -x '*.git*' '*.go'
+	$ make webwormhole-ext.zip
 
 WebWormhole is inspired by and uses a model very similar to that
 of Magic Wormhole.
