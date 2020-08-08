@@ -22,12 +22,12 @@ func TestEnEncodeDecode(t *testing.T) {
 		{256, []byte{8, 8}, "ladle-aged-aloe-aloft"},
 	}
 	for i, c := range cases {
-		if code := EnWords.Encode(c.slot, c.pass); code != c.code {
+		if code := Encode(c.slot, c.pass); code != c.code {
 			t.Errorf("encode testcase %v got %v want %v", i, code, c.code)
 		}
 	}
 	for i, c := range cases {
-		if slot, pass := EnWords.Decode(c.code); slot != c.slot || !reflect.DeepEqual(pass, c.pass) {
+		if slot, pass := Decode(c.code); slot != c.slot || !reflect.DeepEqual(pass, c.pass) {
 			t.Errorf("decode testcase %v got %v,%v want %v,%v", i, slot, pass, c.slot, c.pass)
 		}
 	}
@@ -47,9 +47,10 @@ func TestMatch(t *testing.T) {
 		{"zo", "zone"},
 		{"acre-b", ""},
 		{"zz", ""},
+		{"snaps", "snapshot"}, // fallback to gpg words
 	}
 	for i, c := range cases {
-		if hint := EnWords.Match(c.prefix); hint != c.word {
+		if hint := Match(c.prefix); hint != c.word {
 			t.Errorf("testcase %v (%v) got %v want %v", i, c.prefix, hint, c.word)
 		}
 	}

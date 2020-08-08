@@ -3,12 +3,50 @@ package wordlist
 
 import (
 	"encoding/binary"
+	"fmt"
+	"strconv"
 	"strings"
 )
 
-// Encoding is a string encoding for a vector of bytes.
-type Encoding interface {
-	// Encode returns the string encoding for slot and pass.
+var defaultEncodings = []encoding{
+	varintEncoding(enWords),
+	magicWormholeEncoding(pgpWords),
+	octalEncoding{},
+}
+
+// Encode returns the string encoding of slot and pass using the default encoding,
+// which is english-varint-slot.
+func Encode(slot int, pass []byte) string {
+	return defaultEncodings[0].Encode(slot, pass)
+}
+
+// Encode returns the slot and pass encoded by code, trying all supported word lists
+// supported in the default order. Invalid codes return a 0 slot and a nil pass.
+func Decode(code string) (slot int, pass []byte) {
+	for _, enc := range defaultEncodings {
+		s, p := enc.Decode(code)
+		if p != nil {
+			return s, p
+		}
+	}
+	return 0, nil
+}
+
+// Match returns the first word in the word list that has prefix prefix, trying all
+// supported word lists the default order. It returns the empty string if none match.
+func Match(prefix string) string {
+	for _, enc := range defaultEncodings {
+		hint := enc.Match(prefix)
+		if hint != "" {
+			return hint
+		}
+	}
+	return ""
+}
+
+// encoding is a string encoding for a vector of bytes.
+type encoding interface {
+	// Encode returns the string encoding of slot and pass.
 	Encode(slot int, pass []byte) string
 	// Encode returns the slot and pass encoded by code.
 	Decode(code string) (slot int, pass []byte)
@@ -16,21 +54,57 @@ type Encoding interface {
 	Match(prefix string) string
 }
 
-var (
-	// EnWords is based on the EFF short wordlist, filtered by unique soundex.
-	// https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases
-	// Credit to Nick Moore https://nick.zoic.org/art/shorter-words-list/
-	//
-	// TODO It's a global variable for now. We'll need to figure out an easier
-	// way to switch between multiple encoding for different languages etc.
-	EnWords Encoding = enWords
-)
+// octalEncoding map is a numeric encoding of the codes.
+type octalEncoding struct{}
 
-// wordEncodings map 512 words into the 256 values of bytes and a parity bit.
-type wordEncoding []string
+func (octalEncoding) Encode(slot int, pass []byte) string {
+	if len(pass) == 0 {
+		return ""
+	}
 
-// Encode returns the words representing the bytes in buf.
-func (list wordEncoding) Encode(slot int, pass []byte) string {
+	code := fmt.Sprintf("%o", slot)
+	for i, b := range pass {
+		code += fmt.Sprintf("-%03o", int(b)|((i&1)<<8)) // each byte b + a 9th parity bit
+	}
+	return code
+}
+
+func (octalEncoding) Decode(code string) (slot int, pass []byte) {
+	// White space and - are interchangable.
+	code = strings.ReplaceAll(code, "-", " ")
+	// Space can turn into + in URLs.
+	code = strings.ReplaceAll(code, "+", " ")
+	parts := strings.Fields(code)
+	if len(parts) < 2 {
+		return 0, nil
+	}
+
+	s, err := strconv.ParseInt(parts[0], 8, 64)
+	if err != nil {
+		return 0, nil
+	}
+
+	pass = make([]byte, len(parts[1:]))
+	for i, p := range parts[1:] {
+		n, err := strconv.ParseInt(p, 8, 16)
+		if err != nil {
+			return 0, nil
+		}
+		if int((n>>8)&1) != i%2 {
+			return 0, nil
+		}
+		pass[i] = byte(n & 0xff)
+	}
+	return int(s), pass
+}
+
+func (octalEncoding) Match(prefix string) string { return "" }
+
+// varintEncoding maps codes into a word for each byte, with the slot encoded as a
+// varint at the start. E.g. foo-bar-baz.
+type varintEncoding []string
+
+func (list varintEncoding) Encode(slot int, pass []byte) string {
 	if len(pass) == 0 {
 		return ""
 	}
@@ -48,9 +122,7 @@ func (list wordEncoding) Encode(slot int, pass []byte) string {
 	return strings.Join(words, "-")
 }
 
-// Decode decodes the code of into a slot and a password. Invalid codes
-// return a 0 slot and a nil pass.
-func (list wordEncoding) Decode(code string) (slot int, pass []byte) {
+func (list varintEncoding) Decode(code string) (slot int, pass []byte) {
 	// White space and - are interchangable.
 	code = strings.ReplaceAll(code, "-", " ")
 	// Space can turn into + in URLs.
@@ -58,17 +130,15 @@ func (list wordEncoding) Decode(code string) (slot int, pass []byte) {
 	parts := strings.Fields(code)
 
 	buf := make([]byte, len(parts))
-	parity := 1
 	for i := range parts {
-		j, ok := list.indexOf(parts[i])
-		if !ok {
+		j := indexOf([]string(list), parts[i])
+		if j < 0 {
 			return 0, nil
 		}
 		buf[i] = byte(j / 2)
-		if parity == i%2 {
+		if i%2 != j%2 {
 			return 0, nil
 		}
-		parity = i % 2
 	}
 
 	s, n := binary.Uvarint(buf)
@@ -78,18 +148,69 @@ func (list wordEncoding) Decode(code string) (slot int, pass []byte) {
 	return int(s), buf[n:]
 }
 
-func (list wordEncoding) indexOf(word string) (i int, ok bool) {
-	for i := range list {
-		if strings.EqualFold(word, list[i]) {
-			return i, true
-		}
-	}
-	return 0, false
+func (list varintEncoding) Match(prefix string) string {
+	return match([]string(list), prefix)
 }
 
-// Match returns the first word that begins with prefix, or the empty string
-// if none match.
-func (list wordEncoding) Match(prefix string) string {
+// magicWormholeEncoding maps codes into a word for each byte, with the slot encoded
+// as an integer at the start. E.g. 5-foo-bar.
+type magicWormholeEncoding []string
+
+func (list magicWormholeEncoding) Encode(slot int, pass []byte) string {
+	if len(pass) == 0 {
+		return ""
+	}
+	code := fmt.Sprintf("%d", slot)
+	for i := range pass {
+		code += fmt.Sprintf("-%s", list[int(pass[i])*2+i%2])
+	}
+	return code
+}
+
+func (list magicWormholeEncoding) Decode(code string) (slot int, pass []byte) {
+	// White space and - are interchangable.
+	code = strings.ReplaceAll(code, "-", " ")
+	// Space can turn into + in URLs.
+	code = strings.ReplaceAll(code, "+", " ")
+	parts := strings.Fields(code)
+	if len(parts) < 2 {
+		return 0, nil
+	}
+
+	slot, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, nil
+	}
+
+	pass = make([]byte, len(parts[1:]))
+	for i, p := range parts[1:] {
+		j := indexOf(list, p)
+		if j < 0 {
+			return 0, nil // word not in dict
+		}
+		pass[i] = byte(j / 2)
+		if i%2 != j%2 {
+			return 0, nil // bad parity
+		}
+	}
+	return slot, pass
+}
+
+func (list magicWormholeEncoding) Match(prefix string) string {
+	return match([]string(list), prefix)
+}
+
+// indexOf finds the index of word in list. It returns -1 if it is not in the list.
+func indexOf(list []string, word string) int {
+	for i := range list {
+		if strings.EqualFold(word, list[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+func match(list []string, prefix string) string {
 	if prefix == "" {
 		return ""
 	}
@@ -101,7 +222,10 @@ func (list wordEncoding) Match(prefix string) string {
 	return ""
 }
 
-var enWords = wordEncoding{
+// EnWords is based on the EFF short wordlist, filtered by unique soundex.
+// https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases
+// Credit to Nick Moore https://nick.zoic.org/art/shorter-words-list/
+var enWords = []string{
 	"acorn", "acre",
 	"acts", "afar",
 	"affix", "aged",
@@ -362,7 +486,7 @@ var enWords = wordEncoding{
 
 // pgpWords is the PGP word list encoding.
 // https://en.wikipedia.org/wiki/PGP_word_list
-var pgpWords = wordEncoding{
+var pgpWords = []string{
 	"aardvark", "adroitness",
 	"absurd", "adviser",
 	"accrue", "aftermath",
