@@ -68,7 +68,7 @@ func finish(_ js.Value, args []js.Value) interface{} {
 	return dst
 }
 
-// finish(pass, base64msgA string) (key []byte, base64msgB string)
+// exchange(pass, base64msgA string) (key []byte, base64msgB string)
 func exchange(_ js.Value, args []js.Value) interface{} {
 	pass := make([]byte, args[0].Length())
 	js.CopyBytesToGo(pass, args[0])
@@ -115,7 +115,7 @@ func open(_ js.Value, args []js.Value) interface{} {
 	return string(clear)
 }
 
-// open(key []byte, cleartext string) (base64ciphertext string)
+// seal(key []byte, cleartext string) (base64ciphertext string)
 func seal(_ js.Value, args []js.Value) interface{} {
 	var key [32]byte
 	js.CopyBytesToGo(key[:], args[0])
@@ -143,6 +143,7 @@ func qrencode(_ js.Value, args []js.Value) interface{} {
 	return dst
 }
 
+// encode(int, uint8array) (string)
 func encode(_ js.Value, args []js.Value) interface{} {
 	slot := args[0].Int()
 	pass := make([]byte, args[1].Length())
@@ -150,6 +151,7 @@ func encode(_ js.Value, args []js.Value) interface{} {
 	return wordlist.Encode(slot, pass)
 }
 
+// decode(string) (int, uint8array)
 func decode(_ js.Value, args []js.Value) interface{} {
 	code := args[0].String()
 	slot, pass := wordlist.Decode(code)
@@ -161,11 +163,12 @@ func decode(_ js.Value, args []js.Value) interface{} {
 	}
 }
 
+// match(string) (string)
 func match(_ js.Value, args []js.Value) interface{} {
 	return wordlist.Match(args[0].String())
 }
 
-// fingerprint(key []byte, cleartext string) (uint8array)
+// fingerprint(key []byte) (fp uint8array)
 func fingerprint(_ js.Value, args []js.Value) interface{} {
 	var key [32]byte
 	js.CopyBytesToGo(key[:], args[0])
