@@ -6,8 +6,9 @@
 <meta name="viewport" content="width=device-width, height=device-height">
 <link rel="icon" href="icon.svg">
 <link rel="stylesheet" href="style.css">
-<script defer src="wasm_exec.js"></script>
-<script type="module" src="main.js"></script>
+<script src="wasm_exec.js"></script>
+<script src="webwormhole.js"></script>
+<script src="main.js"></script>
 <title>WEBWORMHOLE</title>
 <body>
 <form id="dialog" role="main">
@@ -18,7 +19,7 @@
 <img id="qr">
 <input type="submit" id="dial" class="button" value="LOADING..." disabled>
 <input type="text" id="magiccode" autocomplete="off" autofocus title="WORMHOLE CODE" placeholder="GOT A CODE? TYPE HERE">
-<span id="autocomplete">&nbsp;</span>
+<span id="autocomplete"></span>
 </form>
 <footer>
 <span>source: <a href="https://github.com/saljam/webwormhole">github.com/saljam/webwormhole</a></span>
