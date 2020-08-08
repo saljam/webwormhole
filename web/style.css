@@ -88,7 +88,8 @@ footer span {
 	margin: 0;
 }
 
-.connected #transfers {
+.connected #transfers,
+.dialling #transfers {
 	display: unset;
 }
 

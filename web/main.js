@@ -11,14 +11,22 @@ const hacks = {}
 const pick = e => {
   const files = document.getElementById('filepicker').files
   for (let i = 0; i < files.length; i++) {
-    send(files[i])
+    queue(files[i])
   }
 }
 
 const drop = e => {
   const files = e.dataTransfer.files
   for (let i = 0; i < files.length; i++) {
-    send(files[i])
+    queue(files[i])
+  }
+
+  // A shortcut to save users a click. If we're disconnected and they drag
+  // a file in treat it as a click on the new/join wormhole button.
+  // TODO track connection state like a decent human being instead of using
+  // the filepicker state...
+  if (document.getElementById('filepicker').disabled) {
+    connect()
   }
 }
 
@@ -52,29 +60,44 @@ class DataChannelWriter {
   }
 }
 
-const send = async f => {
+const queue = async f => {
+  const item = { f }
+  item.offset = 0
+  item.li = document.createElement('li')
+  item.li.innerText = `... ${f.name}`
+  document.getElementById('transfers').appendChild(item.li)
+  sendqueue.push(item)
+  send()
+}
+
+const send = async () => {
+  if (!datachannel) {
+    console.log("not connected yet")
+    return
+  }
   if (sending) {
-    console.log("haven't finished sending", sending.name)
+    console.log("haven't finished sending", sending.f.name)
+    return
+  }
+  if (sendqueue.length < 1) {
+    console.log("send queue is empty")
     return
   }
 
-  console.log('sending', f.name)
-  datachannel.send(new TextEncoder('utf8').encode(JSON.stringify({
-    name: f.name,
-    size: f.size,
-    type: f.type
-  })))
-
-  sending = { f }
-  sending.offset = 0
-  sending.li = document.createElement('li')
-  sending.li.appendChild(document.createTextNode(`↑ ${f.name}`))
+  sending = sendqueue.shift()
+  console.log('sending', sending.f.name)
+  sending.li.innerText = `↑ ${sending.f.name}`
   sending.li.appendChild(document.createElement('progress'))
   sending.progress = sending.li.getElementsByTagName('progress')[0]
-  document.getElementById('transfers').appendChild(sending.li)
+
+  datachannel.send(new TextEncoder('utf8').encode(JSON.stringify({
+    name: sending.f.name,
+    size: sending.f.size,
+    type: sending.f.type
+  })))
 
   const writer = new DataChannelWriter(datachannel)
-  if (!f.stream) {
+  if (!sending.f.stream) {
     // Hack around Safari's lack of Blob.stream() and arrayBuffer().
     // This is unbenchmarked and could probably be made better.
     const read = b => {
@@ -87,17 +110,17 @@ const send = async f => {
       })
     }
     const chunksize = 64 << 10
-    while (sending.offset < f.size) {
+    while (sending.offset < sending.f.size) {
       let end = sending.offset + chunksize
-      if (end > f.size) {
-        end = f.size
+      if (end > sending.f.size) {
+        end = sending.f.size
       }
-      await writer.write(await read(f.slice(sending.offset, end)))
+      await writer.write(await read(sending.f.slice(sending.offset, end)))
       sending.offset = end
-      sending.progress.value = sending.offset / f.size
+      sending.progress.value = sending.offset / sending.f.size
     }
   } else {
-    const reader = f.stream().getReader()
+    const reader = sending.f.stream().getReader()
     while (true) {
       const { done, value } = await reader.read()
       if (done) {
@@ -105,11 +128,12 @@ const send = async f => {
       }
       await writer.write(value)
       sending.offset += value.length
-      sending.progress.value = sending.offset / f.size
+      sending.progress.value = sending.offset / sending.f.size
     }
   }
   sending.li.removeChild(sending.progress)
   sending = null
+  return send()
 }
 
 const triggerDownload = receiving => {
@@ -246,16 +270,20 @@ const initPeerConnection = (iceServers) => {
         break
     }
   }
-  datachannel = pc.createDataChannel('data', { negotiated: true, id: 0 })
-  datachannel.onopen = connected
-  datachannel.onmessage = receive
-  datachannel.binaryType = 'arraybuffer'
-  datachannel.onclose = e => {
+  const dc = pc.createDataChannel('data', { negotiated: true, id: 0 })
+  dc.onopen = () => {
+    connected()
+    datachannel = dc
+    send() // work through the send queue if it has anything
+  }
+  dc.onmessage = receive
+  dc.binaryType = 'arraybuffer'
+  dc.onclose = e => {
     disconnected()
     console.log('datachannel closed')
     document.getElementById('info').innerHTML = 'DISCONNECTED'
   }
-  datachannel.onerror = e => {
+  dc.onerror = e => {
     disconnected()
     console.log('datachannel error:', e.error)
     document.getElementById('info').innerHTML = 'NETWORK ERROR'
@@ -263,7 +291,7 @@ const initPeerConnection = (iceServers) => {
   return pc
 }
 
-const connect = async e => {
+const connect = async () => {
   try {
     dialling()
     if (document.getElementById('magiccode').value === '') {
@@ -308,9 +336,9 @@ const dialling = () => {
   document.body.classList.remove('connected')
   document.body.classList.remove('disconnected')
 
+  document.getElementById('filepicker').disabled = false
   document.getElementById('dial').disabled = true
   document.getElementById('magiccode').readOnly = true
-  document.getElementById('filepicker').disabled = true
 }
 
 const connected = () => {
@@ -318,19 +346,15 @@ const connected = () => {
   document.body.classList.add('connected')
   document.body.classList.remove('disconnected')
 
-  document.body.addEventListener('drop', drop)
-  document.body.addEventListener('dragenter', highlight)
-  document.body.addEventListener('dragover', highlight)
-  document.body.addEventListener('drop', unhighlight)
-  document.body.addEventListener('dragleave', unhighlight)
-  document.getElementById('filepicker').disabled = false
-
   document.getElementById('info').innerHTML = 'OR DRAG FILES TO SEND'
 
   location.hash = ''
 }
 
 const disconnected = () => {
+  datachannel = null
+  sendqueue = []
+
   document.body.classList.remove('dialling')
   document.body.classList.remove('connected')
   document.body.classList.add('disconnected')
@@ -340,12 +364,6 @@ const disconnected = () => {
   document.getElementById('magiccode').value = ''
   codechange()
   document.getElementById('filepicker').disabled = true
-
-  document.body.removeEventListener('drop', drop)
-  document.body.removeEventListener('dragenter', highlight)
-  document.body.removeEventListener('dragover', highlight)
-  document.body.removeEventListener('drop', unhighlight)
-  document.body.removeEventListener('dragleave', unhighlight)
 
   location.hash = ''
 
@@ -533,6 +551,11 @@ const wasmready = async () => {
   document.body.addEventListener('dragover', preventdefault)
   document.body.addEventListener('drop', preventdefault)
   document.body.addEventListener('dragleave', preventdefault)
+  document.body.addEventListener('drop', drop)
+  document.body.addEventListener('dragenter', highlight)
+  document.body.addEventListener('dragover', highlight)
+  document.body.addEventListener('drop', unhighlight)
+  document.body.addEventListener('dragleave', unhighlight)
 
   if (location.hash.substring(1) !== '') {
     document.getElementById('magiccode').value = location.hash.substring(1)
