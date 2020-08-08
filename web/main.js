@@ -1,4 +1,4 @@
-import { newwormhole, dial } from './dial.js'
+'use strict';
 
 let receiving
 let sending
@@ -7,6 +7,19 @@ let datachannel
 let serviceworker
 let signalserver = new URL(location.href)
 const hacks = {}
+
+// Background colour to chose from based on the derived key. I.e., both parties
+// should see the same colour.
+const fingerprintcolors = [
+  '#c1ffab',
+  '#fcabff',
+  '#ccc589',
+  '#80d5d7',
+  '#aeac9c',
+  '#96b6e6',
+  '#eeffab',
+  '#b58788'
+]
 
 const pick = e => {
   const files = document.getElementById('filepicker').files
@@ -236,20 +249,8 @@ const receive = e => {
   }
 }
 
-// initPeerConnection initialises a PeerConnection object.
-const initPeerConnection = (iceServers) => {
-  // TODO fix the case in json object in pion/webrtc
-  let normalisedICEServers = []
-  for (let i=0; i<iceServers.length; i++) {
-    normalisedICEServers.push({
-      urls: iceServers[i].URLs,
-      username: iceServers[i].Username,
-      credential: iceServers[i].Credential
-    })
-  }
-  const pc = new RTCPeerConnection({
-    iceServers: normalisedICEServers
-  })
+// setuppeercon initialises a PeerConnection object.
+const setuppeercon = (pc) => {  
   pc.onconnectionstatechange = e => {
     switch (pc.connectionState) {
       case 'connected':
@@ -294,24 +295,30 @@ const initPeerConnection = (iceServers) => {
 const connect = async () => {
   try {
     dialling()
+    const w = new Wormhole(signalserver.href, document.getElementById('magiccode').value)
+    const signal = await w.signal
+    setuppeercon(signal.pc)
+
     if (document.getElementById('magiccode').value === '') {
       document.getElementById('info').innerHTML = 'WAITING FOR THE OTHER SIDE - SHARE CODE OR URL'
-      const [code, finish] = await newwormhole(signalserver.href, initPeerConnection)
-      document.getElementById('magiccode').value = code
       codechange()
-      location.hash = code
-      signalserver.hash = code
+      document.getElementById('magiccode').value = signal.code
+      location.hash = signal.code
+      signalserver.hash = signal.code
       const qr = webwormhole.qrencode(signalserver.href)
       if (qr === null) {
         document.getElementById('qr').src = ''
       } else {
         document.getElementById('qr').src = URL.createObjectURL(new Blob([qr]))
       }
-      await finish
     } else {
       document.getElementById('info').innerHTML = 'CONNECTING'
-      await dial(signalserver.href, document.getElementById('magiccode').value, initPeerConnection)
     }
+
+    const fingerprint = await w.finish
+    const encodedfp = webwormhole.encode(0, fingerprint.subarray(1))
+    document.getElementById('magiccode').title = encodedfp.substring(encodedfp.indexOf("-")+1)
+    document.body.style.backgroundColor = fingerprintcolors[fingerprint[0] % fingerprintcolors.length]
   } catch (err) {
     disconnected()
     if (err === 'bad key') {
@@ -323,7 +330,7 @@ const connect = async () => {
     } else if (err === 'timed out') {
       document.getElementById('info').innerHTML = 'CODE TIMED OUT GENERATE ANOTHER'
     } else if (err === 'could not connect to signalling server') {
-      document.getElementById('info').innerHTML = 'COULD NOT CONNECT TO SIGNALLING SERVER - ENSURE IT IS REACHABLE AND IS RUNNING A COMPATABLE VERSION'
+      document.getElementById('info').innerHTML = 'COULD NOT CONNECT TO SIGNALLING SERVER - ENSURE IT IS REACHABLE AND IS RUNNING A COMPATIBLE VERSION'
     } else {
       document.getElementById('info').innerHTML = 'COULD NOT CONNECT'
       console.log(err)
@@ -354,6 +361,7 @@ const connected = () => {
 const disconnected = () => {
   datachannel = null
   sendqueue = []
+  document.body.style.backgroundColor = ""
 
   document.body.classList.remove('dialling')
   document.body.classList.remove('connected')

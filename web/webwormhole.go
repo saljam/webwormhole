@@ -165,17 +165,32 @@ func match(_ js.Value, args []js.Value) interface{} {
 	return wordlist.Match(args[0].String())
 }
 
+// fingerprint(key []byte, cleartext string) (uint8array)
+func fingerprint(_ js.Value, args []js.Value) interface{} {
+	var key [32]byte
+	js.CopyBytesToGo(key[:], args[0])
+	hkdf := hkdf.New(sha256.New, key[:], nil, []byte("fingerprint"))
+	fp := make([]byte, 8)
+	if _, err := io.ReadFull(hkdf, fp); err != nil {
+		return nil
+	}
+	dst := js.Global().Get("Uint8Array").New(len(fp))
+	js.CopyBytesToJS(dst, fp)
+	return dst
+}
+
 func main() {
 	js.Global().Set("webwormhole", map[string]interface{}{
-		"start":    js.FuncOf(start),
-		"finish":   js.FuncOf(finish),
-		"exchange": js.FuncOf(exchange),
-		"open":     js.FuncOf(open),
-		"seal":     js.FuncOf(seal),
-		"qrencode": js.FuncOf(qrencode),
-		"encode":   js.FuncOf(encode),
-		"decode":   js.FuncOf(decode),
-		"match":    js.FuncOf(match),
+		"start":       js.FuncOf(start),
+		"finish":      js.FuncOf(finish),
+		"exchange":    js.FuncOf(exchange),
+		"open":        js.FuncOf(open),
+		"seal":        js.FuncOf(seal),
+		"qrencode":    js.FuncOf(qrencode),
+		"encode":      js.FuncOf(encode),
+		"decode":      js.FuncOf(decode),
+		"match":       js.FuncOf(match),
+		"fingerprint": js.FuncOf(fingerprint),
 	})
 
 	// Go wasm executables must remain running. Block indefinitely.
