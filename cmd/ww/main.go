@@ -67,7 +67,7 @@ func fatalf(format string, v ...interface{}) {
 func newConn(code string, length int) *wormhole.Wormhole {
 	if code != "" {
 		// Join wormhole.
-		slot, pass := wordlist.EnWords.Decode(code)
+		slot, pass := wordlist.Decode(code)
 		if pass == nil {
 			fatalf("could not decode password")
 		}
@@ -102,7 +102,7 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		if err != nil {
 			fatalf("got invalid slot from signalling server: %v", s)
 		}
-		printcode(wordlist.EnWords.Encode(slot, pass))
+		printcode(wordlist.Encode(slot, pass))
 	}()
 	c, err := wormhole.New(string(pass), *sigserv, slotc)
 	if err == wormhole.ErrBadVersion {

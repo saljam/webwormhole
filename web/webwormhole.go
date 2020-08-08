@@ -147,12 +147,12 @@ func encode(_ js.Value, args []js.Value) interface{} {
 	slot := args[0].Int()
 	pass := make([]byte, args[1].Length())
 	js.CopyBytesToGo(pass, args[1])
-	return wordlist.EnWords.Encode(slot, pass)
+	return wordlist.Encode(slot, pass)
 }
 
 func decode(_ js.Value, args []js.Value) interface{} {
 	code := args[0].String()
-	slot, pass := wordlist.EnWords.Decode(code)
+	slot, pass := wordlist.Decode(code)
 	dst := js.Global().Get("Uint8Array").New(len(pass))
 	js.CopyBytesToJS(dst, pass)
 	return []interface{}{
@@ -162,7 +162,7 @@ func decode(_ js.Value, args []js.Value) interface{} {
 }
 
 func match(_ js.Value, args []js.Value) interface{} {
-	return wordlist.EnWords.Match(args[0].String())
+	return wordlist.Match(args[0].String())
 }
 
 func main() {

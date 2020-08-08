@@ -222,7 +222,7 @@ func match(list []string, prefix string) string {
 	return ""
 }
 
-// EnWords is based on the EFF short wordlist, filtered by unique soundex.
+// enWords is based on the EFF short wordlist, filtered by unique soundex.
 // https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases
 // Credit to Nick Moore https://nick.zoic.org/art/shorter-words-list/
 var enWords = []string{
