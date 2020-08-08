@@ -2,6 +2,7 @@ import { newwormhole, dial } from './dial.js'
 
 let receiving
 let sending
+let sendqueue = []
 let datachannel
 let serviceworker
 let signalserver = new URL(location.href)
@@ -293,6 +294,8 @@ const connect = async e => {
       document.getElementById('info').innerHTML = 'NO SUCH SLOT'
     } else if (err === 'timed out') {
       document.getElementById('info').innerHTML = 'CODE TIMED OUT GENERATE ANOTHER'
+    } else if (err === 'could not connect to signalling server') {
+      document.getElementById('info').innerHTML = 'COULD NOT CONNECT TO SIGNALLING SERVER - ENSURE IT IS REACHABLE AND IS RUNNING A COMPATABLE VERSION'
     } else {
       document.getElementById('info').innerHTML = 'COULD NOT CONNECT'
       console.log(err)

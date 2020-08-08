@@ -90,8 +90,9 @@ export const newwormhole = async (signal, pccb) => {
     console.log('websocket session established')
   }
   ws.onerror = e => {
-    connC.reject("couldn't connect to signalling server")
-    console.log('websocket session error', e)
+    slotC.reject('could not connect to signalling server')
+    connC.reject('could not connect to signalling server')
+    console.log('websocket session error')
   }
   ws.onclose = e => {
     // TODO hardcoded codes here for now. At somepoint, dialling code should
@@ -194,8 +195,8 @@ export const dial = async (signal, code, pccb) => {
     ws.send(msgA)
   }
   ws.onerror = e => {
-    connC.reject("couldn't connect to signalling server")
-    console.log('websocket session error', e)
+    connC.reject('could not connect to signalling server')
+    console.log('websocket session error')
   }
   ws.onclose = e => {
     // TODO hardcoded codes here for now. At somepoint, dialling code should
