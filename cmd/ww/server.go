@@ -316,7 +316,9 @@ func server(args ...string) {
 		// Disallow 3rd party code to run when we're the origin.
 		// unsafe-eval is required for wasm :(
 		// https://github.com/WebAssembly/content-security-policy/issues/7
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:")
+		// connect-src is required for safari :(
+		// https://bugs.webkit.org/show_bug.cgi?id=201591
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://tip.webwormhole.io/ wss://webwormhole.io/")
 
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			stats.goget.Add(1)
