@@ -2,16 +2,41 @@
 class Wormhole {
 	constructor(signalserver, code) {
 		this.protocol = "4"; // safari has no static fields
-		// It is very possible that I do not understand how to us promises "correctly".
-		this.finish = new Promise((fresolve, freject) => {
-			this.signal = new Promise((sresolve, sreject) => {
-				this.signalresolve = sresolve;
-				this.signalreject = sreject;
-				this.finishresolve = fresolve;
-				this.finishreject = freject;
-				this.dial(signalserver, code);
+		// There are 3 events that we need to synchronise with the caller on:
+		//   1. we got the first message from the signalling server.
+		//        We now have the slot number and the ICE server details, so we can
+		//        create the wormhole code and PeerConnection object, and pass them back
+		//        to the caller to display and configure, respectively.
+		//   2. the caller is done configuring the PeerConnection.
+		//        We can now create the offer or answer and send it to the peer.
+		//   3. we've successfully authenticated the other peer.
+		//        Signalling is now done, apart from any trickling candidates. The called
+		//        can display the key fingerprint.
+		//   4. (unimplemented) caller tells us the webrtc handshake is done.
+		//        We can close the websocket.
+		this.promise1 = new Promise((resolve1, reject1) => {
+			this.promise2 = new Promise((resolve2, reject2) => {
+				this.promise3 = new Promise((resolve3, reject3) => {
+					// It is very possible that I do not understand how to us promises "correctly".
+					this.resolve1 = resolve1;
+					this.reject1 = reject1;
+					this.resolve2 = resolve2;
+					this.reject2 = reject2;
+					this.resolve3 = resolve3;
+					this.reject3 = reject3;
+					this.dial(signalserver, code);
+				});
 			});
 		});
+	}
+
+	async signal() {
+		return this.promise1;
+	}
+
+	async finish() {
+		this.resolve2();
+		return this.promise3;
 	}
 
 	dial(signalserver, code) {
@@ -63,7 +88,7 @@ class Wormhole {
 					return;
 				}
 				this.newPeerConnection(msg.iceServers);
-				this.signalresolve({
+				this.resolve1({
 					code: webwormhole.encode(this.slot, this.pass),
 					pc: this.pc,
 				});
@@ -74,7 +99,7 @@ class Wormhole {
 			case "b": {
 				msg = JSON.parse(m.data);
 				this.newPeerConnection(msg.iceServers);
-				this.signalresolve({
+				this.resolve1({
 					pc: this.pc,
 				});
 				const msgA = webwormhole.start(this.pass);
@@ -99,10 +124,12 @@ class Wormhole {
 				}
 				console.log("generated key");
 				this.ws.send(msgB);
-				this.state = "wait_for_webtc_answer";
-				this.pc.createOffer().then((offer) => {
+				this.state = "wait_for_pc_initialize";
+				this.promise2.then(async () => {
+					const offer = await this.pc.createOffer();
 					console.log("created offer");
 					this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)));
+					this.state = "wait_for_webtc_answer";
 					this.pc.setLocalDescription(offer);
 				});
 				return;
@@ -134,14 +161,16 @@ class Wormhole {
 					return;
 				}
 				console.log("got offer");
+				// No intermediate state wait_for_pc_initialize because candidates can
+				// staring arriving straight after the offer is sent.
 				this.state = "wait_for_candidates";
-				this.pc.setRemoteDescription(new RTCSessionDescription(msg)).then(() => {
-					this.pc.createAnswer().then((answer) => {
-						console.log("created answer");
-						this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
-						this.finishresolve(webwormhole.fingerprint(this.key));
-						this.pc.setLocalDescription(answer);
-					});
+				this.promise2.then(async () => {
+					await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
+					const answer = await this.pc.createAnswer();
+					console.log("created answer");
+					this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
+					this.resolve3(webwormhole.fingerprint(this.key));
+					this.pc.setLocalDescription(answer);
 				});
 				return;
 			}
@@ -161,7 +190,7 @@ class Wormhole {
 				}
 				console.log("got answer");
 				this.pc.setRemoteDescription(new RTCSessionDescription(msg));
-				this.finishresolve(webwormhole.fingerprint(this.key));
+				this.resolve3(webwormhole.fingerprint(this.key));
 				this.state = "wait_for_candidates";
 				return;
 			}
@@ -175,10 +204,12 @@ class Wormhole {
 					return;
 				}
 				console.log("got remote candidate");
+				// TODO should we gate this on promise2 too?
 				this.pc.addIceCandidate(new RTCIceCandidate(msg));
 				return;
 			}
 
+			case "wait_for_pc_initialize":
 			case "wait_for_local_offer":
 			case "wait_for_local_answer": {
 				console.log("unexpected message", m);
@@ -222,8 +253,6 @@ class Wormhole {
 	}
 
 	onclose(e) {
-		// TODO hardcoded codes here for now. At somepoint, dialling code should
-		// be in the wasm portion and reuse server symbols.
 		if (e.code === 4_000) {
 			this.fail("no such slot");
 		} else if (e.code === 4_001) {
@@ -246,8 +275,8 @@ class Wormhole {
 	}
 
 	fail(reason) {
-		this.signalreject(reason);
-		this.finishreject(reason);
+		this.reject1(reason);
+		this.reject3(reason);
 		this.state = "error";
 	}
 

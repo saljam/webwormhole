@@ -311,7 +311,7 @@ async function connect() {
 			signalserver.href,
 			document.getElementById("magiccode").value,
 		);
-		const signal = await w.signal;
+		const signal = await w.signal();
 		setuppeercon(signal.pc);
 
 		if (document.getElementById("magiccode").value === "") {
@@ -330,7 +330,7 @@ async function connect() {
 			document.getElementById("info").innerText = "CONNECTING";
 		}
 
-		const fingerprint = await w.finish;
+		const fingerprint = await w.finish();
 		const encodedfp = webwormhole.encode(0, fingerprint.subarray(1));
 		document.getElementById("magiccode").title = encodedfp.substring(
 			encodedfp.indexOf("-") + 1,
