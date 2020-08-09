@@ -1,0 +1,17 @@
+{
+  "rome": {
+    "name": "webwormhole",
+    "lint": {
+      "globals": [
+        "Go",
+        "chrome",
+        "webwormhole",
+        "Wormhole"
+      ],
+      "ignore": [
+        "wasm_exec.js"
+      ]
+    },
+    "root": true
+  }
+}

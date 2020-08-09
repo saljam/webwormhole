@@ -9,11 +9,13 @@
 		"128": "hole128.png"
 	},
 	"browser_action": {
-		"default_title": "WebWormhole"
-		"default_icon": "hole.png",
+		"default_title": "WebWormhole",
+		"default_icon": "hole.png"
 	},
 	"background": {
-		"scripts": ["background.js"]
+		"scripts": [
+			"background.js"
+		]
 	},
 	"web_accessible_resources": [
 		"main.js",
