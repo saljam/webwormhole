@@ -170,9 +170,9 @@ func match(_ js.Value, args []js.Value) interface{} {
 
 // fingerprint(key []byte) (fp uint8array)
 func fingerprint(_ js.Value, args []js.Value) interface{} {
-	var key [32]byte
-	js.CopyBytesToGo(key[:], args[0])
-	hkdf := hkdf.New(sha256.New, key[:], nil, []byte("fingerprint"))
+	key := make([]byte, 32)
+	js.CopyBytesToGo(key, args[0])
+	hkdf := hkdf.New(sha256.New, key, nil, []byte("fingerprint"))
 	fp := make([]byte, 8)
 	if _, err := io.ReadFull(hkdf, fp); err != nil {
 		return nil
