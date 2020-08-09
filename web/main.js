@@ -260,13 +260,13 @@ const setuppeercon = (pc) => {
       case 'failed':
         disconnected()
         console.log('webrtc connection failed connectionState:', pc.connectionState, 'iceConnectionState', pc.iceConnectionState)
-        document.getElementById('info').innerHTML = 'NETWORK ERROR'
+        document.getElementById('info').innerText = 'NETWORK ERROR'
         break
       case 'disconnected':
       case 'closed':
         disconnected()
         console.log('webrtc connection closed')
-        document.getElementById('info').innerHTML = 'DISCONNECTED'
+        document.getElementById('info').innerText = 'DISCONNECTED'
         pc.onconnectionstatechange = null
         break
     }
@@ -282,12 +282,12 @@ const setuppeercon = (pc) => {
   dc.onclose = e => {
     disconnected()
     console.log('datachannel closed')
-    document.getElementById('info').innerHTML = 'DISCONNECTED'
+    document.getElementById('info').innerText = 'DISCONNECTED'
   }
   dc.onerror = e => {
     disconnected()
     console.log('datachannel error:', e.error)
-    document.getElementById('info').innerHTML = 'NETWORK ERROR'
+    document.getElementById('info').innerText = 'NETWORK ERROR'
   }
   return pc
 }
@@ -300,7 +300,7 @@ const connect = async () => {
     setuppeercon(signal.pc)
 
     if (document.getElementById('magiccode').value === '') {
-      document.getElementById('info').innerHTML = 'WAITING FOR THE OTHER SIDE - SHARE CODE OR URL'
+      document.getElementById('info').innerText = 'WAITING FOR THE OTHER SIDE - SHARE CODE OR URL'
       codechange()
       document.getElementById('magiccode').value = signal.code
       location.hash = signal.code
@@ -312,7 +312,7 @@ const connect = async () => {
         document.getElementById('qr').src = URL.createObjectURL(new Blob([qr]))
       }
     } else {
-      document.getElementById('info').innerHTML = 'CONNECTING'
+      document.getElementById('info').innerText = 'CONNECTING'
     }
 
     const fingerprint = await w.finish
@@ -322,17 +322,17 @@ const connect = async () => {
   } catch (err) {
     disconnected()
     if (err === 'bad key') {
-      document.getElementById('info').innerHTML = 'BAD KEY'
+      document.getElementById('info').innerText = 'BAD KEY'
     } else if (err === 'bad code') {
-      document.getElementById('info').innerHTML = 'INVALID CODE'
+      document.getElementById('info').innerText = 'INVALID CODE'
     } else if (err === 'no such slot') {
-      document.getElementById('info').innerHTML = 'NO SUCH SLOT'
+      document.getElementById('info').innerText = 'NO SUCH SLOT'
     } else if (err === 'timed out') {
-      document.getElementById('info').innerHTML = 'CODE TIMED OUT GENERATE ANOTHER'
+      document.getElementById('info').innerText = 'CODE TIMED OUT GENERATE ANOTHER'
     } else if (err === 'could not connect to signalling server') {
-      document.getElementById('info').innerHTML = 'COULD NOT CONNECT TO SIGNALLING SERVER - ENSURE IT IS REACHABLE AND IS RUNNING A COMPATIBLE VERSION'
+      document.getElementById('info').innerText = 'COULD NOT CONNECT TO SIGNALLING SERVER - ENSURE IT IS REACHABLE AND IS RUNNING A COMPATIBLE VERSION'
     } else {
-      document.getElementById('info').innerHTML = 'COULD NOT CONNECT'
+      document.getElementById('info').innerText = 'COULD NOT CONNECT'
       console.log(err)
     }
   }
@@ -353,7 +353,7 @@ const connected = () => {
   document.body.classList.add('connected')
   document.body.classList.remove('disconnected')
 
-  document.getElementById('info').innerHTML = 'OR DRAG FILES TO SEND'
+  document.getElementById('info').innerText = 'OR DRAG FILES TO SEND'
 
   location.hash = ''
 }
@@ -539,7 +539,7 @@ const wasmready = async () => {
   await Promise.all([domready(), swready(), wasmready()])
 
   if (hacks.browserunsupported) {
-    document.getElementById('info').innerHTML = 'Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.'
+    document.getElementById('info').innerText = 'Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.'
     document.body.classList.add('error')
     return
   }
