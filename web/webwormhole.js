@@ -253,15 +253,15 @@ class Wormhole {
 	}
 
 	onclose(e) {
-		if (e.code === 4_000) {
+		if (e.code === 4000) {
 			this.fail("no such slot");
-		} else if (e.code === 4_001) {
+		} else if (e.code === 4001) {
 			this.fail("timed out");
-		} else if (e.code === 4_002) {
+		} else if (e.code === 4002) {
 			this.fail("could not get slot");
-		} else if (e.code === 4_003) {
+		} else if (e.code === 4003) {
 			this.fail("wrong protocol version, must update");
-		} else if (e.code === 4_004 || e.code === 1_001) {
+		} else if (e.code === 4004 || e.code === 1001) {
 			// Workaround for regression introduced in firefox around version ~78.
 			// Usually the websocket connection stays open for the duration of the session, since
 			// it doesn't hurt and it make candidate trickling easier. We only do this here out of
