@@ -10,14 +10,14 @@ const hacks = {};
 // Background colour to chose from based on the derived key. I.e., both parties
 // should see the same colour.
 const fingerprintcolors = [
-	"#c1ffab",
-	"#fcabff",
-	"#ccc589",
-	"#80d5d7",
-	"#aeac9c",
-	"#96b6e6",
-	"#eeffab",
-	"#b58788",
+	"#c1ffab", // bright green
+	"#c3c0a7", // brown
+	"#b7ae5e", // gold
+	"#6cc3c5", // teal
+	"#cccccc", // grey
+	"#88b6fb", // blue
+	"#cdff33", // lime
+	"#e796ea", // purple
 ];
 
 function pick() {
