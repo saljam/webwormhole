@@ -9,7 +9,7 @@ webwormhole-ext.zip: wasm
 
 .PHONY: webwormhole-src.zip
 webwormhole-src.zip:
-	zip -r -FS webwormhole-0.2-src.zip  * -x '*.git*' webwormhole-src.zip webwormhole-ext.zip
+	zip -r -FS webwormhole-src.zip  * -x '*.git*' webwormhole-src.zip webwormhole-ext.zip
 
 .PHONY: all
 all: webwormhole-ext.zip

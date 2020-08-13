@@ -10,14 +10,22 @@ const hacks = {};
 // Background colour to chose from based on the derived key. I.e., both parties
 // should see the same colour.
 const fingerprintcolors = [
-	"#c1ffab", // bright green
-	"#c3c0a7", // brown
-	"#b7ae5e", // gold
-	"#6cc3c5", // teal
-	"#cccccc", // grey
-	"#88b6fb", // blue
-	"#cdff33", // lime
-	"#e796ea", // purple
+	// bright green
+	"#c1ffab",
+	// brown
+	"#c3c0a7",
+	// gold
+	"#b7ae5e",
+	// teal
+	"#6cc3c5",
+	// grey
+	"#cccccc",
+	// blue
+	"#88b6fb",
+	// lime
+	"#cdff33",
+	// purple
+	"#e796ea",
 ];
 
 function pick() {
@@ -513,7 +521,7 @@ function browserhacks() {
 	// You never saw this.
 	if (
 		/iPad|iPhone|iPod/.test(navigator.userAgent) &&
-		![320, 375, 414, 768, 1_024].includes(window.innerWidth)
+		![320, 375, 414, 768, 1024].includes(window.innerWidth)
 	) {
 		hacks.noautoconnect = true;
 		console.log("quirks: detected preview, ");
