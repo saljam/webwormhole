@@ -10,6 +10,7 @@ import (
 
 var defaultEncodings = []encoding{
 	varintEncoding(enWords),
+	magicWormholeEncoding(enWords),
 	magicWormholeEncoding(pgpWords),
 	octalEncoding{},
 }
