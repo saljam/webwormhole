@@ -272,7 +272,7 @@ func (c *Wormhole) handleRemoteCandidates(ws *websocket.Conn, key *[32]byte) {
 			logf("cannot read remote candidate: %v", err)
 			return
 		}
-		logf("received new remote candidate")
+		logf("received new remote candidate: %v", candidate.Candidate)
 		err = c.pc.AddICECandidate(candidate)
 		if err != nil {
 			logf("cannot add candidate: %v", err)
@@ -423,7 +423,7 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 			logf("cannot send local candidate: %v", err)
 			return
 		}
-		logf("sent new local candidate")
+		logf("sent new local candidate: %v", candidate.String())
 	})
 
 	offer, err := c.pc.CreateOffer(nil)
@@ -574,7 +574,7 @@ func Join(slot, pass string, sigserv string) (*Wormhole, error) {
 			logf("cannot send local candidate: %v", err)
 			return
 		}
-		logf("sent new local candidate")
+		logf("sent new local candidate: %v", candidate.String())
 	})
 
 	err = c.pc.SetRemoteDescription(offer)
