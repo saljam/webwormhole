@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
-	webrtc "github.com/pion/webrtc/v2"
+	webrtc "github.com/pion/webrtc/v3"
 	"golang.org/x/crypto/acme/autocert"
 	"nhooyr.io/websocket"
 	"webwormhole.io/wormhole"
