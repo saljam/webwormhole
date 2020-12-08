@@ -44,9 +44,10 @@ import (
 	"time"
 
 	"filippo.io/cpace"
-	webrtc "github.com/pion/webrtc/v2"
+	webrtc "github.com/pion/webrtc/v3"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/nacl/secretbox"
+	"golang.org/x/net/proxy"
 	"nhooyr.io/websocket"
 )
 
@@ -286,7 +287,7 @@ func (c *Wormhole) newPeerConnection(ice []webrtc.ICEServer) error {
 	// that we do this voodoo.
 	s := webrtc.SettingEngine{}
 	s.DetachDataChannels()
-	s.SetTrickle(true)
+	s.SetICEProxyDialer(proxy.FromEnvironment())
 	rtcapi := webrtc.NewAPI(webrtc.WithSettingEngine(s))
 
 	var err error
