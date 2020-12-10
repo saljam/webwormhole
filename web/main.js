@@ -31,14 +31,14 @@ const fingerprintcolors = [
 function pick() {
 	const files = document.getElementById("filepicker").files;
 	for (let i = 0; i < files.length; i++) {
-		queue(files[i]);
+		sendfile(files[i]);
 	}
 }
 
 function drop(e) {
 	const files = e.dataTransfer.files;
 	for (let i = 0; i < files.length; i++) {
-		queue(files[i]);
+		sendfile(files[i]);
 	}
 
 	// A shortcut to save users a click. If we're disconnected and they drag
@@ -82,11 +82,12 @@ class DataChannelWriter {
 	}
 }
 
-async function queue(f) {
+async function sendfile(f) {
 	const item = {f};
 	item.offset = 0;
 	item.li = document.createElement("li");
-	item.li.innerText = `... ${f.name}`;
+	item.li.innerText = `${f.name}`;
+	item.li.classList.add("pending");
 	document.getElementById("transfers").appendChild(item.li);
 	sendqueue.push(item);
 	send();
@@ -107,8 +108,9 @@ async function send() {
 	}
 
 	sending = sendqueue.shift();
-	console.log("sending", sending.f.name);
-	sending.li.innerText = `↑ ${sending.f.name}`;
+	console.log("sending", sending.f.name, sending.f.type);
+	sending.li.classList.remove("pending");
+	sending.li.classList.add("upload");
 	sending.li.appendChild(document.createElement("progress"));
 	sending.progress = sending.li.getElementsByTagName("progress")[0];
 
@@ -121,6 +123,12 @@ async function send() {
 			}),
 		),
 	);
+
+	if (sending.f.type == "application/webwormhole-text") {
+		sending.li.removeChild(sending.progress);
+		sending = null;
+		return send();
+	}
 
 	const writer = new DataChannelWriter(datachannel);
 	if (sending.f.stream) {
@@ -201,13 +209,26 @@ function receive(e) {
 			receiving.data = new Uint8Array(receiving.size);
 		}
 
+		if (receiving.type == "application/webwormhole-text") {
+			receiving.pre = document.createElement("pre");
+			receiving.pre.appendChild(document.createTextNode(`${receiving.name}`));
+			receiving.li = document.createElement("li");
+			receiving.li.appendChild(receiving.pre);
+			receiving.li.classList.add("download");
+			document.getElementById("transfers").appendChild(receiving.li);
+			receiving = null;
+			return;
+		}
+
 		receiving.li = document.createElement("li");
 		receiving.a = document.createElement("a");
 		receiving.li.appendChild(receiving.a);
-		receiving.a.appendChild(document.createTextNode(`↓ ${receiving.name}`));
+		receiving.a.appendChild(document.createTextNode(`${receiving.name}`));
+		receiving.li.classList.add("download");
 		receiving.progress = document.createElement("progress");
 		receiving.li.appendChild(receiving.progress);
 		document.getElementById("transfers").appendChild(receiving.li);
+
 
 		if (serviceworker) {
 			serviceworker.postMessage({
@@ -441,6 +462,26 @@ function codechange() {
 	}
 }
 
+async function sendmsg(e) {
+	if (e.keyCode == 13 && !e.shiftKey) {
+		const item = {
+			f: {
+				name: document.getElementById("msgbox").value,
+				type: "application/webwormhole-text",
+			}
+		}
+		item.pre = document.createElement("pre");
+		item.pre.appendChild(document.createTextNode(`${item.f.name}`));
+		item.li = document.createElement("li");
+		item.li.appendChild(item.pre);
+		item.li.classList.add("pending");
+		document.getElementById("transfers").appendChild(item.li);
+		sendqueue.push(item);
+		send();
+		document.getElementById("msgbox").value = "";
+	}
+}
+
 function autocompletehint() {
 	const words = document.getElementById("magiccode").value.split("-");
 	const prefix = words[words.length - 1];
@@ -598,13 +639,11 @@ async function wasmready() {
 	window.addEventListener("hashchange", hashchange);
 	document.getElementById("magiccode").addEventListener("input", codechange);
 	document.getElementById("magiccode").addEventListener("keydown", autocomplete);
-	document.getElementById("magiccode").addEventListener(
-		"input",
-		autocompletehint,
-	);
+	document.getElementById("magiccode").addEventListener("input", autocompletehint);
 	document.getElementById("filepicker").addEventListener("change", pick);
 	document.getElementById("dialog").addEventListener("submit", preventdefault);
 	document.getElementById("dialog").addEventListener("submit", connect);
+	document.getElementById("msgbox").addEventListener("keyup", sendmsg);
 	document.body.addEventListener("drop", preventdefault);
 	document.body.addEventListener("dragenter", preventdefault);
 	document.body.addEventListener("dragover", preventdefault);

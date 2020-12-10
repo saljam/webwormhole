@@ -86,6 +86,29 @@ footer span {
 	display: none;
 	list-style-type: none;
 	margin: 0;
+	width: 80%;
+	max-width: 400px;
+}
+
+#transfers li {
+	border-color: #9b9b9b;
+	border-style: solid;
+	border-width: 1px;
+	border-radius: 4px;
+	background-color: #00000012;
+	margin: 5px;
+	padding: 8px;
+	box-shadow: 0px 0px 4px 0px #00000012;
+}
+
+#transfers li.upload {
+	list-style-type: "↑ ";
+}
+#transfers li.download {
+	list-style-type: "↓ ";
+}
+#transfers li.pending {
+	list-style-type: "... ";
 }
 
 .connected #transfers,
@@ -102,6 +125,23 @@ footer span {
 	display: unset;
 }
 
+#msgbox {
+	background: none;
+	border: none;
+	border-bottom: solid;
+	color: #2f6b6c;
+	font-size: x-large;
+	margin: 16px;
+	max-width: 400px;
+	text-align: center;
+	width: 80%;
+	display: none;
+}
+
+.connected #msgbox {
+	display: unset;
+}
+
 #magiccode {
 	background: none;
 	border: none;
@@ -114,7 +154,8 @@ footer span {
 	width: 80%;
 }
 
-.error #magiccode {
+.error #magiccode,
+.connected #magiccode {
 	display: none;
 }
 
