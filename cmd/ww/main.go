@@ -26,8 +26,8 @@ var subcmds = map[string]func(args ...string){
 }
 
 var (
-	verbose = flag.Bool("verbose", false, "verbose logging")
-	sigserv = flag.String("signal", "https://wrmhl.link/", "signalling server to use")
+	verbose bool   = false
+	sigserv string = "https://wrmhl.link"
 )
 
 var stderr = flag.CommandLine.Output()
@@ -45,13 +45,15 @@ func usage() {
 }
 
 func main() {
+	flag.BoolVar(&verbose, "verbose", LookupEnvOrBool("WW_VERBOSE", verbose), "verbose logging")
+	flag.StringVar(&sigserv, "signal", LookupEnvOrString("WW_SIGSERV", sigserv), "signalling server to use")
 	flag.Usage = usage
 	flag.Parse()
 	if flag.NArg() < 1 {
 		usage()
 		os.Exit(2)
 	}
-	if *verbose {
+	if verbose {
 		wormhole.Verbose = true
 	}
 	cmd, ok := subcmds[flag.Arg(0)]
@@ -74,7 +76,7 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		if pass == nil {
 			fatalf("could not decode password")
 		}
-		c, err := wormhole.Join(strconv.Itoa(slot), string(pass), *sigserv)
+		c, err := wormhole.Join(strconv.Itoa(slot), string(pass), sigserv)
 		if err == wormhole.ErrBadVersion {
 			fatalf(
 				"%s%s%s",
@@ -107,7 +109,7 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		}
 		printcode(wordlist.Encode(slot, pass))
 	}()
-	c, err := wormhole.New(string(pass), *sigserv, slotc)
+	c, err := wormhole.New(string(pass), sigserv, slotc)
 	if err == wormhole.ErrBadVersion {
 		fatalf(
 			"%s%s%s",
@@ -129,7 +131,7 @@ func newConn(code string, length int) *wormhole.Wormhole {
 
 func printcode(code string) {
 	fmt.Fprintf(stderr, "%s\n", code)
-	u, err := url.Parse(*sigserv)
+	u, err := url.Parse(sigserv)
 	if err != nil {
 		return
 	}
@@ -171,4 +173,22 @@ func printcode(code string) {
 	}
 	fmt.Fprintf(stderr, "████████\n")
 	fmt.Fprintf(stderr, "%s\n", u.String())
+}
+
+func LookupEnvOrBool(key string, defaultVal bool) bool {
+	if v, ok := os.LookupEnv(key); ok {
+		val, err := strconv.ParseBool(v)
+		if err != nil {
+			fatalf("Cannot parse envvar: %s: %v", v, err)
+		}
+		return val
+	}
+	return defaultVal
+}
+
+func LookupEnvOrString(key string, defaultVal string) string {
+	if val, ok := os.LookupEnv(key); ok {
+		return val
+	}
+	return defaultVal
 }
