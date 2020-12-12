@@ -534,7 +534,7 @@ function browserhacks() {
 	}
 
 	// Safari cannot save files from service workers.
-	if (window.safari) {
+	if (window.safari || /iPad|iPhone|iPod/.test(navigator.userAgent)) {
 		hacks.nosw = true;
 		console.log("quirks: serviceworkers disabled on safari");
 	}
