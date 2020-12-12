@@ -12,6 +12,7 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -76,6 +77,13 @@ var slots = struct {
 var turnSecret string
 var turnServer string
 var stunServers []webrtc.ICEServer
+
+// For custom certificate and key
+var customCertFlag string
+var customKeyFlag string
+var customCert []byte
+var customKey []byte
+var CustomGetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 
 // freeslot tries to find an available numeric slot, favouring smaller numbers.
 // This assume slots is locked.
@@ -269,6 +277,31 @@ func relay(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func PickLocalCert(helloInfo *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	// before opening certificate and key from local files checks if they
+	// are already loaded
+	var err error
+	if len(customCert) == 0 || len(customKey) == 0 {
+		log.Println("No certificate or key loaded, reading from filesystem")
+		customCert, err = ioutil.ReadFile(customCertFlag)
+		if err != nil {
+			log.Printf("Cannot open certificate %s: %s\n", customCertFlag, err)
+			return nil, err
+		}
+		customKey, err = ioutil.ReadFile(customKeyFlag)
+		if err != nil {
+			log.Printf("Cannot open key %s: %s\n", customKeyFlag, err)
+			return nil, err
+		}
+	}
+	cer, err := tls.X509KeyPair(customCert, customKey)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	return &cer, nil
+}
+
 func server(args ...string) {
 	rand.Seed(time.Now().UnixNano())
 
@@ -287,6 +320,8 @@ func server(args ...string) {
 	stunservers := set.String("stun", "stun:relay.webwormhole.io", "list of STUN server addresses to tell clients to use")
 	set.StringVar(&turnServer, "turn", "", "TURN server to use for relaying")
 	set.StringVar(&turnSecret, "turn-secret", "", "secret for HMAC-based authentication in TURN server")
+	set.StringVar(&customCertFlag, "custom-cert", "", "Custom TLS certificate")
+	set.StringVar(&customKeyFlag, "custom-key", "", "Custom TLS key")
 	set.Parse(args[1:])
 
 	if turnServer != "" && turnSecret == "" {
@@ -338,13 +373,22 @@ func server(args ...string) {
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist(strings.Split(*whitelist, ",")...),
 	}
+
+	if customCertFlag != "" {
+		log.Println("Using local certificate and key")
+		CustomGetCertificate = PickLocalCert
+	} else {
+		log.Println("Generating acme certificate")
+		CustomGetCertificate = m.GetCertificate
+	}
+
 	ssrv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 60 * time.Minute,
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpsaddr,
 		Handler:      http.HandlerFunc(handler),
-		TLSConfig:    &tls.Config{GetCertificate: m.GetCertificate},
+		TLSConfig:    &tls.Config{GetCertificate: CustomGetCertificate},
 	}
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
