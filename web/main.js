@@ -385,12 +385,7 @@ async function connect() {
 			document.getElementById("magiccode").value = signal.code;
 			location.hash = signal.code;
 			signalserver.hash = signal.code;
-			const qr = webwormhole.qrencode(signalserver.href);
-			if (qr === null) {
-				document.getElementById("qr").src = "";
-			} else {
-				document.getElementById("qr").src = URL.createObjectURL(new Blob([qr]));
-			}
+			updateqr(signalserver.href);
 		} else {
 			document.getElementById("info").innerText = "CONNECTING";
 		}
@@ -480,6 +475,24 @@ function unhighlight() {
 function preventdefault(e) {
 	e.preventDefault();
 	e.stopPropagation();
+}
+
+async function copyurl() {
+	await navigator.clipboard.writeText(signalserver.href);
+	// TODO react to success.
+}
+
+function updateqr(url) {
+	const qr = webwormhole.qrencode(url);
+	if (url === "" || qr === null) {
+		document.getElementById("qr").src = "";
+		document.getElementById("qr").alt = "";
+		document.getElementById("qr").title = "";
+		return
+	}
+	document.getElementById("qr").src = URL.createObjectURL(new Blob([qr]));
+	document.getElementById("qr").alt = url;
+	document.getElementById("qr").title = url +" - double click to copy";
 }
 
 function hashchange() {
@@ -661,6 +674,7 @@ async function wasmready() {
 	document.getElementById("filepicker").addEventListener("change", pick);
 	document.getElementById("dialog").addEventListener("submit", preventdefault);
 	document.getElementById("dialog").addEventListener("submit", connect);
+	document.getElementById("qr").addEventListener("dblclick", copyurl);
 	document.body.addEventListener("drop", preventdefault);
 	document.body.addEventListener("dragenter", preventdefault);
 	document.body.addEventListener("dragover", preventdefault);
