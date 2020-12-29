@@ -79,10 +79,10 @@ var turnServer string
 var stunServers []webrtc.ICEServer
 
 // For custom certificate and key
-var customCertFlag string
-var customKeyFlag string
-var customCert []byte
-var customKey []byte
+var certFlag string
+var certKeyFlag string
+var cert []byte
+var certKey []byte
 var CustomGetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 
 // freeslot tries to find an available numeric slot, favouring smaller numbers.
@@ -281,20 +281,20 @@ func PickLocalCert(helloInfo *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// before opening certificate and key from local files checks if they
 	// are already loaded
 	var err error
-	if len(customCert) == 0 || len(customKey) == 0 {
+	if len(cert) == 0 || len(certKey) == 0 {
 		log.Println("No certificate or key loaded, reading from filesystem")
-		customCert, err = ioutil.ReadFile(customCertFlag)
+		cert, err = ioutil.ReadFile(certFlag)
 		if err != nil {
-			log.Printf("Cannot open certificate %s: %s\n", customCertFlag, err)
+			log.Printf("Cannot open certificate %s: %s\n", certFlag, err)
 			return nil, err
 		}
-		customKey, err = ioutil.ReadFile(customKeyFlag)
+		certKey, err = ioutil.ReadFile(certKeyFlag)
 		if err != nil {
-			log.Printf("Cannot open key %s: %s\n", customKeyFlag, err)
+			log.Printf("Cannot open key %s: %s\n", certKeyFlag, err)
 			return nil, err
 		}
 	}
-	cer, err := tls.X509KeyPair(customCert, customKey)
+	cer, err := tls.X509KeyPair(cert, certKey)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -320,8 +320,8 @@ func server(args ...string) {
 	stunservers := set.String("stun", "stun:relay.webwormhole.io", "list of STUN server addresses to tell clients to use")
 	set.StringVar(&turnServer, "turn", "", "TURN server to use for relaying")
 	set.StringVar(&turnSecret, "turn-secret", "", "secret for HMAC-based authentication in TURN server")
-	set.StringVar(&customCertFlag, "custom-cert", "", "Custom TLS certificate")
-	set.StringVar(&customKeyFlag, "custom-key", "", "Custom TLS key")
+	set.StringVar(&certFlag, "cert", "", "Certificate for HTTPS (leave empty to use letsencrypt)")
+	set.StringVar(&certKeyFlag, "key", "", "Certificate key")
 	set.Parse(args[1:])
 
 	if turnServer != "" && turnSecret == "" {
