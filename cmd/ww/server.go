@@ -12,7 +12,6 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -83,7 +82,6 @@ var certFlag string
 var certKeyFlag string
 var cert []byte
 var certKey []byte
-var CustomGetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 
 // freeslot tries to find an available numeric slot, favouring smaller numbers.
 // This assume slots is locked.
@@ -277,31 +275,6 @@ func relay(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func PickLocalCert(helloInfo *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	// before opening certificate and key from local files checks if they
-	// are already loaded
-	var err error
-	if len(cert) == 0 || len(certKey) == 0 {
-		log.Println("No certificate or key loaded, reading from filesystem")
-		cert, err = ioutil.ReadFile(certFlag)
-		if err != nil {
-			log.Printf("Cannot open certificate %s: %s\n", certFlag, err)
-			return nil, err
-		}
-		certKey, err = ioutil.ReadFile(certKeyFlag)
-		if err != nil {
-			log.Printf("Cannot open key %s: %s\n", certKeyFlag, err)
-			return nil, err
-		}
-	}
-	cer, err := tls.X509KeyPair(cert, certKey)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	return &cer, nil
-}
-
 func server(args ...string) {
 	rand.Seed(time.Now().UnixNano())
 
@@ -374,12 +347,12 @@ func server(args ...string) {
 		HostPolicy: autocert.HostWhitelist(strings.Split(*whitelist, ",")...),
 	}
 
+	var customGetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 	if certFlag != "" && certKeyFlag != "" {
 		log.Println("Using local certificate and key")
-		CustomGetCertificate = PickLocalCert
 	} else {
 		log.Println("Generating acme certificate")
-		CustomGetCertificate = m.GetCertificate
+		customGetCertificate = m.GetCertificate
 	}
 
 	ssrv := &http.Server{
@@ -388,7 +361,7 @@ func server(args ...string) {
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpsaddr,
 		Handler:      http.HandlerFunc(handler),
-		TLSConfig:    &tls.Config{GetCertificate: CustomGetCertificate},
+		TLSConfig:    &tls.Config{GetCertificate: customGetCertificate},
 	}
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
@@ -400,7 +373,7 @@ func server(args ...string) {
 
 	if *httpsaddr != "" {
 		srv.Handler = m.HTTPHandler(nil) // Enable redirect to https handler.
-		go func() { log.Fatal(ssrv.ListenAndServeTLS("", "")) }()
+		go func() { log.Fatal(ssrv.ListenAndServeTLS(certFlag, certKeyFlag)) }()
 	}
 	log.Fatal(srv.ListenAndServe())
 }
