@@ -374,7 +374,7 @@ func server(args ...string) {
 		HostPolicy: autocert.HostWhitelist(strings.Split(*whitelist, ",")...),
 	}
 
-	if customCertFlag != "" {
+	if certFlag != "" && certKeyFlag != "" {
 		log.Println("Using local certificate and key")
 		CustomGetCertificate = PickLocalCert
 	} else {
