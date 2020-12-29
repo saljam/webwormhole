@@ -77,12 +77,6 @@ var turnSecret string
 var turnServer string
 var stunServers []webrtc.ICEServer
 
-// For custom certificate and key
-var certFlag string
-var certKeyFlag string
-var cert []byte
-var certKey []byte
-
 // freeslot tries to find an available numeric slot, favouring smaller numbers.
 // This assume slots is locked.
 func freeslot() (slot string, ok bool) {
@@ -293,8 +287,8 @@ func server(args ...string) {
 	stunservers := set.String("stun", "stun:relay.webwormhole.io", "list of STUN server addresses to tell clients to use")
 	set.StringVar(&turnServer, "turn", "", "TURN server to use for relaying")
 	set.StringVar(&turnSecret, "turn-secret", "", "secret for HMAC-based authentication in TURN server")
-	set.StringVar(&certFlag, "cert", "", "Certificate for HTTPS (leave empty to use letsencrypt)")
-	set.StringVar(&certKeyFlag, "key", "", "Certificate key")
+	cert := set.String("cert", "", "Certificate for HTTPS (leave empty to use letsencrypt)")
+	key := set.String("key", "", "Certificate key")
 	set.Parse(args[1:])
 
 	if turnServer != "" && turnSecret == "" {
@@ -348,7 +342,7 @@ func server(args ...string) {
 	}
 
 	var customGetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
-	if certFlag != "" && certKeyFlag != "" {
+	if *cert != "" && *key != "" {
 		log.Println("Using local certificate and key")
 	} else {
 		log.Println("Generating acme certificate")
@@ -373,7 +367,7 @@ func server(args ...string) {
 
 	if *httpsaddr != "" {
 		srv.Handler = m.HTTPHandler(nil) // Enable redirect to https handler.
-		go func() { log.Fatal(ssrv.ListenAndServeTLS(certFlag, certKeyFlag)) }()
+		go func() { log.Fatal(ssrv.ListenAndServeTLS(*cert, *key)) }()
 	}
 	log.Fatal(srv.ListenAndServe())
 }
