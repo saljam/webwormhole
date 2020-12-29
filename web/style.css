@@ -68,8 +68,8 @@ footer span {
 }
 
 #info {
-	display: inline-block;
 	margin: 16px 8px;
+	padding: 8px 0;
 	text-align: center;
 }
 
@@ -79,7 +79,8 @@ footer span {
 }
 
 .connected #filepicker-wrap {
-	display: inline-block;
+	display: block;
+	float: left;
 }
 
 #transfers {
@@ -118,27 +119,12 @@ footer span {
 
 #qr {
 	border: 2px solid;
+	width: 256px;
+	height: 256px;
 	display: none;
 }
 
 .dialling #qr[src] {
-	display: unset;
-}
-
-#msgbox {
-	background: none;
-	border: none;
-	border-bottom: solid;
-	color: #2f6b6c;
-	font-size: x-large;
-	margin: 16px;
-	max-width: 400px;
-	text-align: center;
-	width: 80%;
-	display: none;
-}
-
-.connected #msgbox {
 	display: unset;
 }
 
@@ -154,8 +140,7 @@ footer span {
 	width: 80%;
 }
 
-.error #magiccode,
-.connected #magiccode {
+.error #magiccode {
 	display: none;
 }
 
