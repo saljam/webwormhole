@@ -1,39 +1,55 @@
+* {
+	--purple: #321d47;
+	--accent: #ffa400;
+	--accent10: rgba(255, 164, 0, 0.1);
+	--white: white;
+	--black: black;
+	--error: #ff978c;
+	--connected: #c1ffab;
+	--highlight: #e6ffde;
+	--small-breakpoint: 700px;
+}
+
 html {
-	display: flex;
-	height: 100%;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
 }
 
 body {
-	align-items: stretch;
-	background: #fff;
-	color: #2f6b6c;
+	align-items: center;
+	background-color: var(--purple);
+	color: var(--white);
 	display: flex;
 	flex-direction: column;
+	align-items: center;
 	flex-grow: 1;
-	font-family: helvetica, sans-serif;
-	justify-content: center;
-	margin: 10px;
+	font-size: 18px;
+	font-family: "Inter", helvetica, sans-serif;
+	justify-content: space-between;
+
+	box-shadow: inset 0 0 150px -50px var(--black);
+
+	margin: 0;
 	padding: 0;
 	transition: background-color 0.3s;
 }
 
 body.disconnected,
 body.error {
-	background: #ff978c;
+	background-color: var(--error);
 }
 
 body.dialling {
-	background: #fff6ab;
+	background-color: var(--accent);
 }
 
 body.connected {
-	background: #c1ffab;
-	border-radius: 20px;
-	border: 4px dashed #ccc;
+	background-color: var(--connected);
 }
 
 body.highlight {
-	background: #e6ffde;
+	background-color: var(--highlight);
 	border: 4px dashed #fcabff;
 }
 
@@ -45,20 +61,56 @@ footer {
 	justify-content: space-between;
 }
 
-footer a,
-footer span {
-	margin: 0 auto;
+.footer-links {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.footer-item {
+	margin: 1em 0;
+}
+
+p {
+	margin-bottom: 0;
+}
+
+.container {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+
+	box-shadow: 0px 0px 75px 0px rgba(0, 0, 0, 0.35);
+
+	padding: 0 50px;
+
+	width: 100%;
+	height: 100vh;
+	background: var(--purple);
+}
+
+.main {
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	flex-grow: 1;
 }
 
 .connected footer {
 	display: none;
 }
 
+#title {
+	font-size: 3em;
+	margin-bottom: 0;
+}
+
 #dialog {
 	align-items: center;
 	display: flex;
 	flex-flow: column;
-	flex: 1 0 auto;
 	justify-content: center;
 }
 
@@ -68,7 +120,8 @@ footer span {
 }
 
 #info {
-	margin: 16px 8px;
+	margin-top: 0;
+	font-size: 18px;
 	padding: 8px 0;
 	text-align: center;
 }
@@ -129,19 +182,24 @@ footer span {
 }
 
 #magiccode {
-	background: none;
-	border: none;
-	border-bottom: solid;
-	color: #2f6b6c;
-	font-size: x-large;
-	margin: 16px;
-	max-width: 400px;
+	color: var(--accent);
+	background: var(--accent10);
+	border: 2px solid var(--accent);
+	border-radius: 10px;
+	font-weight: bold;
+	margin: 16px 8px;
+	padding: 16px;
 	text-align: center;
-	width: 80%;
+	text-transform: uppercase;
+	max-width: 50%;
 }
 
 .error #magiccode {
 	display: none;
+}
+
+#dial {
+	text-transform: uppercase;
 }
 
 .connected #dial,
@@ -154,7 +212,7 @@ footer span {
 	display: none;
 }
 
-#autocomplete{
+#autocomplete {
 	height: 1em;
 	opacity: 0.5;
 }
@@ -162,28 +220,27 @@ footer span {
 .button {
 	-webkit-appearance: none;
 	appearance: none;
-	background: #6c6969;
-	border-radius: 4px;
+	background: var(--accent);
+	border-radius: 10px;
 	border: none;
-	box-shadow: 0px 0px 6px 2px #0003;
-	color: #ccc589;
+	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.35);
+	color: var(--purple);
+	font-weight: bold;
 	cursor: pointer;
-	font-size: large;
 	margin: 16px 8px;
 	padding: 16px;
 	transition: all 0.2s ease 0s;
 }
 
 .button:hover {
-	box-shadow: 0px 0px 10px 4px #0004;
-	letter-spacing: 1px;
-	transition: all 0.2s ease 0s;
+	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.35);
+	opacity: 0.75;
 }
 
 .button:disabled,
 .button:disabled:hover {
 	background: #8e8a8a;
-	box-shadow: 0px 0px 1px 1px #0001;
+	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.35);
 	color: #aeac9c;
 	cursor: unset;
 	letter-spacing: unset;
@@ -192,16 +249,15 @@ footer span {
 
 a {
 	text-decoration: none;
+	color: var(--accent);
 }
 
 a:link {
 	border-bottom: 1px dotted;
-	color: #387e8e;
 }
 
 a:visited {
 	border-bottom: 1px dotted;
-	color: #387e8f;
 }
 
 a:link:hover,
@@ -209,44 +265,13 @@ a:visited:hover {
 	border-bottom: 1px solid;
 }
 
-@media (prefers-color-scheme: dark) {
-	body,
-	body.disconnected,
-	body.dialling,
-	body.error {
-		background: #801384;
-		background: radial-gradient(ellipse at bottom, #801384 0%, #170926 100%);
-		background-image: url(stars.svg);
-		background-position: center center;
-		background-repeat: no-repeat;
-		background-size: cover;
-		color: #80d5d7;
+/* Styling for screen widths 700px and upwards. */
+@media only screen and (min-width: 700px) {
+	body {
+		background-image: url("space_patten.svg");
 	}
 
-	body.connected {
-		background: radial-gradient(#170926 0%, #3a0c3c 100%);
-		background-image: url(wormhole.svg);
-		background-position: center center;
-		background-repeat: no-repeat;
-		background-size: cover;
-		border-radius: 20px;
-		border: 4px dashed #ccc;
-	}
-
-	body.highlight {
-		background: radial-gradient(#801384 0%, #170926 100%);
-		border: 4px dashed #fcabff;
-	}
-
-	a:link {
-		color: #b58787;
-	}
-
-	a:visited {
-		color: #b58788;
-	}
-
-	#magiccode {
-		color: #80d5d7;
+	.container {
+		width: min-content;
 	}
 }

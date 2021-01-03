@@ -507,9 +507,9 @@ function hashchange() {
 
 function codechange() {
 	if (document.getElementById("magiccode").value === "") {
-		document.getElementById("dial").value = "NEW WORMHOLE";
+		document.getElementById("dial").value = "Create wormhole";
 	} else {
-		document.getElementById("dial").value = "JOIN WORMHOLE";
+		document.getElementById("dial").value = "Join wormhole";
 	}
 }
 
