@@ -434,6 +434,8 @@ function connected() {
 
 	document.getElementById("info").innerText = "OR DROP OR PASTE TO SEND";
 
+	document.getElementById("code-prompt").style.display = "none";
+
 	location.hash = "";
 }
 
