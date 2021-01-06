@@ -5,7 +5,7 @@ wasm:
 
 .PHONY: webwormhole-ext.zip
 webwormhole-ext.zip: wasm
-	zip -j webwormhole-ext.zip ./web/* -x '*.git*' '*.go'
+	zip -j webwormhole-ext.zip ./web/* -x '*.git*' '*.go' '*Dockerfile'
 
 .PHONY: webwormhole-src.zip
 webwormhole-src.zip:

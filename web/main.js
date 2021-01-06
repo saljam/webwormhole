@@ -9,6 +9,7 @@ const hacks = {};
 
 // Background colour to chose from based on the derived key. I.e., both parties
 // should see the same colour.
+// TODO move to css and make this also work for dark mode.
 const fingerprintcolors = [
 	// bright green
 	"#c1ffab",
@@ -37,8 +38,13 @@ function pick() {
 
 function drop(e) {
 	const files = e.dataTransfer.files;
-	for (let i = 0; i < files.length; i++) {
-		sendfile(files[i]);
+	const t = e.dataTransfer.getData("text")
+	if (files.length !== 0) {
+		for (let i = 0; i < files.length; i++) {
+			sendfile(files[i]);
+		}
+	} else if (t.length !== 0) {
+		sendtext(t);
 	}
 
 	// A shortcut to save users a click. If we're disconnected and they drag
@@ -47,6 +53,19 @@ function drop(e) {
 	// the filepicker state...
 	if (document.getElementById("filepicker").disabled) {
 		connect();
+	}
+}
+
+function paste(e) {
+	console.log(e.clipboardData.files)
+	const files = e.clipboardData.files;
+	const t = e.clipboardData.getData("text")
+	if (files.length !== 0) {
+		for (let i = 0; i < files.length; i++) {
+			sendfile(files[i]);
+		}
+	} else if (t.length !== 0) {
+		sendtext(t);
 	}
 }
 
@@ -80,6 +99,23 @@ class DataChannelWriter {
 			});
 		}
 	}
+}
+
+async function sendtext(m) {
+	const item = {
+		f: {
+			name: m,
+			type: "application/webwormhole-text",
+		}
+	}
+	item.pre = document.createElement("pre");
+	item.pre.appendChild(document.createTextNode(`${item.f.name}`));
+	item.li = document.createElement("li");
+	item.li.appendChild(item.pre);
+	item.li.classList.add("pending");
+	document.getElementById("transfers").appendChild(item.li);
+	sendqueue.push(item);
+	send();
 }
 
 async function sendfile(f) {
@@ -344,17 +380,12 @@ async function connect() {
 		setuppeercon(signal.pc);
 
 		if (document.getElementById("magiccode").value === "") {
-			document.getElementById("info").innerText = "WAITING FOR THE OTHER SIDE - SHARE CODE OR URL";
+			document.getElementById("info").innerHTML = "WAITING FOR THE OTHER SIDE<br>ENTER WORDS / SHARE URL / SCAN QR CODE";
 			codechange();
 			document.getElementById("magiccode").value = signal.code;
 			location.hash = signal.code;
 			signalserver.hash = signal.code;
-			const qr = webwormhole.qrencode(signalserver.href);
-			if (qr === null) {
-				document.getElementById("qr").src = "";
-			} else {
-				document.getElementById("qr").src = URL.createObjectURL(new Blob([qr]));
-			}
+			updateqr(signalserver.href);
 		} else {
 			document.getElementById("info").innerText = "CONNECTING";
 		}
@@ -393,6 +424,7 @@ function dialling() {
 	document.getElementById("filepicker").disabled = false;
 	document.getElementById("dial").disabled = true;
 	document.getElementById("magiccode").readOnly = true;
+	document.body.addEventListener("paste", paste);
 }
 
 function connected() {
@@ -400,7 +432,7 @@ function connected() {
 	document.body.classList.add("connected");
 	document.body.classList.remove("disconnected");
 
-	document.getElementById("info").innerText = "OR DRAG FILES TO SEND";
+	document.getElementById("info").innerText = "OR DROP OR PASTE TO SEND";
 
 	location.hash = "";
 }
@@ -419,6 +451,7 @@ function disconnected() {
 	document.getElementById("magiccode").value = "";
 	codechange();
 	document.getElementById("filepicker").disabled = true;
+	document.body.removeEventListener("paste", paste);
 
 	location.hash = "";
 
@@ -444,6 +477,24 @@ function preventdefault(e) {
 	e.stopPropagation();
 }
 
+async function copyurl() {
+	await navigator.clipboard.writeText(signalserver.href);
+	// TODO react to success.
+}
+
+function updateqr(url) {
+	const qr = webwormhole.qrencode(url);
+	if (url === "" || qr === null) {
+		document.getElementById("qr").src = "";
+		document.getElementById("qr").alt = "";
+		document.getElementById("qr").title = "";
+		return
+	}
+	document.getElementById("qr").src = URL.createObjectURL(new Blob([qr]));
+	document.getElementById("qr").alt = url;
+	document.getElementById("qr").title = url +" - double click to copy";
+}
+
 function hashchange() {
 	const newhash = location.hash.substring(1);
 	if (newhash !== "" && newhash !== document.getElementById("magiccode").value) {
@@ -459,26 +510,6 @@ function codechange() {
 		document.getElementById("dial").value = "NEW WORMHOLE";
 	} else {
 		document.getElementById("dial").value = "JOIN WORMHOLE";
-	}
-}
-
-async function sendmsg(e) {
-	if (e.keyCode == 13 && !e.shiftKey) {
-		const item = {
-			f: {
-				name: document.getElementById("msgbox").value,
-				type: "application/webwormhole-text",
-			}
-		}
-		item.pre = document.createElement("pre");
-		item.pre.appendChild(document.createTextNode(`${item.f.name}`));
-		item.li = document.createElement("li");
-		item.li.appendChild(item.pre);
-		item.li.classList.add("pending");
-		document.getElementById("transfers").appendChild(item.li);
-		sendqueue.push(item);
-		send();
-		document.getElementById("msgbox").value = "";
 	}
 }
 
@@ -643,7 +674,7 @@ async function wasmready() {
 	document.getElementById("filepicker").addEventListener("change", pick);
 	document.getElementById("dialog").addEventListener("submit", preventdefault);
 	document.getElementById("dialog").addEventListener("submit", connect);
-	document.getElementById("msgbox").addEventListener("keyup", sendmsg);
+	document.getElementById("qr").addEventListener("dblclick", copyurl);
 	document.body.addEventListener("drop", preventdefault);
 	document.body.addEventListener("dragenter", preventdefault);
 	document.body.addEventListener("dragover", preventdefault);
