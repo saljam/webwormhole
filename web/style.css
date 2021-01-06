@@ -62,13 +62,13 @@ footer {
 	justify-content: space-between;
 }
 
-.footer-links {
+footer ul {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 }
 
-.footer-item {
+footer li {
 	margin: 1em 0;
 }
 
