@@ -132,7 +132,6 @@ p {
 .connected #filepicker-wrap {
 	display: block;
 	float: left;
-	width: 100%;
 }
 
 #filepicker-div {
