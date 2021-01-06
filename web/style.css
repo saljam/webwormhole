@@ -118,6 +118,7 @@ p {
 
 #info {
 	margin-top: 0;
+	margin: 16px 8px;
 	font-size: 18px;
 	padding: 8px 0;
 	text-align: center;
@@ -131,6 +132,14 @@ p {
 .connected #filepicker-wrap {
 	display: block;
 	float: left;
+	width: 100%;
+}
+
+#filepicker-div {
+	max-width: 300px;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
 }
 
 #transfers {
@@ -273,5 +282,13 @@ a:visited:hover {
 		padding: 0 50px;
 		width: min-content;
 		min-width: 400px;
+	}
+
+	.connected #filepicker-wrap {
+		width: min-content;
+	}
+
+	#filepicker-div {
+		flex-direction: row;
 	}
 }
