@@ -322,9 +322,10 @@ func server(args ...string) {
 		// https://bugs.webkit.org/show_bug.cgi?id=201591
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://tip.webwormhole.io/ wss://webwormhole.io/")
 
-		// Set HSTS header
-		// https://ssl-config.mozilla.org/#server=go&config=intermediate
-		w.Header().Set("Strict-Transport-Security", "max-age=63072000")
+		if r.URL.Scheme == "https" {
+			// Set HSTS header for 2 years.
+			w.Header().Set("Strict-Transport-Security", "max-age=63072000")
+		}
 
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			stats.goget.Add(1)
@@ -359,19 +360,9 @@ func server(args ...string) {
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpsaddr,
 		Handler:      http.HandlerFunc(handler),
-		// Mozilla intermediate TLS configuration
-		// https://ssl-config.mozilla.org/#server=go&config=intermediate
 		TLSConfig: &tls.Config{
 			GetCertificate: m.GetCertificate,
-			MinVersion:     tls.VersionTLS12,
-			CipherSuites: []uint16{
-				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			},
+			MinVersion:     tls.VersionTLS13,
 		},
 	}
 	srv := &http.Server{
