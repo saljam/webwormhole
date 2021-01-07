@@ -361,7 +361,7 @@ func server(args ...string) {
 		Addr:         *httpsaddr,
 		Handler:      http.HandlerFunc(handler),
 		TLSConfig: &tls.Config{
-			GetCertificate: m.GetCertificate,
+			GetCertificate: customGetCertificate,
 			MinVersion:     tls.VersionTLS13,
 		},
 	}
