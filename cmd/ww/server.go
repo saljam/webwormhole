@@ -270,7 +270,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 }
 
 func server(args ...string) {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // for slot allocation
 
 	set := flag.NewFlagSet(args[0], flag.ExitOnError)
 	set.Usage = func() {
@@ -281,19 +281,24 @@ func server(args ...string) {
 	}
 	httpaddr := set.String("http", ":http", "http listen address")
 	httpsaddr := set.String("https", ":https", "https listen address")
-	whitelist := set.String("hosts", "", "comma separated list of hosts for which to request let's encrypt certs")
+	acmehosts := set.String("hosts", "", "comma separated list of hosts for which to request let's encrypt certs")
 	secretpath := set.String("secrets", os.Getenv("HOME")+"/keys", "path to put let's encrypt cache")
+	cert := set.String("cert", "", "https certificate (leave empty to use letsencrypt)")
+	key := set.String("key", "", "https certificate key")
 	html := set.String("ui", "./web", "path to the web interface files")
 	stunservers := set.String("stun", "stun:relay.webwormhole.io", "list of STUN server addresses to tell clients to use")
 	set.StringVar(&turnServer, "turn", "", "TURN server to use for relaying")
 	set.StringVar(&turnSecret, "turn-secret", "", "secret for HMAC-based authentication in TURN server")
-	cert := set.String("cert", "", "Certificate for HTTPS (leave empty to use letsencrypt)")
-	key := set.String("key", "", "Certificate key")
 	set.Parse(args[1:])
+
+	if (*cert == "") != (*key == "") {
+		log.Fatalf("-cert and -key options must be provided together or both left empty")
+	}
 
 	if turnServer != "" && turnSecret == "" {
 		log.Fatal("cannot use a TURN server without a secret")
 	}
+
 	for _, s := range strings.Split(*stunservers, ",") {
 		if s == "" {
 			continue
@@ -322,7 +327,7 @@ func server(args ...string) {
 		// https://bugs.webkit.org/show_bug.cgi?id=201591
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://tip.webwormhole.io/ wss://webwormhole.io/")
 
-		if r.URL.Scheme == "https" {
+		if *httpsaddr != "" {
 			// Set HSTS header for 2 years.
 			w.Header().Set("Strict-Transport-Security", "max-age=63072000")
 		}
@@ -343,15 +348,7 @@ func server(args ...string) {
 	m := &autocert.Manager{
 		Cache:      autocert.DirCache(*secretpath),
 		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(strings.Split(*whitelist, ",")...),
-	}
-
-	var customGetCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
-	if *cert != "" && *key != "" {
-		log.Println("Using local certificate and key")
-	} else {
-		log.Println("Generating acme certificate")
-		customGetCertificate = m.GetCertificate
+		HostPolicy: autocert.HostWhitelist(strings.Split(*acmehosts, ",")...),
 	}
 
 	ssrv := &http.Server{
@@ -360,10 +357,7 @@ func server(args ...string) {
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpsaddr,
 		Handler:      http.HandlerFunc(handler),
-		TLSConfig: &tls.Config{
-			GetCertificate: customGetCertificate,
-			MinVersion:     tls.VersionTLS13,
-		},
+		TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS13},
 	}
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
@@ -371,6 +365,10 @@ func server(args ...string) {
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpaddr,
 		Handler:      m.HTTPHandler(http.HandlerFunc(handler)),
+	}
+
+	if *cert == "" && *key == "" {
+		ssrv.TLSConfig.GetCertificate = m.GetCertificate
 	}
 
 	if *httpsaddr != "" {
