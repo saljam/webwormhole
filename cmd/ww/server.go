@@ -322,6 +322,11 @@ func server(args ...string) {
 		// https://bugs.webkit.org/show_bug.cgi?id=201591
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://tip.webwormhole.io/ wss://webwormhole.io/")
 
+		if r.URL.Scheme == "https" {
+			// Set HSTS header for 2 years.
+			w.Header().Set("Strict-Transport-Security", "max-age=63072000")
+		}
+
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			stats.goget.Add(1)
 			w.Write([]byte(importMeta))
@@ -355,7 +360,10 @@ func server(args ...string) {
 		IdleTimeout:  20 * time.Second,
 		Addr:         *httpsaddr,
 		Handler:      http.HandlerFunc(handler),
-		TLSConfig:    &tls.Config{GetCertificate: customGetCertificate},
+		TLSConfig: &tls.Config{
+			GetCertificate: customGetCertificate,
+			MinVersion:     tls.VersionTLS13,
+		},
 	}
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
