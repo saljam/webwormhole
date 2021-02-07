@@ -432,6 +432,8 @@ function connected() {
 	document.body.classList.add("connected");
 	document.body.classList.remove("disconnected");
 
+	document.getElementById("magiccode").style.opacity = "0.2";
+
 	document.getElementById("info").innerText = "OR DROP OR PASTE TO SEND";
 
 	document.getElementById("code-prompt").style.display = "none";
