@@ -18,7 +18,7 @@ html {
 
 body {
 	align-items: center;
-	background-image: url("space_patten.svg");
+	background-image: url("space_pattern.svg");
 	background-color: var(--purple);
 	color: var(--white);
 	display: flex;
