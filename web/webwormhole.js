@@ -203,9 +203,10 @@ class Wormhole {
 					this.ws.close();
 					return;
 				}
-				console.log("got remote candidate");
-				// TODO should we gate this on promise2 too?
-				this.pc.addIceCandidate(new RTCIceCandidate(msg));
+				console.log("got remote candidate", msg);
+				this.promise2.then(async () => {
+					this.pc.addIceCandidate(new RTCIceCandidate(msg));
+				});
 				return;
 			}
 
@@ -235,7 +236,7 @@ class Wormhole {
 		});
 		this.pc.onicecandidate = (e) => {
 			if (e.candidate && e.candidate.candidate !== "") {
-				console.log("got local candidate");
+				console.log("got local candidate", e.candidate);
 				this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
 			} else if (!e.candidate) {
 				Wormhole.logNAT(this.pc.localDescription.sdp);
