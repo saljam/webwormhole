@@ -432,7 +432,11 @@ function connected() {
 	document.body.classList.add("connected");
 	document.body.classList.remove("disconnected");
 
+	document.getElementById("magiccode").style.opacity = "0.2";
+
 	document.getElementById("info").innerText = "OR DROP OR PASTE TO SEND";
+
+	document.getElementById("code-prompt").style.display = "none";
 
 	location.hash = "";
 }
@@ -507,9 +511,9 @@ function hashchange() {
 
 function codechange() {
 	if (document.getElementById("magiccode").value === "") {
-		document.getElementById("dial").value = "NEW WORMHOLE";
+		document.getElementById("dial").value = "Create wormhole";
 	} else {
-		document.getElementById("dial").value = "JOIN WORMHOLE";
+		document.getElementById("dial").value = "Join wormhole";
 	}
 }
 
