@@ -70,7 +70,6 @@ class Wormhole {
 					this.reject2 = reject2;
 					this.resolve3 = resolve3;
 					this.reject3 = reject3;
-					// TODO: perhaps we can return a promise directly from the constructor?
 					this.dial(signalserver, code);
 				});
 			});
