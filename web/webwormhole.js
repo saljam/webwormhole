@@ -59,6 +59,7 @@ class Wormhole {
 		//        can display the key fingerprint.
 		//   4. (unimplemented) caller tells us the webrtc handshake is done.
 		//        We can close the websocket.
+		// TODO: use createDeferredPromise
 		this.promise1 = new Promise((resolve1, reject1) => {
 			this.promise2 = new Promise((resolve2, reject2) => {
 				this.promise3 = new Promise((resolve3, reject3) => {
@@ -69,6 +70,7 @@ class Wormhole {
 					this.reject2 = reject2;
 					this.resolve3 = resolve3;
 					this.reject3 = reject3;
+					// TODO: perhaps we can return a promise directly from the constructor?
 					this.dial(signalserver, code);
 				});
 			});
@@ -111,12 +113,14 @@ class Wormhole {
 		this.ws.onopen = (a) => {
 			this.onopen(a);
 		};
+		
 		this.ws.onerror = (a) => {
 			this.onerror(a);
 		};
 		this.ws.onclose = (a) => {
 			this.onclose(a);
 		};
+		// TODO: do we still need this listener?
 		this.ws.onmessage = (a) => {
 			this.onmessage(a);
 		};
@@ -139,7 +143,10 @@ class Wormhole {
 		console.log('assigned slot:', msg.slot)
 		this.slot = parseInt(msg.slot, 10)
 		if (!Number.isSafeInteger(this.slot)) return this.fail('invalid slot')
+
+		// TODO: should we await this?
 		this.newPeerConnection(msg.iceServers)
+		
 		const code = webwormhole.encode(this.slot, this.pass)
 		// TODO: why do we need to resolve this if nothing awaits it?
 		this.resolve1({ code, pc: this.pc })
@@ -161,16 +168,17 @@ class Wormhole {
 	}
 
 	async waitForPcInitialize() {
+		// TODO: do we need to wait for promise2? Why?
 		await this.promise2
 		const offer = await this.pc.createOffer()
 		console.log('created offer')
-		this.pc.setLocalDescription(offer)
+		await this.pc.setLocalDescription(offer)
 		this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)))
 		this.state = 'wait_for_webtc_answer'
 	}
 	
 	async waitForWebRtcAnswer() {
-		const [m, error] = await wait()
+		const [m, error] = await wait(this.ws)
 		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
 			this.fail('bad key')
@@ -180,17 +188,16 @@ class Wormhole {
 		}
 		if (msg.type !== 'answer') {
 			console.log('unexpected message', msg)
-			this.fail('unexpected message')
-			return
+			return this.fail('unexpected message')
 		}
 		console.log('got answer')
-		this.pc.setRemoteDescription(new RTCSessionDescription(msg))
+		await this.pc.setRemoteDescription(new RTCSessionDescription(msg))
 		this.resolve3(webwormhole.fingerprint(this.key))
 		this.state = 'wait_for_candidates'
 	}
 
 	async waitForCandidates() {
-		const [m, error] = wait(ws)
+		const [m, error] = wait(this.ws)
 		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
 			this.fail('bad key')
@@ -199,9 +206,8 @@ class Wormhole {
 			return
 		}
 		console.log('got remote candidate', msg)
-		this.promise2.then(async () => {
-			this.pc.addIceCandidate(new RTCIceCandidate(msg))
-		})
+		await this.promise2
+		return this.pc.addIceCandidate(new RTCIceCandidate(msg))
 	}
 
 		
@@ -220,7 +226,7 @@ class Wormhole {
 		console.log("created answer");
 		this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
 		this.resolve3(webwormhole.fingerprint(this.key));
-		this.pc.setLocalDescription(answer);
+		await this.pc.setLocalDescription(answer);
 		
 		await this.waitForCandidates()
 	}
