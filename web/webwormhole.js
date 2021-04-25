@@ -163,8 +163,8 @@ class Wormhole {
 		this.state = 'wait_for_webtc_answer'
 	}
 	
-	waitForWebRtcAnswer() {
-		const [m] = await wait()
+	async waitForWebRtcAnswer() {
+		const [m, error] = await wait()
 		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
 			this.fail('bad key')
@@ -183,8 +183,8 @@ class Wormhole {
 		this.state = 'wait_for_candidates'
 	}
 
-	waitForCandidates() {
-		const m = wait(ws)
+	async waitForCandidates() {
+		const [m, error] = wait(ws)
 		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
 			this.fail('bad key')
