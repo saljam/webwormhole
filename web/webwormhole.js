@@ -80,6 +80,8 @@ class Wormhole {
 	}
 
 	async finish() {
+		// TODO: does it make sense to wait for main.js to call finish?
+		// we don't get any info from `resolve2()` so why would we wait for it?
 		this.resolve2();
 		return this.promise3;
 	}
@@ -126,27 +128,28 @@ class Wormhole {
 	async new() {
 		await this.waitForSlotA()
 		await this.waitForPakeA()
+		await this.waitForPcInitialize()
 		await this.waitForWebRtcAnswer()
 		await this.waitForCandidates()
 	}
 
 	async waitForSlotA() {
 		const [rawMessage, error] = await wait(ws)
-		let msg = JSON.parse(rawMessage.data)
+		const msg = JSON.parse(rawMessage.data)
 		console.log('assigned slot:', msg.slot)
 		this.slot = parseInt(msg.slot, 10)
 		if (!Number.isSafeInteger(this.slot)) return this.fail('invalid slot')
 		this.newPeerConnection(msg.iceServers)
-		this.resolve1({
-			code: webwormhole.encode(this.slot, this.pass),
-			pc: this.pc,
-		})
+		const code = webwormhole.encode(this.slot, this.pass)
+		// TODO: why do we need to resolve this if nothing awaits it?
+		this.resolve1({ code, pc: this.pc })
+		// TODO: do we need to keep track of the state machine still?
 		this.state = 'wait_for_pake_a'
 	}
 	
 	
 	async waitForPakeA() {
-		const [m] = await wait(ws)
+		const [m, error] = await wait(ws)
 		console.log('got pake message a:', m.data)
 		const [key, msgB] = webwormhole.exchange(this.pass, m.data)
 		this.key = key
@@ -155,6 +158,9 @@ class Wormhole {
 		console.log('generated key')
 		this.ws.send(msgB)
 		this.state = 'wait_for_pc_initialize'
+	}
+
+	async waitForPcInitialize() {
 		await this.promise2
 		const offer = await this.pc.createOffer()
 		console.log('created offer')
@@ -246,7 +252,7 @@ class Wormhole {
 
 	async waitForWebRtcOffer() {
 		const [m, error] = await this.wait()
-		msg = JSON.parse(webwormhole.open(this.key, m.data));
+		const msg = JSON.parse(webwormhole.open(this.key, m.data));
 		if (msg == null) {
 			this.fail("bad key");
 			this.ws.send(webwormhole.seal(this.key, "bye"));
