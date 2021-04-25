@@ -82,8 +82,8 @@ class Wormhole {
 			case "a": {
 				msg = JSON.parse(m.data);
 				console.log("assigned slot:", msg.slot);
-				this.slot = parseInt(msg.slot);
-				if (isNaN(this.slot)) {
+				this.slot = parseInt(msg.slot, 10);
+				if (!Number.isSafeInteger(this.slot)) {
 					this.fail("invalid slot");
 					return;
 				}
