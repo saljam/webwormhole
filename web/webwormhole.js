@@ -92,12 +92,9 @@ class Wormhole {
 		
 		if (hasCode) {
 			[this.slot, this.pass] = webwormhole.decode(code);
-			if (this.pass.length === 0) {
-				throw "bad code";
-			}
+			if (this.pass.length === 0) throw new Error("bad code")
 			console.log("dialling slot:", this.slot);
 			this.state = "b";
-			
 		} else {
 			this.slot = "";
 			this.pass = crypto.getRandomValues(new Uint8Array(2));
@@ -120,9 +117,9 @@ class Wormhole {
 			this.onclose(a);
 		};
 		// TODO: do we still need this listener?
-		this.ws.onmessage = (a) => {
-			this.onmessage(a);
-		};
+		// this.ws.onmessage = (a) => {
+		// 	this.onmessage(a);
+		// };
 		
 		if (hasCode) return this.join()
 		return this.new()
@@ -137,7 +134,7 @@ class Wormhole {
 	}
 
 	async waitForSlotA() {
-		const [rawMessage, error] = await wait(ws)
+		const [rawMessage, error] = await wait(this.ws)
 		const msg = JSON.parse(rawMessage.data)
 		console.log('assigned slot:', msg.slot)
 		this.slot = parseInt(msg.slot, 10)
@@ -155,7 +152,7 @@ class Wormhole {
 	
 	
 	async waitForPakeA() {
-		const [m, error] = await wait(ws)
+		const [m, error] = await wait(this.ws)
 		console.log('got pake message a:', m.data)
 		const [key, msgB] = webwormhole.exchange(this.pass, m.data)
 		this.key = key
@@ -273,22 +270,6 @@ class Wormhole {
 		this.state = "wait_for_candidates";
 	}
 	
-
-
-	onmessage(m) {
-		switch (this.state) {
-			case "wait_for_pc_initialize":
-			case "wait_for_local_offer":
-			case "wait_for_local_answer": {
-				console.log("unexpected message", m);
-				this.fail("unexpected message");
-				return;
-			}
-			case "error":
-				return;
-		}
-	}
-
 	newPeerConnection(iceServers) {
 		let normalisedICEServers = [];
 		for (let i = 0; i < iceServers.length; i++) {
@@ -298,9 +279,7 @@ class Wormhole {
 				credential: iceServers[i].Credential,
 			});
 		}
-		this.pc = new RTCPeerConnection({
-			iceServers: normalisedICEServers,
-		});
+		this.pc = new RTCPeerConnection({ iceServers: normalisedICEServers });
 		this.pc.onicecandidate = (e) => {
 			if (e.candidate && e.candidate.candidate !== "") {
 				console.log("got local candidate", e.candidate);
