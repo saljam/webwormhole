@@ -1,6 +1,5 @@
 "use strict";
 
-// TODO: move to it's own file
 const matchMessage = (type, rawMessage) => {
   if (!type) return true
   let parsed
@@ -43,6 +42,16 @@ const wait = async (ws, type, timeout) => {
   })
 }
 
+const createDeferredPromise = () => {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 
 class Wormhole {
 	constructor(signalserver, code) {
@@ -59,32 +68,21 @@ class Wormhole {
 		//        can display the key fingerprint.
 		//   4. (unimplemented) caller tells us the webrtc handshake is done.
 		//        We can close the websocket.
-		// TODO: use createDeferredPromise
-		this.promise1 = new Promise((resolve1, reject1) => {
-			this.promise2 = new Promise((resolve2, reject2) => {
-				this.promise3 = new Promise((resolve3, reject3) => {
-					// It is very possible that I do not understand how to us promises "correctly".
-					this.resolve1 = resolve1;
-					this.reject1 = reject1;
-					this.resolve2 = resolve2;
-					this.reject2 = reject2;
-					this.resolve3 = resolve3;
-					this.reject3 = reject3;
-					this.dial(signalserver, code);
-				});
-			});
-		});
+		this.phase1 = createDeferredPromise();
+		this.phase2 = createDeferredPromise();
+		this.phase3 = createDeferredPromise();
+		this.dial(signalserver, code);
 	}
 
 	async signal() {
-		return this.promise1;
+		return this.phase1.promise;
 	}
 
 	async finish() {
 		// TODO: does it make sense to wait for main.js to call finish?
 		// we don't get any info from `resolve2()` so why would we wait for it?
-		this.resolve2();
-		return this.promise3;
+		this.phase2.resolve();
+		return this.phase3.promise;
 	}
 
 	dial(signalserver, code) {
@@ -116,11 +114,7 @@ class Wormhole {
 		this.ws.onclose = (a) => {
 			this.onclose(a);
 		};
-		// TODO: do we still need this listener?
-		// this.ws.onmessage = (a) => {
-		// 	this.onmessage(a);
-		// };
-		
+
 		if (hasCode) return this.join()
 		return this.new()
 	}
@@ -135,17 +129,19 @@ class Wormhole {
 
 	async waitForSlotA() {
 		const [rawMessage, error] = await wait(this.ws)
+		if (error) return
 		const msg = JSON.parse(rawMessage.data)
 		console.log('assigned slot:', msg.slot)
 		this.slot = parseInt(msg.slot, 10)
 		if (!Number.isSafeInteger(this.slot)) return this.fail('invalid slot')
+		
 
 		// TODO: should we await this?
 		this.newPeerConnection(msg.iceServers)
 		
 		const code = webwormhole.encode(this.slot, this.pass)
 		// TODO: why do we need to resolve this if nothing awaits it?
-		this.resolve1({ code, pc: this.pc })
+		this.phase1.resolve({ code, pc: this.pc })
 		// TODO: do we need to keep track of the state machine still?
 		this.state = 'wait_for_pake_a'
 	}
@@ -153,6 +149,7 @@ class Wormhole {
 	
 	async waitForPakeA() {
 		const [m, error] = await wait(this.ws)
+		if (error) return
 		console.log('got pake message a:', m.data)
 		const [key, msgB] = webwormhole.exchange(this.pass, m.data)
 		this.key = key
@@ -165,7 +162,7 @@ class Wormhole {
 
 	async waitForPcInitialize() {
 		// TODO: do we need to wait for promise2? Why?
-		await this.promise2
+		await this.phase2.promise
 		const offer = await this.pc.createOffer()
 		console.log('created offer')
 		await this.pc.setLocalDescription(offer)
@@ -175,12 +172,12 @@ class Wormhole {
 	
 	async waitForWebRtcAnswer() {
 		const [m, error] = await wait(this.ws)
+		if (error) return
 		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
 			this.fail('bad key')
 			this.ws.send(webwormhole.seal(this.key, 'bye'))
-			this.ws.close()
-			return
+			return this.ws.close()
 		}
 		if (msg.type !== 'answer') {
 			console.log('unexpected message', msg)
@@ -188,12 +185,13 @@ class Wormhole {
 		}
 		console.log('got answer')
 		await this.pc.setRemoteDescription(new RTCSessionDescription(msg))
-		this.resolve3(webwormhole.fingerprint(this.key))
+		this.phase3.resolve(webwormhole.fingerprint(this.key))
 		this.state = 'wait_for_candidates'
 	}
 
 	async waitForCandidates() {
 		const [m, error] = await wait(this.ws)
+		if (error) return
 		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
 			this.fail('bad key')
@@ -202,27 +200,24 @@ class Wormhole {
 			return
 		}
 		console.log('got remote candidate', msg)
-		await this.promise2
+		await this.phase2.promise
 		return this.pc.addIceCandidate(new RTCIceCandidate(msg))
 	}
 
 		
 	async join() {
 		await this.waitForSlotB()
-
 		await this.waitForPakeB()
-
 		await this.waitForWebRtcOffer()
-		
-		
 		await this.waitForCandidates()
 	}
 	
 	async waitForSlotB() {
 		const [m, error] = await wait(this.ws)
+		if (error) return
 		const msg = JSON.parse(m.data)
 		this.newPeerConnection(msg.iceServers)
-		this.resolve1({ pc: this.pc })
+		this.phase1.resolve({ pc: this.pc })
 		const msgA = webwormhole.start(this.pass)
 		if (msgA == null) return this.fail("couldn't generate A's PAKE message")
 			
@@ -233,11 +228,11 @@ class Wormhole {
 
 	async waitForPakeB() {
 		const [m, error] = await wait(this.ws)
+		if (error) return
 		console.log('got pake message b:', m.data)
 		this.key = webwormhole.finish(m.data)
 		if (this.key == null) {
-		this.fail('could not generate key')
-			return
+			return this.fail('could not generate key')
 		}
 		console.log('generated key')
 		this.state = 'wait_for_webtc_offer'
@@ -245,6 +240,7 @@ class Wormhole {
 
 	async waitForWebRtcOffer() {
 		const [m, error] = await wait(this.ws)
+		if (error) return
 		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
 			this.fail('bad key')
@@ -261,12 +257,12 @@ class Wormhole {
 		// No intermediate state wait_for_pc_initialize because candidates can
 		// start arriving straight after the offer is sent.
 		
-		await this.promise2
+		await this.phase2.promise
 		await this.pc.setRemoteDescription(new RTCSessionDescription(msg))
 		const answer = await this.pc.createAnswer()
 		await this.pc.setLocalDescription(answer)
 		console.log('created answer')
-		this.resolve3(webwormhole.fingerprint(this.key))
+		this.phase3.resolve(webwormhole.fingerprint(this.key))
 		this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)))
 		this.state = 'wait_for_candidates'
   }
