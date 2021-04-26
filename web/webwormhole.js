@@ -193,7 +193,7 @@ class Wormhole {
 	}
 
 	async waitForCandidates() {
-		const [m, error] = wait(this.ws)
+		const [m, error] = await wait(this.ws)
 		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
 			this.fail('bad key')
@@ -212,24 +212,15 @@ class Wormhole {
 
 		await this.waitForPakeB()
 
-		// No intermediate state wait_for_pc_initialize because candidates can
-		// start arriving straight after the offer is sent.
 		await this.waitForWebRtcOffer()
 		
-		await this.promise2
-		await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
-		const answer = await this.pc.createAnswer();
-		console.log("created answer");
-		this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
-		this.resolve3(webwormhole.fingerprint(this.key));
-		await this.pc.setLocalDescription(answer);
 		
 		await this.waitForCandidates()
 	}
 	
 	async waitForSlotB() {
 		const [m, error] = await wait(this.ws)
-		msg = JSON.parse(m.data)
+		const msg = JSON.parse(m.data)
 		this.newPeerConnection(msg.iceServers)
 		this.resolve1({ pc: this.pc })
 		const msgA = webwormhole.start(this.pass)
@@ -241,7 +232,7 @@ class Wormhole {
 	}
 
 	async waitForPakeB() {
-		const [m, error] = await this.wait()
+		const [m, error] = await wait(this.ws)
 		console.log('got pake message b:', m.data)
 		this.key = webwormhole.finish(m.data)
 		if (this.key == null) {
@@ -253,22 +244,32 @@ class Wormhole {
 	}
 
 	async waitForWebRtcOffer() {
-		const [m, error] = await this.wait()
-		const msg = JSON.parse(webwormhole.open(this.key, m.data));
+		const [m, error] = await wait(this.ws)
+		const msg = JSON.parse(webwormhole.open(this.key, m.data))
 		if (msg == null) {
-			this.fail("bad key");
-			this.ws.send(webwormhole.seal(this.key, "bye"));
-			this.ws.close();
-			return;
+			this.fail('bad key')
+			this.ws.send(webwormhole.seal(this.key, 'bye'))
+			return this.ws.close()
 		}
-		if (msg.type !== "offer") {
-			console.log("unexpected message", msg);
-			this.fail("unexpected message");
-			return;
+
+		if (msg.type !== 'offer') {
+			console.log('unexpected message', msg)
+			return this.fail('unexpected message')
 		}
-		console.log("got offer");
-		this.state = "wait_for_candidates";
-	}
+		console.log('got offer')
+
+		// No intermediate state wait_for_pc_initialize because candidates can
+		// start arriving straight after the offer is sent.
+		
+		await this.promise2
+		await this.pc.setRemoteDescription(new RTCSessionDescription(msg))
+		const answer = await this.pc.createAnswer()
+		await this.pc.setLocalDescription(answer)
+		console.log('created answer')
+		this.resolve3(webwormhole.fingerprint(this.key))
+		this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)))
+		this.state = 'wait_for_candidates'
+  }
 	
 	newPeerConnection(iceServers) {
 		let normalisedICEServers = [];
