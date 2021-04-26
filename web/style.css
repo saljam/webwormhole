@@ -224,6 +224,12 @@ p {
 	opacity: 0.5;
 }
 
+#code-prompt-container {
+  transition: max-height 200ms ease-in-out;
+  max-height: 0px;
+  overflow: hidden;
+}
+
 .button {
 	-webkit-appearance: none;
 	appearance: none;
@@ -237,6 +243,12 @@ p {
 	margin: 16px 8px;
 	padding: 16px;
 	transition: all 0.2s ease 0s;
+}
+
+.button.secondary {
+	color: var(--accent);
+	background: var(--purple);
+	border: 2px solid var(--accent);
 }
 
 .button:hover {

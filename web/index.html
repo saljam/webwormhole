@@ -29,22 +29,35 @@
 						</p>
 					</div>
 					<ul id="transfers"></ul>
-					<input
+					<div class='button-container'>
+						<input
+							type="button"
+							id="dial-join"
+							class="button secondary"
+							value="Loading..."
+							disabled
+						/>
+						
+						<input
 						type="submit"
 						id="dial"
 						class="button"
 						value="Loading..."
 						disabled
-					/>
-					<p id="code-prompt">Got a code? Type it here!</p>
-					<input
-						type="text"
-						id="magiccode"
-						autocomplete="off"
-						autofocus
-						title="WORMHOLE CODE"
-						placeholder="Enter code"
-					/>
+						/>
+						
+					</div>
+					<div id='code-prompt-container'>
+						<p id="code-prompt">Got a code? Type it here!</p>
+						<input
+							type="text"
+							id="magiccode"
+							autocomplete="off"
+							autofocus
+							title="WORMHOLE CODE"
+							placeholder="Enter code"
+						/>
+					</div>
 					<img id="qr" />
 					<span id="autocomplete"></span>
 				</form>

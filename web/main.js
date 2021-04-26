@@ -655,6 +655,29 @@ async function wasmready() {
 	}
 }
 
+const JoinButton = {
+	elem: () => document.getElementById('dial-join'),
+	onMount: () => {
+		const elem = JoinButton.elem()
+		elem.disabled = false
+		elem.value = 'JOIN WORMHOLE'
+		elem.addEventListener('click', JoinButton.onClick)
+	},
+	onClick: () => {
+		const codePrompt = document.getElementById('code-prompt-container')
+		codePrompt.style.maxHeight = '122px'
+		const input = document.getElementById('magiccode')
+		input.focus()
+	}
+}
+
+function mountJoinButton() {
+	const elem = document.getElementById('dial-join')
+	elem.disabled = false
+	elem.value = 'JOIN WORMHOLE'
+}
+
+
 (async () => {
 	// Detect Browser Quirks.
 	browserhacks();
@@ -695,6 +718,7 @@ async function wasmready() {
 	}
 	codechange(); // User might have typed something while we were loading.
 	document.getElementById("dial").disabled = false;
+	JoinButton.onMount()
 
 	if (!hacks.noautoconnect && document.getElementById("magiccode").value !== "") {
 		connect();
