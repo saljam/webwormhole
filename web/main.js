@@ -671,12 +671,6 @@ const JoinButton = {
 	}
 }
 
-function mountJoinButton() {
-	const elem = document.getElementById('dial-join')
-	elem.disabled = false
-	elem.value = 'JOIN WORMHOLE'
-}
-
 
 (async () => {
 	// Detect Browser Quirks.
