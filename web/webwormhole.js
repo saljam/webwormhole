@@ -43,13 +43,20 @@ const wait = async (ws, type, timeout) => {
 }
 
 const createDeferredPromise = () => {
-  let resolve
-  let reject
-  const promise = new Promise((res, rej) => {
-    resolve = res
-    reject = rej
+  let ret = { isPending: true, isFulfilled: false, isRejected: false }
+  ret.promise = new Promise((res, rej) => {
+    ret.resolve = (...args) => {
+	  ret.isPending = false
+	  ret.isFulfilled = true
+	  res(...args)
+	}
+    ret.reject = (...args) => {
+	  ret.isPending = false
+      ret.isRejected = true
+      rej(...args)
+    }
   })
-  return { promise, resolve, reject }
+  return ret
 }
 
 
@@ -80,7 +87,8 @@ class Wormhole {
 
 	async finish() {
 		// TODO: does it make sense to wait for main.js to call finish?
-		// we don't get any info from `resolve2()` so why would we wait for it?
+		// the caller code is synchronous so is there need to setup
+		// a promise?
 		this.phase2.resolve();
 		return this.phase3.promise;
 	}
@@ -140,7 +148,6 @@ class Wormhole {
 		this.newPeerConnection(msg.iceServers)
 		
 		const code = webwormhole.encode(this.slot, this.pass)
-		// TODO: why do we need to resolve this if nothing awaits it?
 		this.phase1.resolve({ code, pc: this.pc })
 		// TODO: do we need to keep track of the state machine still?
 		this.state = 'wait_for_pake_a'
@@ -154,14 +161,14 @@ class Wormhole {
 		const [key, msgB] = webwormhole.exchange(this.pass, m.data)
 		this.key = key
 		console.log('message b:', msgB)
-		if (this.key == null) return this.fail('could not generate key')
+		if (this.key === null) return this.fail('could not generate key')
 		console.log('generated key')
 		this.ws.send(msgB)
 		this.state = 'wait_for_pc_initialize'
 	}
 
 	async waitForPcInitialize() {
-		// TODO: do we need to wait for promise2? Why?
+		// TODO: do we need to await this? Will the caller code be run synchronously?
 		await this.phase2.promise
 		const offer = await this.pc.createOffer()
 		console.log('created offer')
@@ -293,7 +300,11 @@ class Wormhole {
 
 	onerror(e) {
 		console.log("websocket session error:", e);
-		this.fail("could not connect to signalling server");
+		const msg = 'could not connect to signalling server'
+		this.fail(msg);
+		if (this.phase1.isPending) this.phase1.reject(msg)
+		if (this.phase2.isPending) this.phase2.reject(msg)
+		if (this.phase3.isPending) this.phase3.reject(msg)
 	}
 
 	onclose(e) {
