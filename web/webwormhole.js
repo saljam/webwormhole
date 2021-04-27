@@ -131,6 +131,7 @@ class Wormhole {
 		await this.waitForSlotA()
 		await this.waitForPakeA()
 		await this.waitForPcInitialize()
+		await this.createOffer()
 		await this.waitForWebRtcAnswer()
 		await this.waitForCandidates()
 	}
@@ -170,6 +171,9 @@ class Wormhole {
 	async waitForPcInitialize() {
 		// TODO: do we need to await this? Will the caller code be run synchronously?
 		await this.phase2.promise
+	}
+
+	async createOffer() {
 		const offer = await this.pc.createOffer()
 		console.log('created offer')
 		await this.pc.setLocalDescription(offer)
@@ -238,9 +242,7 @@ class Wormhole {
 		if (error) return
 		console.log('got pake message b:', m.data)
 		this.key = webwormhole.finish(m.data)
-		if (this.key == null) {
-			return this.fail('could not generate key')
-		}
+		if (this.key == null) return this.fail('could not generate key')
 		console.log('generated key')
 		this.state = 'wait_for_webtc_offer'
 	}
@@ -263,7 +265,7 @@ class Wormhole {
 
 		// No intermediate state wait_for_pc_initialize because candidates can
 		// start arriving straight after the offer is sent.
-		
+		// TODO: the above comment doesn't align as we do still wait?
 		await this.phase2.promise
 		await this.pc.setRemoteDescription(new RTCSessionDescription(msg))
 		const answer = await this.pc.createAnswer()
