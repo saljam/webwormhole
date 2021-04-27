@@ -98,7 +98,7 @@ class Wormhole {
 		
 		if (hasCode) {
 			[this.slot, this.pass] = webwormhole.decode(code);
-			if (this.pass.length === 0) throw new Error("bad code")
+			if (this.pass.length === 0) throw "bad code"
 			console.log("dialling slot:", this.slot);
 			this.state = "b";
 		} else {
