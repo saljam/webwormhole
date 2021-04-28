@@ -133,6 +133,16 @@ class Wormhole {
 		await this.waitForCandidates()
 	}
 
+	async join() {
+		await this.waitForSlotB()
+		await this.waitForPakeB()
+		await this.waitForWebRtcOffer()
+		await this.waitForPcInitialize()
+		await this.createAnswer()
+		await this.waitForCandidates()
+	}
+	
+
 	async waitForSlotA() {
 		const [rawMessage, error] = await wait(this.ws)
 		if (error) return
@@ -207,16 +217,6 @@ class Wormhole {
 		return this.pc.addIceCandidate(new RTCIceCandidate(msg))
 	}
 
-		
-	async join() {
-		await this.waitForSlotB()
-		await this.waitForPakeB()
-		await this.waitForWebRtcOffer()
-		await this.waitForPcInitialize()
-		await this.createAnswer()
-		await this.waitForCandidates()
-	}
-	
 	async waitForSlotB() {
 		const [m, error] = await wait(this.ws)
 		if (error) return
