@@ -63,7 +63,7 @@ const createDeferredPromise = () => {
 class Wormhole {
 	constructor(signalserver, code) {
 		this.protocol = "4"; // safari has no static fields
-		// There are 3 events that we need to synchronise with the caller on:
+		// There are 4 events that we need to synchronise with the caller on:
 		//   1. we got the first message from the signalling server.
 		//        We now have the slot number and the ICE server details, so we can
 		//        create the wormhole code and PeerConnection object, and pass them back
@@ -73,8 +73,7 @@ class Wormhole {
 		//   3. we've successfully authenticated the other peer.
 		//        Signalling is now done, apart from any trickling candidates. The called
 		//        can display the key fingerprint.
-		//   4. (unimplemented) caller tells us the webrtc handshake is done.
-		//        We can close the websocket.
+		//   4. The webrtc handshake is done. We can close the websocket.
 		this.phase1 = createDeferredPromise();
 		this.phase2 = createDeferredPromise();
 		this.phase3 = createDeferredPromise();
@@ -332,6 +331,7 @@ class Wormhole {
 	}
 
 	fail(reason) {
+		this.ws.close()
 		if (this.phase1.isPending) this.phase1.reject(reason)
     	if (this.phase3.isPending) this.phase3.reject(reason)
 		this.state = "error";
