@@ -4,57 +4,57 @@ const matchMessage = (type, rawMessage) => {
   if (!type) return true
   let parsed
   try {
-    parsed = JSON.parse(rawMessage)
+	parsed = JSON.parse(rawMessage)
   } catch (e) {}
   return parsed?.data?.type === type
 }
 
 const wait = async (ws, type, timeout) => {
   return new Promise((resolve) => {
-    let timeoutID
-    if (timeout) {
-      timeoutID = setTimeout(() => {
-        cleanup()
-        resolve([undefined, new Error('TimeoutError')])
-      }, timeout)
-    }
+	let timeoutID
+	if (timeout) {
+	  timeoutID = setTimeout(() => {
+		cleanup()
+		resolve([undefined, new Error('TimeoutError')])
+	  }, timeout)
+	}
 
-    const listener = (rawMessage) => {
-      if (matchMessage(type, rawMessage)) {
-        clearTimeout(timeoutID)
-        cleanup()
-        resolve([rawMessage])
-      }
-    }
+	const listener = (rawMessage) => {
+	  if (matchMessage(type, rawMessage)) {
+		clearTimeout(timeoutID)
+		cleanup()
+		resolve([rawMessage])
+	  }
+	}
 
-    const errorListener = (error) => {
-      cleanup()
-      resolve([undefined, error])
-    }
+	const errorListener = (error) => {
+	  cleanup()
+	  resolve([undefined, error])
+	}
 
-    const cleanup = () => {
-      ws.removeEventListener('message', listener)
-      ws.removeEventListener('error', errorListener)
-    }
+	const cleanup = () => {
+	  ws.removeEventListener('message', listener)
+	  ws.removeEventListener('error', errorListener)
+	}
 
-    ws.addEventListener('message', listener)
-    ws.addEventListener('error', errorListener)
+	ws.addEventListener('message', listener)
+	ws.addEventListener('error', errorListener)
   })
 }
 
 const createDeferredPromise = () => {
   let ret = { isPending: true, isFulfilled: false, isRejected: false }
   ret.promise = new Promise((res, rej) => {
-    ret.resolve = (...args) => {
+	ret.resolve = (...args) => {
 	  ret.isPending = false
 	  ret.isFulfilled = true
 	  res(...args)
 	}
-    ret.reject = (...args) => {
+	ret.reject = (...args) => {
 	  ret.isPending = false
-      ret.isRejected = true
-      rej(...args)
-    }
+	  ret.isRejected = true
+	  rej(...args)
+	}
   })
   return ret
 }
@@ -86,9 +86,6 @@ class Wormhole {
 	}
 
 	async finish() {
-		// TODO: does it make sense to wait for main.js to call finish?
-		// the caller code is synchronous so is there need to setup
-		// a promise?
 		this.phase2.resolve();
 		return this.phase3.promise;
 	}
@@ -143,14 +140,11 @@ class Wormhole {
 		console.log('assigned slot:', msg.slot)
 		this.slot = parseInt(msg.slot, 10)
 		if (!Number.isSafeInteger(this.slot)) return this.fail('invalid slot')
-		
 
-		// TODO: should we await this?
 		this.newPeerConnection(msg.iceServers)
 		
 		const code = webwormhole.encode(this.slot, this.pass)
 		this.phase1.resolve({ code, pc: this.pc })
-		// TODO: do we need to keep track of the state machine still?
 		this.state = 'wait_for_pake_a'
 	}
 	
@@ -169,7 +163,6 @@ class Wormhole {
 	}
 
 	async waitForPcInitialize() {
-		// TODO: do we need to await this? Will the caller code be run synchronously?
 		await this.phase2.promise
 	}
 
@@ -211,7 +204,6 @@ class Wormhole {
 			return
 		}
 		console.log('got remote candidate', msg)
-		await this.phase2.promise
 		return this.pc.addIceCandidate(new RTCIceCandidate(msg))
 	}
 
@@ -220,6 +212,8 @@ class Wormhole {
 		await this.waitForSlotB()
 		await this.waitForPakeB()
 		await this.waitForWebRtcOffer()
+		await this.waitForPcInitialize()
+		await this.createAnswer()
 		await this.waitForCandidates()
 	}
 	
@@ -262,11 +256,12 @@ class Wormhole {
 			return this.fail('unexpected message')
 		}
 		console.log('got offer')
-
 		// No intermediate state wait_for_pc_initialize because candidates can
 		// start arriving straight after the offer is sent.
-		// TODO: the above comment doesn't align as we do still wait?
-		await this.phase2.promise
+		// TODO: the above comment doesn't align as we do still wait for promise2?
+	}
+	
+	async createAnswer() {
 		await this.pc.setRemoteDescription(new RTCSessionDescription(msg))
 		const answer = await this.pc.createAnswer()
 		await this.pc.setLocalDescription(answer)
@@ -274,7 +269,7 @@ class Wormhole {
 		this.phase3.resolve(webwormhole.fingerprint(this.key))
 		this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)))
 		this.state = 'wait_for_candidates'
-  }
+	}
 	
 	newPeerConnection(iceServers) {
 		let normalisedICEServers = [];
