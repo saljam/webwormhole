@@ -259,10 +259,11 @@ class Wormhole {
 		// No intermediate state wait_for_pc_initialize because candidates can
 		// start arriving straight after the offer is sent.
 		// TODO: the above comment doesn't align as we do still wait for promise2?
+		this.remoteDescription = msg
 	}
 	
 	async createAnswer() {
-		await this.pc.setRemoteDescription(new RTCSessionDescription(msg))
+		await this.pc.setRemoteDescription(new RTCSessionDescription(this.remoteDescription))
 		const answer = await this.pc.createAnswer()
 		await this.pc.setLocalDescription(answer)
 		console.log('created answer')
@@ -300,7 +301,6 @@ class Wormhole {
 		const msg = 'could not connect to signalling server'
 		this.fail(msg);
 		if (this.phase1.isPending) this.phase1.reject(msg)
-		if (this.phase2.isPending) this.phase2.reject(msg)
 		if (this.phase3.isPending) this.phase3.reject(msg)
 	}
 
@@ -327,8 +327,8 @@ class Wormhole {
 	}
 
 	fail(reason) {
-		this.reject1(reason);
-		this.reject3(reason);
+		if (this.phase1.isPending) this.phase1.reject(reason)
+    	if (this.phase3.isPending) this.phase3.reject(reason)
 		this.state = "error";
 	}
 
