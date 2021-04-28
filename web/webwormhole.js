@@ -290,6 +290,11 @@ class Wormhole {
 				Wormhole.logNAT(this.pc.localDescription.sdp);
 			}
 		};
+		this.pc.addEventListener('open', () => {
+			if (this.pc.connectionState === 'connected') {
+				this.ws.close()
+			}
+		})
 	}
 
 	onopen() {
