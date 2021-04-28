@@ -333,7 +333,7 @@ class Wormhole {
 	fail(reason) {
 		this.ws.close()
 		if (this.phase1.isPending) this.phase1.reject(reason)
-    	if (this.phase3.isPending) this.phase3.reject(reason)
+		if (this.phase3.isPending) this.phase3.reject(reason)
 		this.state = "error";
 	}
 
