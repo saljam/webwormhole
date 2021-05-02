@@ -78,7 +78,8 @@ body.highlight {
 	align-items: center;
 	flex-flow: column;
 	justify-content: space-between;
-	padding: 1em;
+	padding: 1em 0;
+	overflow: scroll;
 	width: 100%;
 	text-align: center;
 	box-shadow: 0px 0px 75px 0px var(--grey-tint);
