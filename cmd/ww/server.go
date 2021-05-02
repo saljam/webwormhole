@@ -80,30 +80,30 @@ var stunServers []webrtc.ICEServer
 // freeslot tries to find an available numeric slot, favouring smaller numbers.
 // This assume slots is locked.
 func freeslot() (slot string, ok bool) {
-	// Try a single decimal digit number.
-	for i := 0; i < 3; i++ {
-		s := strconv.Itoa(rand.Intn(10))
-		if _, ok := slots.m[s]; !ok {
-			return s, true
-		}
-	}
-	// Try a single byte number.
+	// Assuming varint encoding, we first try for one byte. That's 7 bits in varint.
 	for i := 0; i < 64; i++ {
-		s := strconv.Itoa(rand.Intn(1 << 8))
+		s := strconv.Itoa(rand.Intn(1 << 7))
 		if _, ok := slots.m[s]; !ok {
 			return s, true
 		}
 	}
-	// Try a 2-byte number.
+	// Then try for two bytes. 11 bits.
 	for i := 0; i < 1024; i++ {
+		s := strconv.Itoa(rand.Intn(1 << 11))
+		if _, ok := slots.m[s]; !ok {
+			return s, true
+		}
+	}
+	// Then try for three bytes. 16 bits.
+	for i := 0; i < 2048; i++ {
 		s := strconv.Itoa(rand.Intn(1 << 16))
 		if _, ok := slots.m[s]; !ok {
 			return s, true
 		}
 	}
-	// Try a 3-byte number.
-	for i := 0; i < 1024; i++ {
-		s := strconv.Itoa(rand.Intn(1 << 24))
+	// Then try for four bytes. 21 bits.
+	for i := 0; i < 2048; i++ {
+		s := strconv.Itoa(rand.Intn(1 << 21))
 		if _, ok := slots.m[s]; !ok {
 			return s, true
 		}
