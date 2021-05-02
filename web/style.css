@@ -1,13 +1,15 @@
 * {
 	--purple: #321d47;
-	--accent: #ffa400;
-	--accent10: rgba(255, 164, 0, 0.1);
+	--yellow: #ffa400;
+	--yellow-tint: #ffa40012;
+	--grey: #8e8a8a;
+	--grey-tint: #00000054;
 	--white: white;
 	--black: black;
-	--error: #ff978c;
+	--error: #8a504a;
+	--dialling: #8c782a;
 	--connected: #c1ffab;
 	--highlight: #e6ffde;
-	--small-breakpoint: 700px;
 }
 
 html {
@@ -43,7 +45,7 @@ body.error {
 }
 
 body.dialling {
-	background-color: var(--accent);
+	background-color: var(--dialling);
 }
 
 body.connected {
@@ -52,7 +54,7 @@ body.connected {
 
 body.highlight {
 	background-color: var(--highlight);
-	border: 4px dashed #fcabff;
+	border: 4px dashed var(--white);
 }
 
 footer {
@@ -78,6 +80,7 @@ p {
 }
 
 .container {
+	box-shadow: 0px 0px 75px 0px var(--grey-tint);
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
@@ -152,14 +155,14 @@ p {
 }
 
 #transfers li {
-	border-color: #9b9b9b;
+	border-color: var(--grey);
 	border-style: solid;
 	border-width: 1px;
 	border-radius: 4px;
-	background-color: #00000012;
+	background-color: var(--grey-tint);
 	margin: 5px;
 	padding: 8px;
-	box-shadow: 0px 0px 4px 0px #00000012;
+	box-shadow: 0px 0px 4px 0pxvar(--grey-tint);
 }
 
 #transfers li.upload {
@@ -189,9 +192,9 @@ p {
 }
 
 #magiccode {
-	color: var(--accent);
-	background: var(--accent10);
-	border: 2px solid var(--accent);
+	color: var(--yellow);
+	background: var(--yellow-tint);
+	border: 2px solid var(--yellow);
 	border-radius: 10px;
 	font-weight: bold;
 	margin: 16px 8px;
@@ -227,10 +230,10 @@ p {
 .button {
 	-webkit-appearance: none;
 	appearance: none;
-	background: var(--accent);
+	background: var(--yellow);
 	border-radius: 10px;
 	border: none;
-	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.35);
+	box-shadow: 0px 0px 5px 0px var(--grey-tint);
 	color: var(--purple);
 	font-weight: bold;
 	cursor: pointer;
@@ -240,14 +243,14 @@ p {
 }
 
 .button:hover {
-	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.35);
+	box-shadow: 0px 0px 5px 0px var(--grey-tint);
 	opacity: 0.75;
 }
 
 .button:disabled,
 .button:disabled:hover {
-	background: #8e8a8a;
-	box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.35);
+	background: var(--grey);
+	box-shadow: 0px 0px 5px 0px var(--grey-tint);
 	color: #aeac9c;
 	cursor: unset;
 	letter-spacing: unset;
@@ -256,7 +259,7 @@ p {
 
 a {
 	text-decoration: none;
-	color: var(--accent);
+	color: var(--yellow);
 }
 
 a:link {
@@ -275,7 +278,6 @@ a:visited:hover {
 /* Styling for screen widths 700px and upwards. */
 @media only screen and (min-width: 700px) {
 	.container {
-		box-shadow: 0px 0px 75px 0px rgba(0, 0, 0, 0.35);
 		width: min-content;
 		min-width: 400px;
 		height: 100%;
