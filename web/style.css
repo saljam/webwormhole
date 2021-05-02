@@ -10,7 +10,7 @@
 	--error: #8a504a;
 	--dialling: #8c782a;
 	--connected: #c1ffab;
-	--highlight: #e6ffde;
+	--highlight: #8464a4;
 
 	/* Palette of background colours chosen by the session key. */
 	--palette-0: #c1ffab; /* bright green */
@@ -59,11 +59,6 @@ body.connected {
 	background-color: var(--connected);
 }
 
-body.highlight {
-	background-color: var(--highlight);
-	border: 4px dashed var(--white);
-}
-
 #footer {
 	font-size: small;
 	text-align: left;
@@ -94,11 +89,17 @@ body.highlight {
 	text-align: center;
 	box-shadow: 0px 0px 75px 0px var(--grey-tint);
 	background: var(--purple);
+	border: 4px solid transparent;
 }
 
 .connected #main {
 	justify-content: space-between;
 	transition: all 1s;
+}
+
+.highlight #main {
+	background-color: var(--highlight);
+	border: 4px dashed var(--white);
 }
 
 #inputs {
