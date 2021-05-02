@@ -7,28 +7,6 @@ let serviceworker;
 let signalserver = new URL(location.href);
 const hacks = {};
 
-// Background colour to chose from based on the derived key. I.e., both parties
-// should see the same colour.
-// TODO move to css and make this also work for dark mode.
-const fingerprintcolors = [
-	// bright green
-	"#c1ffab",
-	// brown
-	"#c3c0a7",
-	// gold
-	"#b7ae5e",
-	// teal
-	"#6cc3c5",
-	// grey
-	"#cccccc",
-	// blue
-	"#88b6fb",
-	// lime
-	"#cdff33",
-	// purple
-	"#e796ea",
-];
-
 function pick() {
 	const files = document.getElementById("filepicker").files;
 	for (let i = 0; i < files.length; i++) {
@@ -393,8 +371,7 @@ async function connect() {
 		document.getElementById("magiccode").title = encodedfp.substring(
 			encodedfp.indexOf("-") + 1,
 		);
-		document.body.style.backgroundColor = fingerprintcolors[fingerprint[0] %
-		fingerprintcolors.length];
+		document.body.style.backgroundColor = `var(--palette-${fingerprint[0]%8})`;
 	} catch (err) {
 		disconnected();
 		if (err === "bad key") {

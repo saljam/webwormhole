@@ -11,6 +11,16 @@
 	--dialling: #8c782a;
 	--connected: #c1ffab;
 	--highlight: #e6ffde;
+
+	/* Palette of background colours chosen by the session key. */
+	--palette-0: #c1ffab; /* bright green */
+	--palette-1: #c3c0a7; /* brown */
+	--palette-2: #b7ae5e; /* gold */
+	--palette-3: #6cc3c5; /* teal */
+	--palette-4: #cccccc; /* grey */
+	--palette-5: #88b6fb; /* blue */
+	--palette-6: #cdff33; /* lime */
+	--palette-7: #e796ea; /* purple */
 }
 
 html {
