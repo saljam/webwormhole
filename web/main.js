@@ -49,8 +49,6 @@ function drop(e) {
 
 	// A shortcut to save users a click. If we're disconnected and they drag
 	// a file in treat it as a click on the new/join wormhole button.
-	// TODO track connection state like a decent human being instead of using
-	// the filepicker state...
 	if (document.getElementById("filepicker").disabled) {
 		connect();
 	}
@@ -335,14 +333,14 @@ function setuppeercon(pc) {
 					"iceConnectionState",
 					pc.iceConnectionState,
 				);
-				document.getElementById("info").innerText = "NETWORK ERROR";
+				document.getElementById("info").innerText = "Network error.";
 				break;
 			}
 			case "disconnected":
 			case "closed": {
 				disconnected();
 				console.log("webrtc connection closed");
-				document.getElementById("info").innerText = "DISCONNECTED";
+				document.getElementById("info").innerText = "Disconnected.";
 				pc.onconnectionstatechange = null;
 				break;
 			}
@@ -359,12 +357,12 @@ function setuppeercon(pc) {
 	dc.onclose = () => {
 		disconnected();
 		console.log("datachannel closed");
-		document.getElementById("info").innerText = "DISCONNECTED";
+		document.getElementById("info").innerText = "Disconnected.";
 	};
 	dc.onerror = (e) => {
 		disconnected();
 		console.log("datachannel error:", e.error);
-		document.getElementById("info").innerText = "NETWORK ERROR";
+		document.getElementById("info").innerText = "Network error.";
 	};
 	return pc;
 }
@@ -380,14 +378,14 @@ async function connect() {
 		setuppeercon(signal.pc);
 
 		if (document.getElementById("magiccode").value === "") {
-			document.getElementById("info").innerHTML = "WAITING FOR THE OTHER SIDE<br>ENTER WORDS / SHARE URL / SCAN QR CODE";
+			document.getElementById("info").innerHTML = "Waiting for the other side to join by typing the wormhole phrase, opening this URL, or scanning the QR code.";
 			codechange();
 			document.getElementById("magiccode").value = signal.code;
 			location.hash = signal.code;
 			signalserver.hash = signal.code;
 			updateqr(signalserver.href);
 		} else {
-			document.getElementById("info").innerText = "CONNECTING";
+			document.getElementById("info").innerText = "Connecting...";
 		}
 
 		const fingerprint = await w.finish();
@@ -400,17 +398,17 @@ async function connect() {
 	} catch (err) {
 		disconnected();
 		if (err === "bad key") {
-			document.getElementById("info").innerText = "BAD KEY";
+			document.getElementById("info").innerText = "Wrong wormhole phrase.";
 		} else if (err === "bad code") {
-			document.getElementById("info").innerText = "INVALID CODE";
+			document.getElementById("info").innerText = "Not a valid wormhole phrase.";
 		} else if (err === "no such slot") {
-			document.getElementById("info").innerText = "NO SUCH SLOT";
+			document.getElementById("info").innerText = "No such slot. The wormhole might have expired.";
 		} else if (err === "timed out") {
-			document.getElementById("info").innerText = "CODE TIMED OUT GENERATE ANOTHER";
+			document.getElementById("info").innerText = "Wormhole expired.";
 		} else if (err === "could not connect to signalling server") {
-			document.getElementById("info").innerText = "COULD NOT CONNECT TO SIGNALLING SERVER - ENSURE IT IS REACHABLE AND IS RUNNING A COMPATIBLE VERSION";
+			document.getElementById("info").innerText = "Could not reach the signalling server. Refresh page and try again.";
 		} else {
-			document.getElementById("info").innerText = "COULD NOT CONNECT";
+			document.getElementById("info").innerText = "Could not connect.";
 			console.log(err);
 		}
 	}
@@ -432,11 +430,7 @@ function connected() {
 	document.body.classList.add("connected");
 	document.body.classList.remove("disconnected");
 
-	document.getElementById("magiccode").style.opacity = "0.2";
-
-	document.getElementById("info").innerText = "OR DROP OR PASTE TO SEND";
-
-	document.getElementById("code-prompt").style.display = "none";
+	document.getElementById("info").innerText = "a file, or drag and drop it, or paste text with CTRL-V/CMD-V to send.";
 
 	location.hash = "";
 }
@@ -511,9 +505,9 @@ function hashchange() {
 
 function codechange() {
 	if (document.getElementById("magiccode").value === "") {
-		document.getElementById("dial").value = "Create wormhole";
+		document.getElementById("dial").value = "CREATE WORMHOLE";
 	} else {
-		document.getElementById("dial").value = "Join wormhole";
+		document.getElementById("dial").value = "JOIN WORMHOLE";
 	}
 }
 
@@ -525,7 +519,7 @@ function autocompletehint() {
 }
 
 function autocomplete(e) {
-	// TODO repeated tabs cycle through all matches?
+	// TODO more stateful autocomplete, i.e. repeated tabs cycle through matches.
 	if (e.keyCode === 9) {
 		e.preventDefault(); // Prevent tabs from doing tab things.
 		const words = document.getElementById("magiccode").value.split("-");
@@ -637,9 +631,7 @@ async function swready() {
 			"sw.js",
 			{scope: "/_/"},
 		);
-		// TODO handle updates to service workers.
-		serviceworker =
-			registration.active || registration.waiting || registration.installing;
+		serviceworker = registration.active || registration.waiting || registration.installing;
 		console.log("service worker registered:", serviceworker.state);
 	}
 }
@@ -676,8 +668,8 @@ async function wasmready() {
 	document.getElementById("magiccode").addEventListener("keydown", autocomplete);
 	document.getElementById("magiccode").addEventListener("input", autocompletehint);
 	document.getElementById("filepicker").addEventListener("change", pick);
-	document.getElementById("dialog").addEventListener("submit", preventdefault);
-	document.getElementById("dialog").addEventListener("submit", connect);
+	document.getElementById("main").addEventListener("submit", preventdefault);
+	document.getElementById("main").addEventListener("submit", connect);
 	document.getElementById("qr").addEventListener("dblclick", copyurl);
 	document.body.addEventListener("drop", preventdefault);
 	document.body.addEventListener("dragenter", preventdefault);

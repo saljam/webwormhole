@@ -1,82 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
-	<meta charset="utf-8" />
-	<meta name="description" content="SEND FILES FROM ONE PLACE TO ANOTHER" />
-	<meta
-		name="go-import"
-		content="webwormhole.io git https://github.com/saljam/webwormhole"
-	/>
-	<meta name="viewport" content="width=device-width, height=device-height" />
-	<link rel="icon" href="icon.svg" />
-	<link rel="stylesheet" href="style.css" />
-	<script src="wasm_exec.js"></script>
-	<script src="webwormhole.js"></script>
-	<script src="main.js"></script>
-	<title>WEBWORMHOLE</title>
-	<body>
-		<div class="container">
-			<div class="main">
-				<form id="dialog" role="main">
-					<div id="filepicker-div">
-						<label id="filepicker-wrap" class="button"
-							>OPEN<input type="file" id="filepicker" disabled
-						/></label>
-						<p id="info">
-							Web Wormhole lets you send files from one place to
-							another.
-						</p>
-					</div>
-					<ul id="transfers"></ul>
-					<input
-						type="submit"
-						id="dial"
-						class="button"
-						value="Loading..."
-						disabled
-					/>
-					<p id="code-prompt">Got a code? Type it here!</p>
-					<input
-						type="text"
-						id="magiccode"
-						autocomplete="off"
-						autofocus
-						title="WORMHOLE CODE"
-						placeholder="Enter code"
-					/>
-					<img id="qr" />
-					<span id="autocomplete"></span>
-				</form>
-			</div>
-
-			<footer>
-				<ul>
-					<li>
-						<strong>source:</strong>
-						<a href="https://github.com/saljam/webwormhole"
-							>github.com/saljam/webwormhole</a
-						>
-					</li>
-					<li>
-						<strong>feedback:</strong>
-						<a href="mailto:s@lj.am">s@lj.am</a>
-						<a href="https://twitter.com/_saljam">@_saljam</a>
-					</li>
-					<li>
-						<strong>install:</strong>
-						<a
-							href="https://addons.mozilla.org/firefox/addon/webwormhole/"
-							>firefox</a
-						>
-						<a
-							href="https://chrome.google.com/webstore/detail/webwormhole/jhombkhjanncdalcbcahinpjoacaiidn"
-							>chrome</a
-						>
-						<a href="https://pkg.go.dev/webwormhole.io/cmd/ww"
-							>command line</a
-						>
-					</li>
-				</ul>
-			</footer>
-		</div>
-	</body>
+<meta charset="utf-8" />
+<meta name="description" content="Send files from one place to another." />
+<meta name="go-import" content="webwormhole.io git https://github.com/saljam/webwormhole" />
+<meta name="viewport" content="width=device-width, height=device-height" />
+<link rel="icon" href="icon.svg" />
+<link rel="stylesheet" href="style.css" />
+<script src="wasm_exec.js"></script>
+<script src="webwormhole.js"></script>
+<script src="main.js"></script>
+<title>WebWormhole</title>
+<body>
+<form id="main" role="main">
+<div>
+<label id="filepicker-wrap" class="button">OPEN<input type="file" id="filepicker" disabled /></label>
+<p id="info">WebWormhole lets you send files from one computer to another.</p>
+</div>
+<ul id="transfers"></ul>
+<div id="inputs">
+<p id="prompt">Type a wormhole's phrase to join it, or leave empty to create a new one.</p>
+<img id="qr" />
+<input type="text" id="magiccode" autocomplete="off" autofocus title="wormhole phrase" placeholder="wormhole phrase" />
+<input type="submit" id="dial" class="button" value="LOADING..." disabled />
+<span id="autocomplete"></span>
+</div>
+<div id="footer">
+<ul>
+<li>source: <a href="https://github.com/saljam/webwormhole">github.com/saljam/webwormhole</a></li>
+<li>feedback: <a href="mailto:s@lj.am">s@lj.am</a> <a href="https://twitter.com/_saljam">@_saljam</a></li>
+<li>install: <a href="https://addons.mozilla.org/firefox/addon/webwormhole/">firefox</a> <a href="https://chrome.google.com/webstore/detail/webwormhole/jhombkhjanncdalcbcahinpjoacaiidn">chrome</a> <a href="https://pkg.go.dev/webwormhole.io/cmd/ww">command line</a></li>
+</ul>
+</div>
+</form>
+</body>
 </html>

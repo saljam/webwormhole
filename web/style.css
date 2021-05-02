@@ -1,9 +1,10 @@
-* {
+:root {
 	--purple: #321d47;
 	--yellow: #ffa400;
 	--yellow-tint: #ffa40012;
 	--grey: #8e8a8a;
 	--grey-tint: #00000054;
+	--grey-light: #aeac9c;
 	--white: white;
 	--black: black;
 	--error: #8a504a;
@@ -20,22 +21,18 @@ html {
 
 body {
 	align-items: center;
-	background-image: url("space_pattern.svg");
+	background-image: url("space.svg");
 	background-color: var(--purple);
 	color: var(--white);
 	display: flex;
 	flex-direction: column;
-	flex-grow: 1;
 	font-size: 18px;
 	font-family: Arial, Helvetica, sans-serif;
 	justify-content: center;
 	height: 100vh;
-
 	margin: 0;
 	padding: 0;
-
 	box-shadow: inset 0 0 150px -50px var(--black);
-
 	transition: background-color 0.3s;
 }
 
@@ -57,67 +54,50 @@ body.highlight {
 	border: 4px dashed var(--white);
 }
 
-footer {
-	display: flex;
-	flex-shrink: 0;
-	flex-wrap: wrap;
+#footer {
 	font-size: small;
-	justify-content: space-between;
+	text-align: left;
 }
 
-footer ul {
+.connected #footer {
+	display: none;
+}
+
+#footer ul {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 }
 
-footer li {
-	margin: 1em 0;
+#footer li {
+	margin: 4px 0;
 }
 
-p {
-	margin-bottom: 0;
-}
-
-.container {
-	box-shadow: 0px 0px 75px 0px var(--grey-tint);
+#main {
 	display: flex;
-	flex-direction: column;
-	justify-content: center;
 	align-items: center;
-	width: 100%;
-	background: var(--purple);
-	padding: 2em 0;
-}
-
-.main {
-	text-align: center;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	flex-grow: 1;
-	width: 100%;
-}
-
-.connected footer {
-	display: none;
-}
-
-#title {
-	font-size: 2em;
-	margin-bottom: 0;
-}
-
-#dialog {
-	align-items: center;
-	display: flex;
 	flex-flow: column;
-	justify-content: center;
+	justify-content: space-between;
+	padding: 1em;
+	width: 100%;
+	text-align: center;
+	box-shadow: 0px 0px 75px 0px var(--grey-tint);
+	background: var(--purple);
 }
 
-.connected #dialog {
+.connected #main {
 	justify-content: space-between;
 	transition: all 1s;
+}
+
+#inputs {
+	display: flex;
+	align-items: center;
+	flex-flow: column;
+}
+
+#inputs input {
+	margin: 4px;
 }
 
 #info {
@@ -138,7 +118,7 @@ p {
 	float: left;
 }
 
-#filepicker-div {
+#top {
 	max-width: 300px;
 	display: flex;
 	align-items: center;
@@ -154,6 +134,11 @@ p {
 	max-width: 400px;
 }
 
+.connected #transfers,
+.dialling #transfers {
+	display: unset;
+}
+
 #transfers li {
 	border-color: var(--grey);
 	border-style: solid;
@@ -162,25 +147,23 @@ p {
 	background-color: var(--grey-tint);
 	margin: 5px;
 	padding: 8px;
-	box-shadow: 0px 0px 4px 0pxvar(--grey-tint);
+	box-shadow: 0px 0px 4px 0px var(--grey-tint);
 }
 
 #transfers li.upload {
 	list-style-type: "↑ ";
 }
+
 #transfers li.download {
 	list-style-type: "↓ ";
 }
+
 #transfers li.pending {
 	list-style-type: "... ";
 }
 
-.connected #transfers,
-.dialling #transfers {
-	display: unset;
-}
-
 #qr {
+	margin: 4px;
 	border: 2px solid;
 	width: 256px;
 	height: 256px;
@@ -204,7 +187,16 @@ p {
 	max-width: 50%;
 }
 
+.connected #magiccode {
+	opacity: 0.2;
+}
+
 .error #magiccode {
+	display: none;
+}
+
+.connected #prompt,
+.dialling #prompt {
 	display: none;
 }
 
@@ -217,14 +209,14 @@ p {
 	display: none;
 }
 
-.connected #autocomplete,
-.dialling #autocomplete {
-	display: none;
-}
-
 #autocomplete {
 	height: 1em;
 	opacity: 0.5;
+}
+
+.connected #autocomplete,
+.dialling #autocomplete {
+	display: none;
 }
 
 .button {
@@ -251,7 +243,7 @@ p {
 .button:disabled:hover {
 	background: var(--grey);
 	box-shadow: 0px 0px 5px 0px var(--grey-tint);
-	color: #aeac9c;
+	color: var(--grey-light);
 	cursor: unset;
 	letter-spacing: unset;
 	transition: all 0.2s ease 0s;
@@ -262,10 +254,7 @@ a {
 	color: var(--yellow);
 }
 
-a:link {
-	border-bottom: 1px dotted;
-}
-
+a:link,
 a:visited {
 	border-bottom: 1px dotted;
 }
@@ -275,15 +264,11 @@ a:visited:hover {
 	border-bottom: 1px solid;
 }
 
-/* Styling for screen widths 700px and upwards. */
 @media only screen and (min-width: 700px) {
-	.container {
+	#main {
 		width: min-content;
 		min-width: 400px;
 		height: 100%;
-
-		margin: 0;
-		padding: 0;
 	}
 
 	.connected #filepicker-wrap {
