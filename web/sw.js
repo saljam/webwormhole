@@ -99,6 +99,7 @@ self.addEventListener(
 
 		// Sanity test.
 		if (event.request.method !== "GET" || !url.pathname.startsWith(`${PREFIX}/`)) {
+			event.respondWith(fetch(event.request));
 			return;
 		}
 

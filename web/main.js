@@ -627,7 +627,7 @@ async function swready() {
 	if (!hacks.nosw) {
 		const registration = await navigator.serviceWorker.register(
 			"sw.js",
-			{scope: "/_/"},
+			{scope: "/"},
 		);
 		serviceworker = registration.active || registration.waiting || registration.installing;
 		console.log("service worker registered:", serviceworker.state);

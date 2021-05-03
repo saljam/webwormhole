@@ -1,0 +1,22 @@
+{
+  "name": "WebWormhole",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "scope": "/",
+  "background_color": "#321d47",
+  "theme_color": "#321d47",
+  "description": "WebWormhole lets you send files from one place to another.",
+  "screenshots": []
+}
