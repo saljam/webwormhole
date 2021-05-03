@@ -102,15 +102,21 @@ body.connected {
 	border: 4px dashed var(--white);
 }
 
-#inputs {
+#prompt {
 	display: flex;
 	align-items: center;
 	flex-flow: column;
 }
 
-#inputs input {
+#prompt input {
 	margin: 4px;
 }
+
+.connected #prompt p,
+.dialling #prompt p {
+	display: none;
+}
+
 
 #info {
 	margin-top: 0;
@@ -120,21 +126,24 @@ body.connected {
 	text-align: center;
 }
 
-#filepicker,
-#filepicker-wrap {
+.connected #info {
 	display: none;
 }
 
-.connected #filepicker-wrap {
-	display: block;
-	float: left;
+#top {
+	display: none;
 }
 
-#top {
-	max-width: 300px;
-	display: flex;
-	align-items: center;
-	flex-direction: column;
+.connected #top {
+	display: unset;
+}
+
+#filepicker {
+	display: none;
+}
+
+#filepicker-wrap {
+	display: inline-block;
 }
 
 #transfers {
@@ -192,11 +201,10 @@ body.connected {
 	border: 2px solid var(--yellow);
 	border-radius: 10px;
 	font-weight: bold;
-	margin: 16px 8px;
+	margin: 4px;
 	padding: 16px;
 	text-align: center;
 	text-transform: uppercase;
-	max-width: 50%;
 }
 
 .connected #magiccode {
@@ -204,11 +212,6 @@ body.connected {
 }
 
 .error #magiccode {
-	display: none;
-}
-
-.connected #prompt,
-.dialling #prompt {
 	display: none;
 }
 
@@ -240,8 +243,9 @@ body.connected {
 	box-shadow: 0px 0px 5px 0px var(--grey-tint);
 	color: var(--purple);
 	font-weight: bold;
+	font-size: medium;
 	cursor: pointer;
-	margin: 16px 8px;
+	margin: 8px 0px;
 	padding: 16px;
 	transition: all 0.2s ease 0s;
 }
@@ -281,13 +285,5 @@ a:visited:hover {
 		width: min-content;
 		min-width: 400px;
 		height: 100%;
-	}
-
-	.connected #filepicker-wrap {
-		width: min-content;
-	}
-
-	#filepicker-div {
-		flex-direction: row;
 	}
 }

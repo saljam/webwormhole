@@ -12,13 +12,13 @@
 <title>WebWormhole</title>
 <body>
 <form id="main" role="main">
-<div>
-<label id="filepicker-wrap" class="button">OPEN<input type="file" id="filepicker" disabled /></label>
 <p id="info">WebWormhole lets you send files from one computer to another.</p>
+<div id="top">
+Drag and drop, <label id="filepicker-wrap" class="button">OPEN<input type="file" id="filepicker" disabled /></label>, or <input type="button" id="clipboard" class="button" value="PASTE" disabled /> files and text to send.
 </div>
 <ul id="transfers"></ul>
-<div id="inputs">
-<p id="prompt">Type a wormhole's phrase to join it, or leave empty to create a new one.</p>
+<div id="prompt">
+<p>Type a wormhole's phrase to join it, or leave empty to create a new one.</p>
 <img id="qr" />
 <input type="text" id="magiccode" autocomplete="off" autofocus title="wormhole phrase" placeholder="wormhole phrase" />
 <input type="submit" id="dial" class="button" value="LOADING..." disabled />

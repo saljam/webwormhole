@@ -32,8 +32,8 @@ function drop(e) {
 	}
 }
 
-function paste(e) {
-	console.log(e.clipboardData.files)
+// Handle a paste event from cmd-v/ctl-v.
+function pasteEvent(e) {
 	const files = e.clipboardData.files;
 	const t = e.clipboardData.getData("text")
 	if (files.length !== 0) {
@@ -42,6 +42,21 @@ function paste(e) {
 		}
 	} else if (t.length !== 0) {
 		sendtext(t);
+	}
+}
+
+// Read clipboard content using Clipboard API.
+async function pasteClipboard(e) {
+	let items = await navigator.clipboard.read();
+	// TODO toast a message if permission wasn't given.
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].types.includes("image/png")) {
+			const blob = await items[i].getType(image/png);
+			sendfile(blob);
+		} else  if (items[i].types.includes("text/plain")) {
+			const blob = await items[i].getType("text/plain");
+			sendtext(await blob.text());
+		}
 	}
 }
 
@@ -397,17 +412,16 @@ function dialling() {
 	document.body.classList.remove("disconnected");
 
 	document.getElementById("filepicker").disabled = false;
+	document.getElementById("clipboard").disabled = false || hacks.noclipboardapi;
 	document.getElementById("dial").disabled = true;
 	document.getElementById("magiccode").readOnly = true;
-	document.body.addEventListener("paste", paste);
+	document.body.addEventListener("paste", pasteEvent);
 }
 
 function connected() {
 	document.body.classList.remove("dialling");
 	document.body.classList.add("connected");
 	document.body.classList.remove("disconnected");
-
-	document.getElementById("info").innerText = "a file, or drag and drop it, or paste text with CTRL-V/CMD-V to send.";
 
 	location.hash = "";
 }
@@ -421,12 +435,13 @@ function disconnected() {
 	document.body.classList.remove("connected");
 	document.body.classList.add("disconnected");
 
+	document.getElementById("filepicker").disabled = true;
+	document.getElementById("clipboard").disabled = true;
+	document.body.removeEventListener("paste", pasteEvent);
 	document.getElementById("dial").disabled = false;
 	document.getElementById("magiccode").readOnly = false;
 	document.getElementById("magiccode").value = "";
 	codechange();
-	document.getElementById("filepicker").disabled = true;
-	document.body.removeEventListener("paste", paste);
 
 	location.hash = "";
 
@@ -579,6 +594,12 @@ function browserhacks() {
 		hacks.browserunsupported = true;
 	}
 
+	// Firefox does not support clipboard.read out of extensions.
+	if (!navigator.clipboard.read) {
+		hacks.noclipboardapi = true;
+		console.log("quirks: clipboard api not supported");
+	}
+
 	// Are we in an extension?
 	hacks.wasmURL = "webwormhole.wasm";
 	if (window.chrome && chrome.runtime && chrome.runtime.getURL) {
@@ -645,6 +666,7 @@ async function wasmready() {
 	document.getElementById("magiccode").addEventListener("keydown", autocomplete);
 	document.getElementById("magiccode").addEventListener("input", autocompletehint);
 	document.getElementById("filepicker").addEventListener("change", pick);
+	document.getElementById("clipboard").addEventListener("click", pasteClipboard);
 	document.getElementById("main").addEventListener("submit", preventdefault);
 	document.getElementById("main").addEventListener("submit", connect);
 	document.getElementById("qr").addEventListener("dblclick", copyurl);
