@@ -85,11 +85,11 @@ body.connected {
 	justify-content: space-between;
 	padding: 1em 0;
 	overflow: scroll;
-	width: 100%;
 	text-align: center;
 	box-shadow: 0px 0px 75px 0px var(--grey-tint);
 	background: var(--purple);
 	border: 4px solid transparent;
+	box-sizing: border-box;
 }
 
 .connected #main {
@@ -117,9 +117,7 @@ body.connected {
 	display: none;
 }
 
-
 #info {
-	margin-top: 0;
 	margin: 16px 8px;
 	font-size: 18px;
 	padding: 8px 0;
@@ -280,10 +278,20 @@ a:visited:hover {
 	border-bottom: 1px solid;
 }
 
+
+#main {
+	height: min-content;
+	min-height: 200px;
+	width: 100%;
+}
+
 @media only screen and (min-width: 700px) {
 	#main {
 		width: min-content;
 		min-width: 400px;
 		height: 100%;
+	}
+	#info {
+		margin-top: 25vh;
 	}
 }
