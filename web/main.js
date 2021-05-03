@@ -256,7 +256,6 @@ function receive(e) {
 		receiving.li.appendChild(receiving.progress);
 		document.getElementById("transfers").appendChild(receiving.li);
 
-
 		if (serviceworker) {
 			serviceworker.postMessage({
 				id: receiving.id,
@@ -318,23 +317,20 @@ function setuppeercon(pc) {
 				console.log("webrtc connected");
 				break;
 			}
+			case "disconnected":
+			case "closed": {
+				disconnected("webrtc connection closed");
+				pc.onconnectionstatechange = null;
+				break;
+			}
 			case "failed": {
-				disconnected();
+				disconnected("webrtc connection failed");
 				console.log(
 					"webrtc connection failed connectionState:",
 					pc.connectionState,
 					"iceConnectionState",
 					pc.iceConnectionState,
 				);
-				document.getElementById("info").innerText = "Network error.";
-				break;
-			}
-			case "disconnected":
-			case "closed": {
-				disconnected();
-				console.log("webrtc connection closed");
-				document.getElementById("info").innerText = "Disconnected.";
-				pc.onconnectionstatechange = null;
 				break;
 			}
 		}
@@ -343,70 +339,57 @@ function setuppeercon(pc) {
 	dc.onopen = () => {
 		connected();
 		datachannel = dc;
-		send(); // work through the send queue if it has anything
+		// Send anything we have in the send queue.
+		send();
 	};
 	dc.onmessage = receive;
 	dc.binaryType = "arraybuffer";
-	dc.onclose = () => {
-		disconnected();
-		console.log("datachannel closed");
-		document.getElementById("info").innerText = "Disconnected.";
-	};
-	dc.onerror = (e) => {
-		disconnected();
-		console.log("datachannel error:", e.error);
-		document.getElementById("info").innerText = "Network error.";
-	};
+	dc.onclose = () => { disconnected("datachannel closed"); };
+	dc.onerror = e => { disconnected("datachannel error:", e.error); };
 	return pc;
 }
 
 async function connect() {
 	try {
 		dialling();
-		const w = new Wormhole(
-			signalserver.href,
-			document.getElementById("magiccode").value,
-		);
+		const code = document.getElementById("magiccode").value;
+		const w = new Wormhole(signalserver.href, code);
 		const signal = await w.signal();
 		setuppeercon(signal.pc);
 
-		if (document.getElementById("magiccode").value === "") {
-			document.getElementById("info").innerHTML = "Waiting for the other side to join by typing the wormhole phrase, opening this URL, or scanning the QR code.";
+		if (code === "") {
+			waiting();
 			codechange();
 			document.getElementById("magiccode").value = signal.code;
 			location.hash = signal.code;
 			signalserver.hash = signal.code;
 			updateqr(signalserver.href);
-		} else {
-			document.getElementById("info").innerText = "Connecting...";
 		}
-
 		const fingerprint = await w.finish();
+
+		// To make it more likely to spot the 1 in 2^16 chance of a successful
+		// MITM password guess, we can compare a fingerprint derived from the PAKE
+		// key. The 7 words visible on the tooltip of the input box should match on
+		// both side.
+		// We also use the first 3 bits of it to choose the background colour, so
+		// that should match on both sides as well.
 		const encodedfp = webwormhole.encode(0, fingerprint.subarray(1));
 		document.getElementById("magiccode").title = encodedfp.substring(
 			encodedfp.indexOf("-") + 1,
 		);
 		document.body.style.backgroundColor = `var(--palette-${fingerprint[0]%8})`;
 	} catch (err) {
-		disconnected();
-		if (err === "bad key") {
-			document.getElementById("info").innerText = "Wrong wormhole phrase.";
-		} else if (err === "bad code") {
-			document.getElementById("info").innerText = "Not a valid wormhole phrase.";
-		} else if (err === "no such slot") {
-			document.getElementById("info").innerText = "No such slot. The wormhole might have expired.";
-		} else if (err === "timed out") {
-			document.getElementById("info").innerText = "Wormhole expired.";
-		} else if (err === "could not connect to signalling server") {
-			document.getElementById("info").innerText = "Could not reach the signalling server. Refresh page and try again.";
-		} else {
-			document.getElementById("info").innerText = "Could not connect.";
-			console.log(err);
-		}
+		disconnected(err);
 	}
 }
 
+function waiting() {
+	document.getElementById("info").innerText = "Waiting for the other side to join by typing the wormhole phrase, opening this URL, or scanning the QR code.";
+}
+
 function dialling() {
+	document.getElementById("info").innerText = "Connecting...";
+
 	document.body.classList.add("dialling");
 	document.body.classList.remove("connected");
 	document.body.classList.remove("disconnected");
@@ -419,6 +402,8 @@ function dialling() {
 }
 
 function connected() {
+	document.getElementById("info").innerText = "";
+
 	document.body.classList.remove("dialling");
 	document.body.classList.add("connected");
 	document.body.classList.remove("disconnected");
@@ -426,10 +411,37 @@ function connected() {
 	location.hash = "";
 }
 
-function disconnected() {
+function disconnected(reason) {
 	datachannel = null;
 	sendqueue = [];
 	document.body.style.backgroundColor = "";
+
+	// TODO better error types or at least hoist the strings to consts.
+	if (reason === "bad key") {
+		document.getElementById("info").innerText = "Wrong wormhole phrase.";
+	} else if (reason === "bad code") {
+		document.getElementById("info").innerText = "Not a valid wormhole phrase.";
+	} else if (reason === "no such slot") {
+		document.getElementById("info").innerText = "No such slot. The wormhole might have expired.";
+	} else if (reason === "timed out") {
+		document.getElementById("info").innerText = "Wormhole expired.";
+	} else if (reason === "could not connect to signalling server") {
+		document.getElementById("info").innerText = "Could not reach the signalling server. Refresh page and try again.";
+
+	} else if (reason === "webrtc connection closed") {
+		document.getElementById("info").innerText = "Disconnected.";
+	} else if (reason === "webrtc connection failed") {
+		document.getElementById("info").innerText = "Network error.";
+
+	} else if (reason === "datachannel closed") {
+		document.getElementById("info").innerText = "Disconnected.";
+	} else if (reason === "webrtc connection failed") {
+		document.getElementById("info").innerText = "Network error.";
+
+	} else {
+		document.getElementById("info").innerText = "Could not connect.";
+		console.log(reason);
+	}
 
 	document.body.classList.remove("dialling");
 	document.body.classList.remove("connected");
@@ -442,6 +454,7 @@ function disconnected() {
 	document.getElementById("magiccode").readOnly = false;
 	document.getElementById("magiccode").value = "";
 	codechange();
+	updateqr("");
 
 	location.hash = "";
 

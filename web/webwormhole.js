@@ -203,7 +203,7 @@ class Wormhole {
 					this.ws.close();
 					return;
 				}
-				console.log("got remote candidate", msg);
+				console.log("got remote candidate", msg.candidate);
 				this.promise2.then(async () => {
 					this.pc.addIceCandidate(new RTCIceCandidate(msg));
 				});
@@ -236,7 +236,7 @@ class Wormhole {
 		});
 		this.pc.onicecandidate = (e) => {
 			if (e.candidate && e.candidate.candidate !== "") {
-				console.log("got local candidate", e.candidate);
+				console.log("got local candidate", e.candidate.candidate);
 				this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
 			} else if (!e.candidate) {
 				Wormhole.logNAT(this.pc.localDescription.sdp);
