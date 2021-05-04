@@ -308,10 +308,7 @@ func server(args ...string) {
 
 	fs := gziphandler.GzipHandler(http.FileServer(http.Dir(*html)))
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/s/") {
-			http.Error(w, "old protocol version please upgrade client", http.StatusNotFound)
-			return
-		}
+		// Handle WebSocket connections.
 		if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 			relay(w, r)
 			return
@@ -327,21 +324,31 @@ func server(args ...string) {
 		// https://bugs.webkit.org/show_bug.cgi?id=201591
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://tip.webwormhole.io/ wss://webwormhole.io/")
 
+		// Set a small max age for cache. We might want to switch to a content-addressed
+		// resource naming scheme and change this to immutable, but until then 60 seconds
+		// and revalidation should do.
+		w.Header().Set("Cache-Control", "max-age=60, must-revalidate")
+
+		// Set HSTS header for 2 years on HTTPS connections.
 		if *httpsaddr != "" {
-			// Set HSTS header for 2 years.
 			w.Header().Set("Strict-Transport-Security", "max-age=63072000")
 		}
 
+		// Return a redirect to source code repo for the go get URL.
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
 			stats.goget.Add(1)
 			w.Write([]byte(importMeta))
 			return
 		}
+
+		// Handle the Service Worker private prefix. A well-behaved Service Worker
+		// must *never* reach us on this path.
 		if strings.HasPrefix(r.URL.Path, "/_/") {
 			stats.serviceworkererr.Add(1)
 			http.Error(w, serviceWorkerPage, http.StatusNotFound)
 			return
 		}
+
 		fs.ServeHTTP(w, r)
 	}
 
