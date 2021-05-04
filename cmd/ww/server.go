@@ -30,7 +30,7 @@ import (
 
 // slotTimeout is the the maximum amount of time a client is allowed to
 // hold a slot.
-const slotTimeout = 30 * time.Minute
+const slotTimeout = 12 * time.Hour
 
 const importMeta = `<!doctype html>
 <meta charset=utf-8>
