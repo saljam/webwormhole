@@ -195,21 +195,30 @@ func relay(w http.ResponseWriter, r *http.Request) {
 				slots.Unlock()
 				return
 			}
-			select {
-			case <-ctx.Done():
-				stats.timeout.Add(1)
-				slots.Lock()
-				delete(slots.m, slotkey)
-				stats.usedslots.Set(int64(len(slots.m)))
-				slots.Unlock()
-				conn.Close(wormhole.CloseSlotTimedOut, "timed out")
-				return
-			case sc <- conn:
+
+		wait:
+			for {
+				select {
+				case <-ctx.Done():
+					stats.timeout.Add(1)
+					slots.Lock()
+					delete(slots.m, slotkey)
+					stats.usedslots.Set(int64(len(slots.m)))
+					slots.Unlock()
+					conn.Close(wormhole.CloseSlotTimedOut, "timed out")
+					return
+				case <-time.After(30 * time.Second):
+					// Do a WebSocket Ping every 30 seconds.
+					conn.Ping(ctx)
+				case sc <- conn:
+					break wait
+				}
 			}
 			rconn = <-sc
 			stats.rendezvous.Add(1)
 			return
 		}
+
 		// Join an existing slot.
 		slots.Lock()
 		sc, ok := slots.m[slotkey]
