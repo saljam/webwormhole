@@ -47,6 +47,8 @@ function pasteEvent(e) {
 
 // Read clipboard content using Clipboard API.
 async function pasteClipboard(e) {
+	if (hacks.noclipboardapi) return
+
 	let items = await navigator.clipboard.read();
 	// TODO toast a message if permission wasn't given.
 	for (let i = 0; i < items.length; i++) {
@@ -607,8 +609,8 @@ function browserhacks() {
 		hacks.browserunsupported = true;
 	}
 
-	// Firefox does not support clipboard.read out of extensions.
-	if (!navigator.clipboard.read) {
+	// Firefox does not support clipboard.read.
+	if (!navigator.clipboard || !navigator.clipboard.read) {
 		hacks.noclipboardapi = true;
 		console.log("quirks: clipboard api not supported");
 	}
