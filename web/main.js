@@ -638,11 +638,15 @@ async function domready() {
 
 async function swready() {
 	if (!hacks.nosw) {
-		const registration = await navigator.serviceWorker.register(
-			"sw.js",
-			{scope: "/"},
-		);
-		serviceworker = registration.active || registration.waiting || registration.installing;
+		// Remove old /_/ scoped service worker.
+		const regs = await navigator.serviceWorker.getRegistrations();
+		for (let i = 0; i < regs.length; i++) {
+			if (regs[i].scope.endsWith("/_/")) {
+				regs[i].unregister();
+			}
+		}
+		const reg = await navigator.serviceWorker.register("sw.js", {scope: "/"});
+		serviceworker = reg.active || reg.waiting || reg.installing;
 		console.log("service worker registered:", serviceworker.state);
 	}
 }
