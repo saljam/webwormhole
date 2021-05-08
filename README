@@ -77,7 +77,7 @@ Frequently asked questions
 
 Is it compatible with magic-wormhole?
 
-	Is is not. Maybe one day.
+	It is not. Maybe one day.
 
 	This project started as a UI for magic-wormhole, but drifted
 	away when I wanted to experiment with the PAKE used, the
@@ -91,7 +91,7 @@ Why CPace and not another PAKE algorithm?
 
 	CPace (https://tools.ietf.org/id/draft-haase-cpace-01.html)
 	looked nice and simple to implement, and there wasn't a
-	CPace Go package at the time, so it was a good oppurtunity
+	CPace Go package at the time, so it was a good opportunity
 	and a learning exercise to write one. I ended up nerd-sniping
 	Filippo instead and he beat me to write filippo.io/cpace.
 
