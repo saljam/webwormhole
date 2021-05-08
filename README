@@ -45,10 +45,10 @@ of Magic Wormhole.
 It differs in that it uses WebRTC to make its connections. This
 allows us to make use of WebRTC's NAT traversal tricks, as well as
 the fact that it can be used in browsers. The exchange of session
-descriptions (offers and answers) is protected by PAKE and a generated
-random password, similar to Magic Wormhole. The session descriptions
-include the fingerprints of the DTLS certificates that WebRTC uses
-to secure its communications.
+descriptions (offers and answers) is protected by PAKE (we use
+CPace) and a generated random password, similar to Magic Wormhole.
+The session descriptions include the fingerprints of the DTLS
+certificates that WebRTC uses to secure its communications.
 
 The author operates the signalling server at webwormhole.io, its
 alias wrmhl.link, and a relay server. These are free to use but
@@ -89,8 +89,9 @@ Why CPace and not another PAKE algorithm?
 	process (https://github.com/cfrg/pake-selection), so it was
 	going to be one of the two.
 
-	CPace looked nice and simple to implement, and there wasn't
-	a CPace Go package at the time, so it was a good oppurtunity
+	CPace (https://tools.ietf.org/id/draft-haase-cpace-01.html)
+	looked nice and simple to implement, and there wasn't a
+	CPace Go package at the time, so it was a good oppurtunity
 	and a learning exercise to write one. I ended up nerd-sniping
 	Filippo instead and he beat me to write filippo.io/cpace.
 
