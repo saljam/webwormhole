@@ -13,17 +13,17 @@ On one computer the tool generates a one-time code:
 	$ cat hello.txt
 	hello, world
 	$ ww send hello.txt
-	8-enlist-decadence
+	east-pep-aloe
 
 On another use the code to establish a connection:
 
-	$ ww receive 8-enlist-decadence
+	$ ww receive east-pep-aloe
 	$ cat hello.txt
 	hello, world
 
 To install the command line tool:
 
-	$ GO111MODULE=on go get webwormhole.io/cmd/ww
+	$ go install webwormhole.io/cmd/ww@latest
 
 This requires Go 1.13 or newer.
 
@@ -45,10 +45,10 @@ of Magic Wormhole.
 It differs in that it uses WebRTC to make its connections. This
 allows us to make use of WebRTC's NAT traversal tricks, as well as
 the fact that it can be used in browsers. The exchange of session
-descriptions (offers and answers) is protected by PAKE and a generated
-random password, similar to Magic Wormhole. The session descriptions
-include the fingerprints of the DTLS certificates that WebRTC uses
-to secure its communications.
+descriptions (offers and answers) is protected by PAKE (we use
+CPace) and a generated random password, similar to Magic Wormhole.
+The session descriptions include the fingerprints of the DTLS
+certificates that WebRTC uses to secure its communications.
 
 The author operates the signalling server at webwormhole.io, its
 alias wrmhl.link, and a relay server. These are free to use but
@@ -72,3 +72,50 @@ remote code, and requires no permissions:
 
 Unless otherwise noted, the source files in this repository are
 distributed under the BSD-style license found in the LICENSE file.
+
+Frequently asked questions
+
+Is it compatible with magic-wormhole?
+
+	It is not. Maybe one day.
+
+	This project started as a UI for magic-wormhole, but drifted
+	away when I wanted to experiment with the PAKE used, the
+	protocol, and the word lists.
+
+Why CPace and not another PAKE algorithm?
+
+	CPace and PAKE2 were the finalists for CFRG PAKE selection
+	process (https://github.com/cfrg/pake-selection), so it was
+	going to be one of the two.
+
+	CPace (https://tools.ietf.org/id/draft-haase-cpace-01.html)
+	looked nice and simple to implement, and there wasn't a
+	CPace Go package at the time, so it was a good opportunity
+	and a learning exercise to write one. I ended up nerd-sniping
+	Filippo instead and he beat me to write filippo.io/cpace.
+
+Why not the PGP word list?
+
+	The PGP word list (https://en.wikipedia.org/wiki/PGP_word_list)
+	is quite good as far as unambiguity goes. However, a few
+	word combinations do make some unsavoury phrases. I switched
+	to a word list that is more agreeable.
+
+	Also, it would be nice to experiment with localised word
+	lists.
+
+Don't you have to trust the web server anyway? What's the point of
+the PAKE?
+
+	Yes and no. The application itself, because of the PAKE,
+	does not need to trust the signalling server. You can install
+	the command line tool, the browser extension, or host the
+	web application's files yourself and not have to trust the
+	signalling server at all. There's also a mobile app version
+	in the works.
+
+	The web version hosted on webwormhole.io exists as a middle
+	ground between convenience and security. Like any other
+	website you visit, you do have to trust it's not running
+	any malicious code in your browser.

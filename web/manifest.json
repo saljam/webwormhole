@@ -1,7 +1,7 @@
 {
 	"manifest_version": 2,
 	"name": "WebWormhole",
-	"version": "0.5",
+	"version": "0.6",
 	"description": "WebWormhole lets you send files from one place to another.",
 	"icons": {
 		"16": "hole16.png",

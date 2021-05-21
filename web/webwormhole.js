@@ -2,6 +2,21 @@
 class Wormhole {
 	constructor(signalserver, code) {
 		this.protocol = "4"; // safari has no static fields
+
+		if (code !== "") {
+			[this.slot, this.pass] = webwormhole.decode(code);
+			if (this.pass.length === 0) {
+				throw "bad code";
+			}
+			console.log("dialling slot:", this.slot);
+			this.state = "b";
+		} else {
+			this.slot = "";
+			this.pass = crypto.getRandomValues(new Uint8Array(2));
+			console.log("requesting slot");
+			this.state = "a";
+		}
+
 		// There are 3 events that we need to synchronise with the caller on:
 		//   1. we got the first message from the signalling server.
 		//        We now have the slot number and the ICE server details, so we can
@@ -40,19 +55,6 @@ class Wormhole {
 	}
 
 	dial(signalserver, code) {
-		if (code !== "") {
-			[this.slot, this.pass] = webwormhole.decode(code);
-			if (this.pass.length === 0) {
-				throw "bad code";
-			}
-			console.log("dialling slot:", this.slot);
-			this.state = "b";
-		} else {
-			this.slot = "";
-			this.pass = crypto.getRandomValues(new Uint8Array(2));
-			console.log("requesting slot");
-			this.state = "a";
-		}
 		this.ws = new WebSocket(
 			Wormhole.wsserver(signalserver, this.slot),
 			this.protocol,

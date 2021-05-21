@@ -47,6 +47,8 @@ function pasteEvent(e) {
 
 // Read clipboard content using Clipboard API.
 async function pasteClipboard(e) {
+	if (hacks.noclipboardapi) return
+
 	let items = await navigator.clipboard.read();
 	// TODO toast a message if permission wasn't given.
 	for (let i = 0; i < items.length; i++) {
@@ -607,8 +609,8 @@ function browserhacks() {
 		hacks.browserunsupported = true;
 	}
 
-	// Firefox does not support clipboard.read out of extensions.
-	if (!navigator.clipboard.read) {
+	// Firefox does not support clipboard.read.
+	if (!navigator.clipboard || !navigator.clipboard.read) {
 		hacks.noclipboardapi = true;
 		console.log("quirks: clipboard api not supported");
 	}
@@ -638,11 +640,15 @@ async function domready() {
 
 async function swready() {
 	if (!hacks.nosw) {
-		const registration = await navigator.serviceWorker.register(
-			"sw.js",
-			{scope: "/"},
-		);
-		serviceworker = registration.active || registration.waiting || registration.installing;
+		// Remove old /_/ scoped service worker.
+		const regs = await navigator.serviceWorker.getRegistrations();
+		for (let i = 0; i < regs.length; i++) {
+			if (regs[i].scope.endsWith("/_/")) {
+				regs[i].unregister();
+			}
+		}
+		const reg = await navigator.serviceWorker.register("sw.js", {scope: "/"});
+		serviceworker = reg.active || reg.waiting || reg.installing;
 		console.log("service worker registered:", serviceworker.state);
 	}
 }

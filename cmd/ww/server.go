@@ -334,9 +334,8 @@ func server(args ...string) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://tip.webwormhole.io/ wss://webwormhole.io/")
 
 		// Set a small max age for cache. We might want to switch to a content-addressed
-		// resource naming scheme and change this to immutable, but until then 60 seconds
-		// and revalidation should do.
-		w.Header().Set("Cache-Control", "max-age=60, must-revalidate")
+		// resource naming scheme and change this to immutable, but until then disable caching.
+		w.Header().Set("Cache-Control", "no-cache")
 
 		// Set HSTS header for 2 years on HTTPS connections.
 		if *httpsaddr != "" {
