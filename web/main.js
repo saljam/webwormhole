@@ -355,18 +355,19 @@ async function connect() {
 	try {
 		dialling();
 		const code = document.getElementById("magiccode").value;
-		const w = new Wormhole(signalserver.href, code);
-		const signal = await w.signal();
-		setuppeercon(signal.pc);
-
-		if (code === "") {
-			waiting();
-			codechange();
-			document.getElementById("magiccode").value = signal.code;
-			location.hash = signal.code;
-			signalserver.hash = signal.code;
-			updateqr(signalserver.href);
+		const onSignal = (signal) => {
+			setuppeercon(signal.pc)
+			if (code === "") {
+				waiting();
+				codechange();
+				document.getElementById("magiccode").value = signal.code;
+				location.hash = signal.code;
+				signalserver.hash = signal.code;
+				updateqr(signalserver.href);
+			}
 		}
+		
+		const w = new Wormhole(signalserver.href, code, onSignal)
 		const fingerprint = await w.finish();
 
 		// To make it more likely to spot the 1 in 2^16 chance of a successful

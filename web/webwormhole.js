@@ -1,6 +1,6 @@
 "use strict";
 class Wormhole {
-	constructor(signalserver, code) {
+	constructor(signalserver, code, onSignal) {
 		this.protocol = "4"; // safari has no static fields
 
 		if (code !== "") {
@@ -16,6 +16,7 @@ class Wormhole {
 			console.log("requesting slot");
 			this.state = "a";
 		}
+		this.onSignal = onSignal
 
 		// There are 3 events that we need to synchronise with the caller on:
 		//   1. we got the first message from the signalling server.
@@ -29,28 +30,14 @@ class Wormhole {
 		//        can display the key fingerprint.
 		//   4. (unimplemented) caller tells us the webrtc handshake is done.
 		//        We can close the websocket.
-		this.promise1 = new Promise((resolve1, reject1) => {
-			this.promise2 = new Promise((resolve2, reject2) => {
-				this.promise3 = new Promise((resolve3, reject3) => {
-					// It is very possible that I do not understand how to us promises "correctly".
-					this.resolve1 = resolve1;
-					this.reject1 = reject1;
-					this.resolve2 = resolve2;
-					this.reject2 = reject2;
-					this.resolve3 = resolve3;
-					this.reject3 = reject3;
-					this.dial(signalserver, code);
-				});
-			});
+		this.promise3 = new Promise((resolve3, reject3) => {
+			this.resolve3 = resolve3;
+			this.reject3 = reject3;
 		});
-	}
-
-	async signal() {
-		return this.promise1;
+		this.dial(signalserver, code)
 	}
 
 	async finish() {
-		this.resolve2();
 		return this.promise3;
 	}
 
@@ -90,7 +77,7 @@ class Wormhole {
 					return;
 				}
 				this.newPeerConnection(msg.iceServers);
-				this.resolve1({
+				this.onSignal({
 					code: webwormhole.encode(this.slot, this.pass),
 					pc: this.pc,
 				});
@@ -101,7 +88,7 @@ class Wormhole {
 			case "b": {
 				msg = JSON.parse(m.data);
 				this.newPeerConnection(msg.iceServers);
-				this.resolve1({
+				this.onSignal({
 					pc: this.pc,
 				});
 				const msgA = webwormhole.start(this.pass);
@@ -127,13 +114,11 @@ class Wormhole {
 				console.log("generated key");
 				this.ws.send(msgB);
 				this.state = "wait_for_pc_initialize";
-				this.promise2.then(async () => {
-					const offer = await this.pc.createOffer();
-					console.log("created offer");
-					this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)));
-					this.state = "wait_for_webtc_answer";
-					this.pc.setLocalDescription(offer);
-				});
+				const offer = await this.pc.createOffer();
+				console.log("created offer");
+				this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)));
+				this.state = "wait_for_webtc_answer";
+				this.pc.setLocalDescription(offer);
 				return;
 			}
 
@@ -166,14 +151,12 @@ class Wormhole {
 				// No intermediate state wait_for_pc_initialize because candidates can
 				// staring arriving straight after the offer is sent.
 				this.state = "wait_for_candidates";
-				this.promise2.then(async () => {
-					await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
-					const answer = await this.pc.createAnswer();
-					console.log("created answer");
-					this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
-					this.resolve3(webwormhole.fingerprint(this.key));
-					this.pc.setLocalDescription(answer);
-				});
+				await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
+				const answer = await this.pc.createAnswer();
+				console.log("created answer");
+				this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
+				this.resolve3(webwormhole.fingerprint(this.key));
+				this.pc.setLocalDescription(answer);
 				return;
 			}
 
@@ -206,9 +189,7 @@ class Wormhole {
 					return;
 				}
 				console.log("got remote candidate", msg.candidate);
-				this.promise2.then(async () => {
-					this.pc.addIceCandidate(new RTCIceCandidate(msg));
-				});
+				this.pc.addIceCandidate(new RTCIceCandidate(msg));
 				return;
 			}
 
