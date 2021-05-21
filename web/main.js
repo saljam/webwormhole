@@ -357,14 +357,13 @@ async function connect() {
 		const code = document.getElementById("magiccode").value;
 		const onSignal = (signal) => {
 			setuppeercon(signal.pc)
-			if (code === "") {
-				waiting();
-				codechange();
-				document.getElementById("magiccode").value = signal.code;
-				location.hash = signal.code;
-				signalserver.hash = signal.code;
-				updateqr(signalserver.href);
-			}
+			if (code !== "") return
+			waiting();
+			codechange();
+			document.getElementById("magiccode").value = signal.code;
+			location.hash = signal.code;
+			signalserver.hash = signal.code;
+			updateqr(signalserver.href);
 		}
 		
 		const w = new Wormhole(signalserver.href, code, onSignal)
