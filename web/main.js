@@ -570,7 +570,7 @@ function browserhacks() {
 	}
 
 	// Safari cannot save files from service workers.
-	if (window.safari || /iPad|iPhone|iPod/.test(navigator.userAgent)) {
+	if (/Safari/.test(navigator.userAgent) && !(/Chrome/.test(navigator.userAgent) || /Chromium/.test(navigator.userAgent))) {
 		hacks.nosw = true;
 		console.log("quirks: serviceworkers disabled on safari");
 	}
@@ -601,7 +601,7 @@ function browserhacks() {
 		![320, 375, 414, 768, 1024].includes(window.innerWidth)
 	) {
 		hacks.noautoconnect = true;
-		console.log("quirks: detected preview, ");
+		console.log("quirks: detected ios page preview");
 	}
 
 	// Detect for features we need for this to work.
