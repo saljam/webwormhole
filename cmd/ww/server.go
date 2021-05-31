@@ -295,7 +295,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			iceCounter.WithLabelValues("success", "unknown").Inc()
 			return
 		case wormhole.CloseWebRTCSuccessDirect:
-			iceCounter.WithLabelValues("success", "host").Inc()
+			iceCounter.WithLabelValues("success", "direct").Inc()
 			return
 		case wormhole.CloseWebRTCSuccessRelay:
 			iceCounter.WithLabelValues("success", "relay").Inc()
