@@ -1,8 +1,21 @@
 "use strict";
-class Wormhole {
-	constructor(signalserver, code) {
-		this.protocol = "4"; // safari has no static fields
 
+class Wormhole {
+	// From webwormhole/dial.go:
+	closeNoSuchSlot = 4000
+	closeSlotTimedOut = 4001
+	closeNoMoreSlots = 4002
+	closeWrongProto = 4003
+	closePeerHungUp = 4004
+	closeBadKey = 4005
+	closeWebRTCSuccess = 4006
+	closeWebRTCSuccessDirect = 4007
+	closeWebRTCSuccessRelay = 4008
+	closeWebRTCFailed = 4009
+
+	protocol = "4";
+
+	constructor(signalserver, code) {
 		if (code !== "") {
 			[this.slot, this.pass] = webwormhole.decode(code);
 			if (this.pass.length === 0) {
@@ -17,7 +30,7 @@ class Wormhole {
 			this.state = "a";
 		}
 
-		// There are 3 events that we need to synchronise with the caller on:
+		// There are 4 events that we need to synchronise with the caller on:
 		//   1. we got the first message from the signalling server.
 		//        We now have the slot number and the ICE server details, so we can
 		//        create the wormhole code and PeerConnection object, and pass them back
@@ -25,14 +38,12 @@ class Wormhole {
 		//   2. the caller is done configuring the PeerConnection.
 		//        We can now create the offer or answer and send it to the peer.
 		//   3. we've successfully authenticated the other peer.
-		//        Signalling is now done, apart from any trickling candidates. The called
+		//        Signalling is now done, apart from any trickling candidates. The caller
 		//        can display the key fingerprint.
-		//   4. (unimplemented) caller tells us the webrtc handshake is done.
-		//        We can close the websocket.
+		//   4. caller tells us the webrtc handshake is done. We can close the websocket.
 		this.promise1 = new Promise((resolve1, reject1) => {
 			this.promise2 = new Promise((resolve2, reject2) => {
 				this.promise3 = new Promise((resolve3, reject3) => {
-					// It is very possible that I do not understand how to us promises "correctly".
 					this.resolve1 = resolve1;
 					this.reject1 = reject1;
 					this.resolve2 = resolve2;
@@ -52,6 +63,43 @@ class Wormhole {
 	async finish() {
 		this.resolve2();
 		return this.promise3;
+	}
+
+	async close() {
+		switch (this.pc.iceConnectionState) {
+			case "connected": {
+				const connType = await this.connType()
+				// TODO UI to warn if relay is used.
+				console.log("webrtc connected:", connType)
+				switch (connType) {
+					case "relay": {
+						this.ws.close(this.closeWebRTCSuccessRelay);
+						break;
+					}
+					case "host": {
+						this.ws.close(this.closeWebRTCSuccessDirect);
+						break;
+					}
+					default: {
+						this.ws.close(this.closeWebRTCSuccess);
+						break;
+					}
+				}
+				break;
+			}
+			case "failed": {
+				this.ws.close(this.closeWebRTCFailed);
+				break;
+			}
+		}
+	}
+
+	async connType() {
+		let stats = await this.pc.getStats();
+		// s.selected gives more confidenece than s.state == "succeeded", but Chrome does
+		// not implement it.
+		let selected = [...stats.values()].find(s => s.type == "candidate-pair" && s.state == "succeeded");
+		return stats.get(selected.localCandidateId).candidateType
 	}
 
 	dial(signalserver, code) {
@@ -154,7 +202,7 @@ class Wormhole {
 				if (msg == null) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close();
+					this.ws.close(closeBadKey);
 					return;
 				}
 				if (msg.type !== "offer") {
@@ -182,7 +230,7 @@ class Wormhole {
 				if (msg == null) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close();
+					this.ws.close(closeBadKey);
 					return;
 				}
 				if (msg.type !== "answer") {
@@ -202,7 +250,7 @@ class Wormhole {
 				if (msg == null) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close();
+					this.ws.close(closeBadKey);
 					return;
 				}
 				console.log("got remote candidate", msg.candidate);
@@ -240,8 +288,6 @@ class Wormhole {
 			if (e.candidate && e.candidate.candidate !== "") {
 				console.log("got local candidate", e.candidate.candidate);
 				this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
-			} else if (!e.candidate) {
-				Wormhole.logNAT(this.pc.localDescription.sdp);
 			}
 		};
 	}
@@ -295,63 +341,6 @@ class Wormhole {
 			path = `/${path}`;
 		}
 		return `${protocol}//${u.host}${path}`;
-	}
-
-	// logNAT tries to guess the type of NAT based on candidates and log it.
-	static logNAT(sdp) {
-		let count = 0;
-		let host = 0;
-		let srflx = 0;
-		const portmap = new Map();
-
-		const lines = sdp.replace(/\r/g, "").split("\n");
-		for (let i = 0; i < lines.length; i++) {
-			if (!lines[i].startsWith("a=candidate:")) {
-				continue;
-			}
-			const parts = lines[i].substring("a=candidate:".length).split(" ");
-			const proto = parts[2].toLowerCase();
-			const port = parts[5];
-			const typ = parts[7];
-			if (proto !== "udp") {
-				continue;
-			}
-			count++;
-			if (typ === "host") {
-				host++;
-			} else if (typ === "srflx") {
-				srflx++;
-				let rport = "";
-				for (let j = 8; j < parts.length; j += 2) {
-					if (parts[j] === "rport") {
-						rport = parts[j + 1];
-					}
-				}
-				if (!portmap.get(rport)) {
-					portmap.set(rport, new Set());
-				}
-				portmap.get(rport).add(port);
-			}
-		}
-		console.log(`local udp candidates: ${count} (host: ${host} stun: ${srflx})`);
-		let maxmapping = 0;
-		portmap.forEach((v) => {
-			if (v.size > maxmapping) {
-				maxmapping = v.size;
-			}
-		});
-		if (maxmapping === 0) {
-			console.log("nat: ice disabled or stun blocked");
-		} else if (maxmapping === 1) {
-			console.log("nat: 1:1 port mapping");
-		} else if (maxmapping > 1) {
-			console.log("nat: 1:n port mapping (bad news?)");
-		} else {
-			console.log("nat: failed to estimate nat type");
-		}
-		console.log(
-			"for more webrtc troubleshooting try https://test.webrtc.org/ and your browser webrtc logs (about:webrtc or chrome://webrtc-internals/)",
-		);
 	}
 
 	// WASM loads the WebAssembly part from url.

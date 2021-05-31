@@ -79,7 +79,19 @@ const (
 	// connection because the key it derived is bad.
 	CloseBadKey
 
-	// TODO move these out of this package.
+	// CloseWebRTCSuccess indicates a WebRTC connection was successful.
+	CloseWebRTCSuccess
+
+	// CloseWebRTCSuccessDirect indicates a WebRTC connection was successful and we
+	// know it's peer-to-peer.
+	CloseWebRTCSuccessDirect
+
+	// CloseWebRTCSuccessRelay indicates a WebRTC connection was successful and we
+	// know it's going via a relay.
+	CloseWebRTCSuccessRelay
+
+	// CloseWebRTCFailed we couldn't establish a WebRTC connection.
+	CloseWebRTCFailed
 )
 
 var (
@@ -463,6 +475,7 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 		logf("webrtc connection succeeded, closing signalling channel")
 	case err = <-c.err:
 	}
+	// TODO detect connection ("host" vs "relay") type.
 	ws.Close(websocket.StatusNormalClosure, "done")
 	return c, err
 }
@@ -605,7 +618,7 @@ func Join(slot, pass string, sigserv string) (*Wormhole, error) {
 		logf("webrtc connection succeeded, closing signalling channel")
 	case err = <-c.err:
 	}
-
+	// TODO detect connection ("host" vs "relay") type.
 	ws.Close(websocket.StatusNormalClosure, "done")
 	return c, err
 }

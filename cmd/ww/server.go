@@ -9,7 +9,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"expvar"
 	"flag"
 	"fmt"
 	"log"
@@ -23,6 +22,8 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	webrtc "github.com/pion/webrtc/v3"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/acme/autocert"
 	"nhooyr.io/websocket"
 	"webwormhole.io/wormhole"
@@ -38,31 +39,57 @@ const importMeta = `<!doctype html>
 <meta http-equiv="refresh" content="0;URL='https://github.com/saljam/webwormhole'">
 `
 
-const serviceWorkerPage = `Oops. You're not supposed to end up here.
+const serviceWorkerPage = `You're not supposed to get this file or end up here.
 
-This URL is used by WebWormhole to efficiently download data from
-a web page.  It is usually handled by a ServiceWorker running in
-your browser.
+This is a dummy URL is used by WebWormhole to help web browsers
+efficiently download files from a WebRTC connection. It should be
+handled entirely by a ServiceWorker running in your browser.
+
+If you got this text instead of the file you expected to download,
+it is possible your web browser doesn't fully support ServiceWorkers
+but claims it does. Try a different web browser, and if that doesn't
+work, please file a bug report.
 `
 
-var stats = struct {
-	timeout          *expvar.Int
-	rendezvous       *expvar.Int
-	serviceworkererr *expvar.Int
-	goget            *expvar.Int
-	nosuchslot       *expvar.Int
-	nomoreslots      *expvar.Int
-	usedslots        *expvar.Int
-	badproto         *expvar.Int
-}{
-	timeout:          expvar.NewInt("timeout"),
-	rendezvous:       expvar.NewInt("rendezvous"),
-	serviceworkererr: expvar.NewInt("serviceworkererr"),
-	goget:            expvar.NewInt("goget"),
-	nosuchslot:       expvar.NewInt("nosuchslot"),
-	nomoreslots:      expvar.NewInt("nomoreslots"),
-	usedslots:        expvar.NewInt("usedslots"),
-	badproto:         expvar.NewInt("badproto"),
+var (
+	rendezvousCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "ww",
+			Name:      "rendezvous_attempts",
+			Help:      "Number of attempts to rendezvous using the signalling server.",
+		},
+		[]string{"result"},
+	)
+	iceCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "ww",
+			Name:      "webrtc_attempts",
+			Help:      "Number of reported ICE results sliced by ICE method used.",
+		},
+		[]string{"result", "method"},
+	)
+	protocolErrorCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "ww",
+			Name:      "protocol_errors",
+			Help:      "Number of bad requests to the signalling server.",
+		},
+		[]string{"kind"},
+	)
+	slotsGuage = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "ww",
+			Name:      "busy_slots",
+			Help:      "Number of currently busy slots.",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(rendezvousCounter)
+	prometheus.MustRegister(iceCounter)
+	prometheus.MustRegister(protocolErrorCounter)
+	prometheus.MustRegister(slotsGuage)
 }
 
 // slots is a map of allocated slot numbers.
@@ -147,7 +174,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 	if conn.Subprotocol() != wormhole.Protocol {
 		// Make sure we negotiated the right protocol, since "blank" is also a
 		// default one.
-		stats.badproto.Add(1)
+		protocolErrorCounter.WithLabelValues("wrongversion").Inc()
 		conn.Close(wormhole.CloseWrongProto, "wrong protocol, please upgrade client")
 		return
 	}
@@ -167,14 +194,14 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			newslot, ok := freeslot()
 			if !ok {
 				slots.Unlock()
-				stats.nomoreslots.Add(1)
+				rendezvousCounter.WithLabelValues("nomoreslots").Inc()
 				conn.Close(wormhole.CloseNoMoreSlots, "cannot allocate slots")
 				return
 			}
 			slotkey = newslot
 			sc := make(chan *websocket.Conn)
 			slots.m[slotkey] = sc
-			stats.usedslots.Set(int64(len(slots.m)))
+			slotsGuage.Set(float64(len(slots.m)))
 			slots.Unlock()
 			initmsg.Slot = slotkey
 			buf, err := json.Marshal(initmsg)
@@ -182,7 +209,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 				log.Println(err)
 				slots.Lock()
 				delete(slots.m, slotkey)
-				stats.usedslots.Set(int64(len(slots.m)))
+				slotsGuage.Set(float64(len(slots.m)))
 				slots.Unlock()
 				return
 			}
@@ -191,7 +218,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 				log.Println(err)
 				slots.Lock()
 				delete(slots.m, slotkey)
-				stats.usedslots.Set(int64(len(slots.m)))
+				slotsGuage.Set(float64(len(slots.m)))
 				slots.Unlock()
 				return
 			}
@@ -200,10 +227,10 @@ func relay(w http.ResponseWriter, r *http.Request) {
 			for {
 				select {
 				case <-ctx.Done():
-					stats.timeout.Add(1)
+					rendezvousCounter.WithLabelValues("timeout").Inc()
 					slots.Lock()
 					delete(slots.m, slotkey)
-					stats.usedslots.Set(int64(len(slots.m)))
+					slotsGuage.Set(float64(len(slots.m)))
 					slots.Unlock()
 					conn.Close(wormhole.CloseSlotTimedOut, "timed out")
 					return
@@ -215,7 +242,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			rconn = <-sc
-			stats.rendezvous.Add(1)
+			rendezvousCounter.WithLabelValues("success").Inc()
 			return
 		}
 
@@ -224,12 +251,12 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		sc, ok := slots.m[slotkey]
 		if !ok {
 			slots.Unlock()
-			stats.nosuchslot.Add(1)
+			rendezvousCounter.WithLabelValues("nosuchslot").Inc()
 			conn.Close(wormhole.CloseNoSuchSlot, "no such slot")
 			return
 		}
 		delete(slots.m, slotkey)
-		stats.usedslots.Set(int64(len(slots.m)))
+		slotsGuage.Set(float64(len(slots.m)))
 		slots.Unlock()
 		initmsg.Slot = slotkey
 		buf, err := json.Marshal(initmsg)
@@ -248,18 +275,34 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		case rconn = <-sc:
 		}
 		sc <- conn
+		rendezvousCounter.WithLabelValues("success").Inc()
 	}()
 
 	defer cancel()
 	for {
 		msgType, p, err := conn.Read(ctx)
-		if websocket.CloseStatus(err) == wormhole.CloseBadKey {
+		switch websocket.CloseStatus(err) {
+		case wormhole.CloseBadKey:
+			iceCounter.WithLabelValues("fail", "badkey").Inc()
 			if rconn != nil {
 				rconn.Close(wormhole.CloseBadKey, "bad key")
 			}
 			return
+		case wormhole.CloseWebRTCFailed:
+			iceCounter.WithLabelValues("fail", "unknown").Inc()
+			return
+		case wormhole.CloseWebRTCSuccess:
+			iceCounter.WithLabelValues("success", "unknown").Inc()
+			return
+		case wormhole.CloseWebRTCSuccessDirect:
+			iceCounter.WithLabelValues("success", "host").Inc()
+			return
+		case wormhole.CloseWebRTCSuccessRelay:
+			iceCounter.WithLabelValues("success", "relay").Inc()
+			return
 		}
 		if err != nil {
+			iceCounter.WithLabelValues("unknown", "unknown").Inc()
 			if rconn != nil {
 				rconn.Close(wormhole.ClosePeerHungUp, "peer hung up")
 			}
@@ -290,6 +333,7 @@ func server(args ...string) {
 	}
 	httpaddr := set.String("http", ":http", "http listen address")
 	httpsaddr := set.String("https", ":https", "https listen address")
+	debugaddr := set.String("debug", "", "debug and metrics listen address")
 	acmehosts := set.String("hosts", "", "comma separated list of hosts for which to request let's encrypt certs")
 	secretpath := set.String("secrets", os.Getenv("HOME")+"/keys", "path to put let's encrypt cache")
 	cert := set.String("cert", "", "https certificate (leave empty to use letsencrypt)")
@@ -344,7 +388,6 @@ func server(args ...string) {
 
 		// Return a redirect to source code repo for the go get URL.
 		if r.URL.Query().Get("go-get") == "1" || r.URL.Path == "/cmd/ww" {
-			stats.goget.Add(1)
 			w.Write([]byte(importMeta))
 			return
 		}
@@ -352,7 +395,7 @@ func server(args ...string) {
 		// Handle the Service Worker private prefix. A well-behaved Service Worker
 		// must *never* reach us on this path.
 		if strings.HasPrefix(r.URL.Path, "/_/") {
-			stats.serviceworkererr.Add(1)
+			protocolErrorCounter.WithLabelValues("serviceworkererr").Inc()
 			http.Error(w, serviceWorkerPage, http.StatusNotFound)
 			return
 		}
@@ -396,9 +439,17 @@ func server(args ...string) {
 		ssrv.TLSConfig.GetCertificate = m.GetCertificate
 	}
 
+	errc := make(chan error)
+	if *debugaddr != "" {
+		http.Handle("/metrics", promhttp.Handler())
+		go func() { errc <- http.ListenAndServe(*debugaddr, nil) }()
+	}
 	if *httpsaddr != "" {
 		srv.Handler = m.HTTPHandler(nil) // Enable redirect to https handler.
-		go func() { log.Fatal(ssrv.ListenAndServeTLS(*cert, *key)) }()
+		go func() { errc <- ssrv.ListenAndServeTLS(*cert, *key) }()
 	}
-	log.Fatal(srv.ListenAndServe())
+	if *httpaddr != "" {
+		go func() { errc <- srv.ListenAndServe() }()
+	}
+	log.Fatal(<-errc)
 }
