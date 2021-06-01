@@ -311,60 +311,61 @@ function receive(e) {
 	}
 }
 
-function setuppeercon(pc) {
-	pc.onconnectionstatechange = () => {
-		switch (pc.connectionState) {
-			case "connected": {
-				// Handled in datachannel.onopen.
-				console.log("webrtc connected");
-				break;
-			}
-			case "disconnected":
-			case "closed": {
-				disconnected("webrtc connection closed");
-				pc.onconnectionstatechange = null;
-				break;
-			}
-			case "failed": {
-				disconnected("webrtc connection failed");
-				console.log(
-					"webrtc connection failed connectionState:",
-					pc.connectionState,
-					"iceConnectionState",
-					pc.iceConnectionState,
-				);
-				break;
-			}
-		}
-	};
-	const dc = pc.createDataChannel("data", {negotiated: true, id: 0});
-	dc.onopen = () => {
-		connected();
-		datachannel = dc;
-		// Send anything we have in the send queue.
-		send();
-	};
-	dc.onmessage = receive;
-	dc.binaryType = "arraybuffer";
-	dc.onclose = () => { disconnected("datachannel closed"); };
-	dc.onerror = e => { disconnected("datachannel error:", e.error); };
-	return pc;
-}
-
 async function connect() {
 	try {
 		dialling();
 		const code = document.getElementById("magiccode").value;
 		const onSignal = (signal) => {
-			setuppeercon(signal.pc)
-			if (code !== "") return
-			waiting();
-			codechange();
-			document.getElementById("magiccode").value = signal.code;
-			location.hash = signal.code;
-			signalserver.hash = signal.code;
-			updateqr(signalserver.href);
-		}
+      // Use PeerConnection.iceConnectionState since Firefox does not
+      // implement PeerConnection.connectionState
+      signal.pc.oniceconnectionstatechange = () => {
+        switch (signal.pc.iceConnectionState) {
+          case "connected": {
+            // Handled in datachannel.onopen.
+            w.close();
+            break;
+          }
+          case "disconnected":
+          case "closed": {
+            disconnected("webrtc connection closed");
+            signal.pc.onconnectionstatechange = null;
+            break;
+          }
+          case "failed": {
+            disconnected("webrtc connection failed");
+            console.log(
+              "webrtc connection failed connectionState:",
+              signal.pc.connectionState,
+              "iceConnectionState",
+              signal.pc.iceConnectionState,
+            );
+            w.close();
+            break;
+          }
+        }
+      };
+
+      const dc = signal.pc.createDataChannel("data", {negotiated: true, id: 0});
+      dc.onopen = () => {
+        connected();
+        datachannel = dc;
+        // Send anything we have in the send queue.
+        send();
+      };
+      dc.onmessage = receive;
+      dc.binaryType = "arraybuffer";
+      dc.onclose = () => { disconnected("datachannel closed"); };
+      dc.onerror = e => { disconnected("datachannel error:", e.error); };
+
+      if (code === "") {
+        waiting();
+        codechange();
+        document.getElementById("magiccode").value = signal.code;
+        location.hash = signal.code;
+        signalserver.hash = signal.code;
+        updateqr(signalserver.href);
+      }
+    }
 		
 		const w = new Wormhole(signalserver.href, code, onSignal)
 		const fingerprint = await w.finish();
@@ -570,7 +571,7 @@ function browserhacks() {
 	}
 
 	// Safari cannot save files from service workers.
-	if (window.safari || /iPad|iPhone|iPod/.test(navigator.userAgent)) {
+	if (/Safari/.test(navigator.userAgent) && !(/Chrome/.test(navigator.userAgent) || /Chromium/.test(navigator.userAgent))) {
 		hacks.nosw = true;
 		console.log("quirks: serviceworkers disabled on safari");
 	}
@@ -601,7 +602,7 @@ function browserhacks() {
 		![320, 375, 414, 768, 1024].includes(window.innerWidth)
 	) {
 		hacks.noautoconnect = true;
-		console.log("quirks: detected preview, ");
+		console.log("quirks: detected ios page preview");
 	}
 
 	// Detect for features we need for this to work.
