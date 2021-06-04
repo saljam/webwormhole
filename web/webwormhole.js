@@ -1,21 +1,25 @@
 "use strict";
 
 class Wormhole {
-	// From webwormhole/dial.go:
-	closeNoSuchSlot = 4000
-	closeSlotTimedOut = 4001
-	closeNoMoreSlots = 4002
-	closeWrongProto = 4003
-	closePeerHungUp = 4004
-	closeBadKey = 4005
-	closeWebRTCSuccess = 4006
-	closeWebRTCSuccessDirect = 4007
-	closeWebRTCSuccessRelay = 4008
-	closeWebRTCFailed = 4009
-
-	protocol = "4";
-
 	constructor(signalserver, code) {
+		// Fields, let alone static fields, are not supported on older
+		// browsers (e.g. firefox 68 and safari 12).
+
+		// Signalling protocol version.
+		this.protocol = "4";
+
+		// Error codes from webwormhole/dial.go.
+		this.closeNoSuchSlot = 4000;
+		this.closeSlotTimedOut = 4001;
+		this.closeNoMoreSlots = 4002;
+		this.closeWrongProto = 4003;
+		this.closePeerHungUp = 4004;
+		this.closeBadKey = 4005;
+		this.closeWebRTCSuccess = 4006;
+		this.closeWebRTCSuccessDirect = 4007;
+		this.closeWebRTCSuccessRelay = 4008;
+		this.closeWebRTCFailed = 4009;
+
 		if (code !== "") {
 			[this.slot, this.pass] = webwormhole.decode(code);
 			if (this.pass.length === 0) {
