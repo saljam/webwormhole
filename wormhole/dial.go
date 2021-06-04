@@ -469,14 +469,21 @@ func New(pass string, sigserv string, slotc chan string) (*Wormhole, error) {
 
 	go c.handleRemoteCandidates(ws, &key)
 
-	// TODO put a timeout here.
 	select {
 	case <-c.opened:
-		logf("webrtc connection succeeded, closing signalling channel")
+		relay := c.IsRelay()
+		logf("webrtc connection succeeded (relay: %v) closing signalling channel", relay)
+		if relay {
+			ws.Close(CloseWebRTCSuccessRelay, "")
+		} else {
+			ws.Close(CloseWebRTCSuccessDirect, "")
+		}
 	case err = <-c.err:
+		ws.Close(CloseWebRTCFailed, "")
+	case <-time.After(30 * time.Second):
+		err = ErrTimedOut
+		ws.Close(CloseWebRTCFailed, "timed out")
 	}
-	// TODO detect connection ("host" vs "relay") type.
-	ws.Close(websocket.StatusNormalClosure, "done")
 	return c, err
 }
 
@@ -612,13 +619,20 @@ func Join(slot, pass string, sigserv string) (*Wormhole, error) {
 
 	go c.handleRemoteCandidates(ws, &key)
 
-	// TODO put a timeout here.
 	select {
 	case <-c.opened:
-		logf("webrtc connection succeeded, closing signalling channel")
+		relay := c.IsRelay()
+		logf("webrtc connection succeeded (relay: %v) closing signalling channel", relay)
+		if relay {
+			ws.Close(CloseWebRTCSuccessRelay, "")
+		} else {
+			ws.Close(CloseWebRTCSuccessDirect, "")
+		}
 	case err = <-c.err:
+		ws.Close(CloseWebRTCFailed, "")
+	case <-time.After(30 * time.Second):
+		err = ErrTimedOut
+		ws.Close(CloseWebRTCFailed, "timed out")
 	}
-	// TODO detect connection ("host" vs "relay") type.
-	ws.Close(websocket.StatusNormalClosure, "done")
 	return c, err
 }
