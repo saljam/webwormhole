@@ -76,8 +76,9 @@ class Wormhole {
 				// TODO UI to warn if relay is used.
 				console.log("webrtc connected:", connType)
 				switch (connType) {
+					case "host":
 					case "srflx":
-					case "host": {
+					case "prflx": {
 						this.ws.close(this.closeWebRTCSuccessDirect);
 						break;
 					}
