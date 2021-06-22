@@ -321,7 +321,7 @@ func relay(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func server(args ...string) {
+func Server(args ...string) {
 	rand.Seed(time.Now().UnixNano()) // for slot allocation
 
 	set := flag.NewFlagSet(args[0], flag.ExitOnError)

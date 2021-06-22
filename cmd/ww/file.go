@@ -15,10 +15,10 @@ const (
 	msgChunkSize = 32 << 10
 )
 
-type header struct {
-	Name string `json:"name",omitempty`
-	Size int    `json:"size",omitempty`
-	Type string `json:"type",omitempty`
+type Header struct {
+	Name string `json:"name,omitempty"`
+	Size int    `json:"size,omitempty"`
+	Type string `json:"type,omitempty"`
 }
 
 func receive(args ...string) {
@@ -51,7 +51,7 @@ func receive(args ...string) {
 		if err != nil {
 			fatalf("could not read file header: %v", err)
 		}
-		var h header
+		var h Header
 		err = json.Unmarshal(buf[:n], &h)
 		if err != nil {
 			fatalf("could not decode file header: %v", err)
@@ -102,7 +102,7 @@ func send(args ...string) {
 		if err != nil {
 			fatalf("could not stat file %s: %v", filename, err)
 		}
-		h, err := json.Marshal(header{
+		h, err := json.Marshal(Header{
 			Name: filepath.Base(filepath.Clean(filename)),
 			Size: int(info.Size()),
 		})
