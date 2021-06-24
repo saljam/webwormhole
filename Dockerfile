@@ -12,4 +12,4 @@ RUN apk --no-cache add ca-certificates
 COPY --from=build /src/ww /bin
 COPY --from=build /src/web /web
 WORKDIR /
-ENTRYPOINT ["/bin/ww", "server"]
+ENTRYPOINT ["/bin/ww", "server", "-https="]

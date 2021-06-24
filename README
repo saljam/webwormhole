@@ -37,6 +37,15 @@ To package the browser extension for Firefox or Chrome:
 
 	$ make webwormhole-ext.zip
 
+To run the server using docker:
+	$ docker build -t webwormhole .
+	$ docker run -p 8000:80 webwormhole
+
+To use a custom signalling server.
+	$ ww -signal http://localhost:8000 send test.txt
+	east-pep-aloe
+	$ ww -signal http://localhost:8000 receive east-pep-aloe
+
 WebWormhole is inspired by and uses a model very similar to that
 of Magic Wormhole.
 
