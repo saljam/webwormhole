@@ -2,13 +2,13 @@
   "name": "WebWormhole",
   "icons": [
     {
-      "src": "icon.svg",
-      "type": "image/svg+xml",
+      "src": "icon192.png",
+      "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "icon.svg",
-      "type": "image/svg+xml",
+      "src": "icon512.png",
+      "type": "image/png",
       "sizes": "512x512"
     }
   ],

@@ -1,1 +1,13 @@
-<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>🕳️</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" height="512" width="512">
+<defs>
+<polygon
+points="265, 0, 486.7, 128, 486.7, 384, 265, 512, 34.3, 384, 34.3, 128"
+stroke-width="5" stroke="#FF7000"
+id="h"
+/>
+</defs>
+<!--<rect x="6" y="6" width="500" height="500" rx="64" />-->
+<use xlink:href="#h" fill="#910074" transform="translate(256,256) scale(0.85, 0.85) translate(-256,-256) rotate(30,256,256)" style="filter: drop-shadow(rgba(255, 255, 255, 0.6) 0px 0px 20px);" />
+<use xlink:href="#h" fill="#570045" transform="translate(256,256) scale(0.60, 0.60) translate(-256,-256) rotate(50,256,256)" />
+<use xlink:href="#h" fill="#310027" transform="translate(256,256) scale(0.35, 0.35) translate(-256,-256) rotate(70,256,256)" />
+</svg>
