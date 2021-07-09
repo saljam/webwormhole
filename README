@@ -23,7 +23,7 @@ On another use the code to establish a connection:
 
 To install the command line tool:
 
-	$ go install webwormhole.io/cmd/ww@latest
+	$ go install github.com/SpiderOak/webwormhole/cmd/ww@latest
 
 This requires Go 1.13 or newer.
 

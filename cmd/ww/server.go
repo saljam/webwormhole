@@ -21,12 +21,12 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"github.com/SpiderOak/webwormhole/wormhole"
 	webrtc "github.com/pion/webrtc/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/acme/autocert"
 	"nhooyr.io/websocket"
-	"webwormhole.io/wormhole"
 )
 
 // slotTimeout is the the maximum amount of time a client is allowed to

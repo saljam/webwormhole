@@ -15,10 +15,10 @@ import (
 	"syscall/js"
 
 	"filippo.io/cpace"
+	"github.com/SpiderOak/webwormhole/wordlist"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/nacl/secretbox"
 	"rsc.io/qr"
-	"webwormhole.io/wordlist"
 )
 
 // state is the PAKE state so far.
