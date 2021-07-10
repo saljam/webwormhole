@@ -43,28 +43,19 @@ class Wormhole {
 
 	pass: Uint8Array;
 	state: string; // TODO enum?
+	signalserver: string;
 	slot?: number;
 	pc?: RTCPeerConnection;
 	ws?: WebSocket;
 	key?: Uint8Array;
 
-	// signalPromise is fullfilled when we've established a signalling channel
-	// and obtained a slot.
-	signalPromise: Promise<{ code?: string, pc: RTCPeerConnection }>
-	signalResolve?: (result: {code?: string, pc: RTCPeerConnection}) => void
-	signalReject?: (reason: string) => void
-
-	// signalPromise is fullfilled when the called is done configuring the
-	// PeerConnection object and we can attempt ICE.
-	finishPromise?: Promise<void>
-	finishResolve?: () => void
-
-	// donePromise is fullfilled when we're done with signalling.
-	donePromise?: Promise<Uint8Array>
-	doneResolve?: (fingerprint: Uint8Array) => void
-	doneReject?: (reason: string) => void
+	callback?: (pc: RTCPeerConnection, newcode?: string) => void;
+	done: Promise<Uint8Array>;
+	resolve?: (fingerprint: Uint8Array) => void;
+	reject?: (reason: string) => void;
 
 	constructor(signalserver: string, code: string) {
+		this.signalserver = signalserver;
 		if (code !== "") {
 			[this.slot, this.pass] = webwormhole.decode(code);
 			if (this.pass.length === 0) {
@@ -78,7 +69,7 @@ class Wormhole {
 			this.state = "a";
 		}
 
-		// There are 4 events that we need to synchronise with the caller on:
+		// There are 3 events that we need to synchronise with the caller on:
 		//   1. we got the first message from the signalling server.
 		//        We now have the slot number and the ICE server details, so we can
 		//        create the wormhole code and PeerConnection object, and pass them back
@@ -88,29 +79,11 @@ class Wormhole {
 		//   3. we've successfully authenticated the other peer.
 		//        Signalling is now done, apart from trickling candidates. The caller
 		//        can display the key fingerprint.
-		//   4. caller tells us the webrtc handshake is done. We can close the websocket.
 
-		this.signalPromise = new Promise((signalResolve, signalReject) => {
-			this.finishPromise = new Promise((finishResolve, finishReject) => {
-				this.donePromise = new Promise((doneResolve, doneReject) => {
-					this.signalResolve = signalResolve;
-					this.signalReject = signalReject;
-					this.finishResolve = finishResolve;
-					this.doneResolve = doneResolve;
-					this.doneReject = doneReject;
-					this.dial(signalserver);
-				});
-			});
+		this.done = new Promise((resolve, reject) => {
+			this.resolve = resolve;
+			this.reject = reject;
 		});
-	}
-
-	async signal() {
-		return this.signalPromise;
-	}
-
-	async finish() {
-		if (this.finishResolve) this.finishResolve();
-		return this.donePromise;
 	}
 
 	async close() {
@@ -176,9 +149,9 @@ class Wormhole {
 		return conntype
 	}
 
-	dial(signalserver: string) {
+	async dial(): Promise<Uint8Array> {
 		this.ws = new WebSocket(
-			Wormhole.wsserver(signalserver, this.slot),
+			Wormhole.wsserver(this.signalserver, this.slot),
 			Wormhole.protocol,
 		);
 		// Use lambdas so that 'this' in the respective bodies refers to the Wormhole
@@ -187,9 +160,11 @@ class Wormhole {
 		this.ws.onerror = (e: Event) => this.onerror(e);
 		this.ws.onclose = (e: CloseEvent) => this.onclose(e);
 		this.ws.onmessage = (e: MessageEvent) => this.onmessage(e);
+
+		return this.done;
 	}
 
-	onmessage(m: MessageEvent) {
+	async onmessage(m: MessageEvent) {
 		if (!this.ws) { return }
 
 		// This all being so asynchronous makes it so the only way apparent to
@@ -207,10 +182,9 @@ class Wormhole {
 					return;
 				}
 				this.makePeerConnection(msg.iceServers);
-				if (this.signalResolve) this.signalResolve({
-					code: webwormhole.encode(this.slot, this.pass),
-					pc: this.pc as RTCPeerConnection,
-				});
+				if (this.callback && this.pc) {
+					this.callback(this.pc, webwormhole.encode(this.slot, this.pass));
+				}
 				this.state = "wait_for_pake_a";
 				return;
 			}
@@ -219,11 +193,11 @@ class Wormhole {
 				const msg: {iceServers: GoICEServers} = JSON.parse(m.data);
 
 				this.makePeerConnection(msg.iceServers);
-				if (this.signalResolve) this.signalResolve({
-					pc: this.pc as RTCPeerConnection,
-				});
+				if (this.callback && this.pc) {
+					this.callback(this.pc);
+				}
 				const msgA = webwormhole.start(this.pass);
-				if (msgA == null) {
+				if (!msgA) {
 					this.fail("couldn't generate A's PAKE message");
 					return;
 				}
@@ -244,18 +218,19 @@ class Wormhole {
 					this.fail("could not generate key");
 					return;
 				}
+				if (!msgB) {
+					this.fail("couldn't generate B's PAKE message");
+					return;
+				}
 				console.log("generated key");
 				this.ws.send(msgB);
-				this.state = "wait_for_pc_initialize";
-				if (this.finishPromise) this.finishPromise.then(async () => {
-					if (!this.ws || !this.key || !this.pc) { return }
 
-					const offer = await this.pc.createOffer();
-					console.log("created offer");
-					this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)));
-					this.state = "wait_for_webtc_answer";
-					this.pc.setLocalDescription(offer);
-				});
+				this.state = "wait_for_local_offer";
+				const offer = await this.pc.createOffer();
+				console.log("created offer");
+				this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)));
+				this.state = "wait_for_webtc_answer";
+				this.pc.setLocalDescription(offer);
 				return;
 			}
 
@@ -272,7 +247,7 @@ class Wormhole {
 			}
 
 			case "wait_for_webtc_offer": {
-				if (!this.key || !this.pc) { return }
+				if (!this.key || !this.pc || !this.resolve) { return }
 
 				const msg: RTCSessionDescriptionInit | null = JSON.parse(webwormhole.open(this.key, m.data));
 				if (!msg) {
@@ -287,24 +262,20 @@ class Wormhole {
 					return;
 				}
 				console.log("got offer");
-				// No intermediate state wait_for_pc_initialize because candidates can
-				// staring arriving straight after the offer is sent.
-				this.state = "wait_for_candidates";
-				if (this.finishPromise) this.finishPromise.then(async () => {
-					if (!this.ws || !this.key || !this.pc) { return }
 
-					await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
-					const answer = await this.pc.createAnswer();
-					console.log("created answer");
-					this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
-					if (this.doneResolve) this.doneResolve(webwormhole.fingerprint(this.key));
-					this.pc.setLocalDescription(answer);
-				});
+				this.state = "wait_for_local_answer"
+				await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
+				const answer = await this.pc.createAnswer();
+				console.log("created answer");
+				this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
+				this.resolve(webwormhole.fingerprint(this.key));
+				this.pc.setLocalDescription(answer);
+				this.state = "wait_for_candidates"
 				return;
 			}
 
 			case "wait_for_webtc_answer": {
-				if (!this.key || !this.pc) { return }
+				if (!this.key || !this.pc || !this.resolve) { return }
 
 				const msg: RTCSessionDescriptionInit | null = JSON.parse(webwormhole.open(this.key, m.data));
 				if (!msg) {
@@ -320,39 +291,53 @@ class Wormhole {
 				}
 				console.log("got answer");
 				this.pc.setRemoteDescription(new RTCSessionDescription(msg));
-				if (this.doneResolve) this.doneResolve(webwormhole.fingerprint(this.key));
+				this.resolve(webwormhole.fingerprint(this.key));
 				this.state = "wait_for_candidates";
 				return;
 			}
 
 			case "wait_for_candidates": {
 				if (!this.key || !this.pc) { return }
-
-				const msg: {candidate: string} | null = JSON.parse(webwormhole.open(this.key, m.data));
-				if (!msg) {
-					this.fail("bad key");
-					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close(WormholeErrorCodes.closeBadKey);
-					return;
-				}
-				console.log("got remote candidate", msg.candidate);
-				if (this.finishPromise) this.finishPromise.then(async () => {
-					if (!this.key || !this.pc) { return }
-					this.pc.addIceCandidate(new RTCIceCandidate(msg));
-				});
+				this.processCandidate(m.data)
 				return;
 			}
 
-			case "wait_for_pc_initialize":
-			case "wait_for_local_offer":
+			case "wait_for_local_offer": {
+				this.fail(`unexpected message: ${m.data}`)
+				return;
+			}
+
 			case "wait_for_local_answer": {
-				console.log("unexpected message", m);
-				this.fail("unexpected message");
+				// In this state we already got an offer and the WebRTC API is busy
+				// making an answer. It's possible to get remote candidates from eager
+				// peers now, but it's not safe to add them to this.pc on all browsers
+				// just yet.
+				// Delay processing the candidate until the handshake is done.
+				// This "state" is special. It doesn't progress the state machine. The
+				// wait_for_webtc_offer state moves us into and out of this state. (My
+				// brain is just not wired for async/await...)
+				await this.done
+				this.processCandidate(m.data)
 				return;
 			}
-			case "error":
-				return;
+
+			case "error": return;
 		}
+	}
+
+	processCandidate(data: string) {
+		if (!this.ws || !this.key || !this.pc) { return }
+
+		const msg: {candidate: string} | null = JSON.parse(webwormhole.open(this.key, data));
+		if (!msg) {
+			this.fail("bad key");
+			this.ws.send(webwormhole.seal(this.key, "bye"));
+			this.ws.close(WormholeErrorCodes.closeBadKey);
+			return;
+		}
+		console.log("got remote candidate", msg.candidate);
+		this.pc.addIceCandidate(new RTCIceCandidate(msg));
+		return;
 	}
 
 	makePeerConnection(iceServers: GoICEServers) {
@@ -409,8 +394,7 @@ class Wormhole {
 	}
 
 	fail(reason: string) {
-		if (this.signalReject) this.signalReject(reason);
-		if (this.doneReject) this.doneReject(reason);
+		if (this.reject) this.reject(reason);
 		this.state = "error";
 	}
 

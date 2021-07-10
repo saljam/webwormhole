@@ -317,64 +317,69 @@ function receive(e) {
 async function connect() {
 	try {
 		dialling();
-		const code = document.getElementById("magiccode").value;
-		const w = new Wormhole(signalserver.href, code);
-		const signal = await w.signal();
 
-		// Use PeerConnection.iceConnectionState since Firefox does not
-		// implement PeerConnection.connectionState
-		signal.pc.oniceconnectionstatechange = () => {
-			switch (signal.pc.iceConnectionState) {
-				case "connected": {
-					// Handled in datachannel.onopen.
-					w.close();
-					break;
-				}
-				case "disconnected":
-				case "closed": {
-					disconnected("webrtc connection closed");
-					signal.pc.onconnectionstatechange = null;
-					break;
-				}
-				case "failed": {
-					disconnected("webrtc connection failed");
-					console.log(
-						"webrtc connection failed connectionState:",
-						signal.pc.connectionState,
-						"iceConnectionState",
-						signal.pc.iceConnectionState,
-					);
-					w.close();
-					break;
-				}
+		const w = new Wormhole(
+			signalserver.href,
+			document.getElementById("magiccode").value,
+		);
+
+		w.callback = (pc, code) => {
+			if (code) {
+				waiting();
+				codechange();
+				document.getElementById("magiccode").value = code;
+				location.hash = code;
+				signalserver.hash = code;
+				updateqr(signalserver.href);
 			}
-		};
 
-		const dc = signal.pc.createDataChannel("data", {negotiated: true, id: 0});
-		dc.onopen = () => {
-			connected();
-			datachannel = dc;
-			// Send anything we have in the send queue.
-			send();
-		};
-		dc.onmessage = receive;
-		dc.binaryType = "arraybuffer";
-		dc.onclose = () => {
-			disconnected("datachannel closed");
-		};
-		dc.onerror = (e) => {
-			disconnected("datachannel error:", e.error);
-		};
+			// Use PeerConnection.iceConnectionState since Firefox does not
+			// implement PeerConnection.connectionState
+			pc.oniceconnectionstatechange = () => {
+				switch (pc.iceConnectionState) {
+					case "connected": {
+						// Handled in datachannel.onopen.
+						w.close();
+						break;
+					}
+					case "disconnected":
+					case "closed": {
+						disconnected("webrtc connection closed");
+						pc.onconnectionstatechange = null;
+						break;
+					}
+					case "failed": {
+						disconnected("webrtc connection failed");
+						console.log(
+							"webrtc connection failed connectionState:",
+							pc.connectionState,
+							"iceConnectionState",
+							pc.iceConnectionState,
+						);
+						w.close();
+						break;
+					}
+				}
+			};
 
-		if (code === "") {
-			waiting();
-			codechange();
-			document.getElementById("magiccode").value = signal.code;
-			location.hash = signal.code;
-			signalserver.hash = signal.code;
-			updateqr(signalserver.href);
+			const dc = pc.createDataChannel("data", {negotiated: true, id: 0});
+			dc.onopen = () => {
+				connected();
+				datachannel = dc;
+				// Send anything we have in the send queue.
+				send();
+			};
+			dc.onmessage = receive;
+			dc.binaryType = "arraybuffer";
+			dc.onclose = () => {
+				disconnected("datachannel closed");
+			};
+			dc.onerror = (e) => {
+				disconnected("datachannel error:", e.error);
+			};
 		}
-		const fingerprint = await w.finish();
+
+		const fingerprint = await w.dial();
 
 		// To make it more likely to spot the 1 in 2^16 chance of a successful
 		// MITM password guess, we can compare a fingerprint derived from the PAKE
