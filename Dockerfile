@@ -1,4 +1,9 @@
-FROM golang:alpine as build
+FROM node:slim as jsbuild
+RUN npm install -g rome
+WORKDIR /src
+COPY . /src
+
+FROM golang:alpine as gobuild
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -9,7 +14,7 @@ RUN go build ./cmd/ww
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
-COPY --from=build /src/ww /bin
-COPY --from=build /src/web /web
+COPY --from=gobuild /src/ww /bin
+COPY --from=gobuild /src/web /web
 WORKDIR /
 ENTRYPOINT ["/bin/ww", "server"]
