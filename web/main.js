@@ -27,7 +27,8 @@ function drop(e) {
 
 	// A shortcut to save users a click. If we're disconnected and they drag
 	// a file in treat it as a click on the new/join wormhole button.
-	if (document.getElementById("filepicker").disabled) {
+	// TODO use global connection state.
+	if (!document.getElementById("dial").disabled) {
 		connect();
 	}
 }
@@ -484,7 +485,7 @@ function preventdefault(e) {
 
 async function copyurl() {
 	await navigator.clipboard.writeText(signalserver.href);
-	// TODO react to success.
+	// TODO toast message on success.
 }
 
 function updateqr(url) {
@@ -647,8 +648,19 @@ async function swready() {
 				regs[i].unregister();
 			}
 		}
+
+		// The scope has to be "/" and not just "/_/" in order to meet Chrome's
+		// PWA installability criteria.
 		const reg = await navigator.serviceWorker.register("sw.js", {scope: "/"});
 		serviceworker = reg.active || reg.waiting || reg.installing;
+
+		// Add a stub listener for Share Target API requests forwarded from service worker.
+		navigator.serviceWorker.addEventListener("message", e => {
+			console.log("got shared message:", e.data)
+			// TODO start a new connection (only if we're not connected already)
+			// and queue the shared file.
+		});
+
 		console.log("service worker registered:", serviceworker.state);
 	}
 }

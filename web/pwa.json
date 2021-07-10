@@ -1,22 +1,42 @@
 {
-  "name": "WebWormhole",
-  "icons": [
-    {
-      "src": "icon192.png",
-      "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "icon512.png",
-      "type": "image/png",
-      "sizes": "512x512"
-    }
-  ],
-  "start_url": "/",
-  "display": "standalone",
-  "scope": "/",
-  "background_color": "#321d47",
-  "theme_color": "#321d47",
-  "description": "WebWormhole lets you send files from one place to another.",
-  "screenshots": []
+	"name": "WebWormhole",
+	"icons": [
+		{
+			"src": "icon192.png",
+			"type": "image/png",
+			"sizes": "192x192"
+		},
+		{
+			"src": "icon512.png",
+			"type": "image/png",
+			"sizes": "512x512"
+		}
+	],
+	"start_url": "/",
+	"display": "standalone",
+	"scope": "/",
+	"background_color": "#321d47",
+	"theme_color": "#321d47",
+	"description": "WebWormhole lets you send files from one place to another.",
+	"screenshots": [],
+	"share_target": {
+		"action": "/_/",	
+		"method": "POST",
+		"enctype": "multipart/form-data",
+		"params": {
+			"title": "title",
+			"text": "text",
+			"url": "url",
+			"files": [
+				{
+					"name": "plaintext",
+					"accept": ["text/plain", ".txt"]
+				},
+				{
+					"name": "image",
+					"accept": "image/png"
+				}
+			]
+		}
+	}
 }
