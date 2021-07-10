@@ -41,46 +41,54 @@ function signalMetadataReady(id: string, s: Stream) {
 	}
 }
 
-sw.addEventListener(
-	"message",
-	(e) => {
-		const msg = e.data;
-		const id = msg.id;
+sw.addEventListener("message", (e) => {
+	const msg = e.data;
+	const id = msg.id;
 
-		if (msg.type === "metadata") {
+	switch (msg.type) {
+		case "metadata": {
 			const s = new Stream(msg.name, msg.size, msg.filetype);
 
 			// Resolve promise if GET request arrived first.
 			signalMetadataReady(id, s);
 
 			streams.set(id, s);
-		} else {
-			const streamInfo = streams.get(id);
-
-			if (msg.type === "data") {
-				if (msg.offset !== streamInfo.offset) {
-					console.warn(`aborting ${id}: got data out of order`);
-					// TODO abort fetch response
-					streams.delete(id);
-					return;
-				}
-				streamInfo.controller.enqueue(new Uint8Array(msg.data));
-				streamInfo.offset += msg.data.byteLength;
-			} else if (msg.type === "end") {
-				streamInfo.controller.close();
-
-				// Synchronize with fetch handler to clean up properly.
-				if (streamInfo.requestHandled) {
-					streams.delete(id);
-				} else {
-					streamInfo.streamHandled = true;
-				}
-			} else if (msg.type === "error") {
-				streamInfo.controller.error(msg.error);
-			}
+			return;
 		}
-	},
-);
+		case "data": {
+			const s = streams.get(id);
+
+			if (msg.offset !== s.offset) {
+				console.warn(`aborting ${id}: got data out of order`);
+				// TODO abort fetch response
+				streams.delete(id);
+				return;
+			}
+			s.controller.enqueue(new Uint8Array(msg.data));
+			s.offset += msg.data.byteLength;
+		
+			return;
+		}
+		case "end": {
+			const s = streams.get(id);
+
+			s.controller.close();
+
+			// Synchronize with fetch handler to clean up properly.
+			if (s.requestHandled) {
+				streams.delete(id);
+			} else {
+				s.streamHandled = true;
+			}
+		
+			return;
+		}
+		case "error": {
+			streams.get(id).controller.error(msg.error);
+			return;
+		}
+	}
+});
 
 function encodeFilename(filename: string) {
 	return encodeURIComponent(filename).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\(/g, "%29").replace(/\*/g, "%2A");
@@ -164,26 +172,23 @@ async function streamUpload(e: FetchEvent) {
 	return new Response("ok");
 }
 
-sw.addEventListener(
-	"fetch",
-	(e) => {
-		const PREFIX = "/_";
-		const url = new URL(e.request.url);
+sw.addEventListener("fetch", (e) => {
+	const PREFIX = "/_";
+	const url = new URL(e.request.url);
 
-		// Stream download from WebRTC DataChannel.
-		if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "GET") {
-			const id = url.pathname.substring(`${PREFIX}/`.length);
-			e.respondWith(streamDownload(id));
-			return;
-		}
+	// Stream download from WebRTC DataChannel.
+	if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "GET") {
+		const id = url.pathname.substring(`${PREFIX}/`.length);
+		e.respondWith(streamDownload(id));
+		return;
+	}
 
-		// Stream upload to WebRTC DataChannel, triggered by Share Target API.
-		if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "POST") {
-			e.respondWith(streamUpload(e));
-			return;
-		}
+	// Stream upload to WebRTC DataChannel, triggered by Share Target API.
+	if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "POST") {
+		e.respondWith(streamUpload(e));
+		return;
+	}
 
-		// Default to passthrough.
-		e.respondWith(fetch(e.request));
-	},
-);
+	// Default to passthrough.
+	e.respondWith(fetch(e.request));
+});

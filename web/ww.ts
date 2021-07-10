@@ -1,23 +1,60 @@
-"use strict";
+// Declare the WASM symbols.
+declare var webwormhole: {
+	decode(code: string): [number, Uint8Array];
+	encode(slot: number, pass: Uint8Array): string;
+	start(pass: Uint8Array): string;
+	exchange(pass: Uint8Array, msg: string): [Uint8Array, string];
+	finish(msg: Uint8Array): Uint8Array;
+	open(key: Uint8Array, msg: string): string;
+	seal(key: Uint8Array, msg: string): string;
+	fingerprint(key: Uint8Array): Uint8Array;
+}
+
+declare class Go {
+	importObject: any;
+	run(instance: WebAssembly.Instance): void;
+}
+
+// Error codes from webwormhole/dial.go.
+enum WormholeErrorCodes {
+	closeNoSuchSlot = 4000,
+	closeSlotTimedOut = 4001,
+	closeNoMoreSlots = 4002,
+	closeWrongProto = 4003,
+	closePeerHungUp = 4004,
+	closeBadKey = 4005,
+	closeWebRTCSuccess = 4006,
+	closeWebRTCSuccessDirect = 4007,
+	closeWebRTCSuccessRelay = 4008,
+	closeWebRTCFailed = 4009,
+}
+
+// The ICEServers JSON as exported from Pion capitalises field names, but
+// JS expects lowercase dictionary entries.
+type GoICEServers = [{ URLs:[string], Username: string, Credential: string }];
+
 class Wormhole {
-	constructor(signalserver, code) {
-		// Fields, let alone static fields, are not supported on older
-		// browsers (e.g. firefox 68 and safari 12).
-		// Signalling protocol version.
-		this.protocol = "4";
+	// Signalling protocol version.
+	static readonly protocol = "4";
 
-		// Error codes from webwormhole/dial.go.
-		this.closeNoSuchSlot = 4_000;
-		this.closeSlotTimedOut = 4_001;
-		this.closeNoMoreSlots = 4_002;
-		this.closeWrongProto = 4_003;
-		this.closePeerHungUp = 4_004;
-		this.closeBadKey = 4_005;
-		this.closeWebRTCSuccess = 4_006;
-		this.closeWebRTCSuccessDirect = 4_007;
-		this.closeWebRTCSuccessRelay = 4_008;
-		this.closeWebRTCFailed = 4_009;
+	slot?: number;
+	pass: Uint8Array;
+	state: string; // TODO enum?
+	pc?: RTCPeerConnection;
+	ws?: any;
+	key?: Uint8Array;
 
+	promise1: any;
+	resolve1: any;
+	reject1: any;
+	promise2: any;
+	resolve2: any;
+	reject2: any;
+	promise3: any;
+	resolve3: any;
+	reject3: any;
+
+	constructor(signalserver: string, code: string) {
 		if (code !== "") {
 			[this.slot, this.pass] = webwormhole.decode(code);
 			if (this.pass.length === 0) {
@@ -26,7 +63,6 @@ class Wormhole {
 			console.log("dialling slot:", this.slot);
 			this.state = "b";
 		} else {
-			this.slot = "";
 			this.pass = crypto.getRandomValues(new Uint8Array(2));
 			console.log("requesting slot");
 			this.state = "a";
@@ -68,6 +104,7 @@ class Wormhole {
 	}
 
 	async close() {
+		if (!this.pc) { return }
 		switch (this.pc.iceConnectionState) {
 			case "connected": {
 				const connType = await this.connType();
@@ -77,29 +114,31 @@ class Wormhole {
 					case "host":
 					case "srflx":
 					case "prflx": {
-						this.ws.close(this.closeWebRTCSuccessDirect);
+						this.ws.close(WormholeErrorCodes.closeWebRTCSuccessDirect);
 						break;
 					}
 					case "relay": {
-						this.ws.close(this.closeWebRTCSuccessRelay);
+						this.ws.close(WormholeErrorCodes.closeWebRTCSuccessRelay);
 						break;
 					}
 					default: {
-						this.ws.close(this.closeWebRTCSuccess);
+						this.ws.close(WormholeErrorCodes.closeWebRTCSuccess);
 						break;
 					}
 				}
 				break;
 			}
 			case "failed": {
-				this.ws.close(this.closeWebRTCFailed);
+				this.ws.close(WormholeErrorCodes.closeWebRTCFailed);
 				break;
 			}
 		}
 	}
 
-	async connType() {
-		let stats = await this.pc.getStats();
+	async connType(): Promise<string> {
+		if (!this.pc) { return "" }
+		// Type any here because RTCStatsReport seems to be poorly defined?
+		let stats: any = await this.pc.getStats();
 		// s.selected gives more confidenece than s.state == "succeeded", but Chrome does
 		// not implement it.
 		let selected = [...stats.values()].find((s) =>
@@ -108,42 +147,35 @@ class Wormhole {
 		return stats.get(selected.localCandidateId).candidateType;
 	}
 
-	dial(signalserver) {
+	dial(signalserver: string) {
 		this.ws = new WebSocket(
 			Wormhole.wsserver(signalserver, this.slot),
-			this.protocol,
+			Wormhole.protocol,
 		);
-		this.ws.onopen = (a) => {
-			this.onopen(a);
-		};
-		this.ws.onerror = (a) => {
-			this.onerror(a);
-		};
-		this.ws.onclose = (a) => {
-			this.onclose(a);
-		};
-		this.ws.onmessage = (a) => {
-			this.onmessage(a);
-		};
+		// Use lambdas so that 'this' in the respective bodies refers to the Wormhole
+		// instance, and not the WebSocket one.
+		this.ws.onopen = () => this.onopen();
+		this.ws.onerror = (e: Event) => this.onerror(e);
+		this.ws.onclose = (e: CloseEvent) => this.onclose(e);
+		this.ws.onmessage = (e: MessageEvent) => this.onmessage(e);
 	}
 
-	onmessage(m) {
-		let msg; // for decoded json
-
+	onmessage(m: MessageEvent) {
 		// This all being so asynchronous makes it so the only way apparent to
 		// me to describe the PAKE and WebRTC message exchange state machine
 		// a big case statement. I'd welcome a clearer or more idiomatic approach
 		// in JS if someone were to suggest one.
 		switch (this.state) {
 			case "a": {
-				msg = JSON.parse(m.data);
+				const msg: {slot: string, iceServers: GoICEServers} = JSON.parse(m.data);
+
 				console.log("assigned slot:", msg.slot);
 				this.slot = parseInt(msg.slot, 10);
 				if (!Number.isSafeInteger(this.slot)) {
 					this.fail("invalid slot");
 					return;
 				}
-				this.newPeerConnection(msg.iceServers);
+				this.makePeerConnection(msg.iceServers);
 				this.resolve1({
 					code: webwormhole.encode(this.slot, this.pass),
 					pc: this.pc,
@@ -153,8 +185,9 @@ class Wormhole {
 			}
 
 			case "b": {
-				msg = JSON.parse(m.data);
-				this.newPeerConnection(msg.iceServers);
+				const msg: {iceServers: GoICEServers} = JSON.parse(m.data);
+
+				this.makePeerConnection(msg.iceServers);
 				this.resolve1({
 					pc: this.pc,
 				});
@@ -170,11 +203,13 @@ class Wormhole {
 			}
 
 			case "wait_for_pake_a": {
+				if (!this.pc) { return }
+
 				console.log("got pake message a:", m.data);
 				let msgB;
 				[this.key, msgB] = webwormhole.exchange(this.pass, m.data);
 				console.log("message b:", msgB);
-				if (this.key == null) {
+				if (!this.key) {
 					this.fail("could not generate key");
 					return;
 				}
@@ -182,6 +217,8 @@ class Wormhole {
 				this.ws.send(msgB);
 				this.state = "wait_for_pc_initialize";
 				this.promise2.then(async () => {
+					if (!this.key || !this.pc) { return }
+
 					const offer = await this.pc.createOffer();
 					console.log("created offer");
 					this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)));
@@ -194,7 +231,7 @@ class Wormhole {
 			case "wait_for_pake_b": {
 				console.log("got pake message b:", m.data);
 				this.key = webwormhole.finish(m.data);
-				if (this.key == null) {
+				if (!this.key) {
 					this.fail("could not generate key");
 					return;
 				}
@@ -204,11 +241,13 @@ class Wormhole {
 			}
 
 			case "wait_for_webtc_offer": {
-				msg = JSON.parse(webwormhole.open(this.key, m.data));
-				if (msg == null) {
+				if (!this.key || !this.pc) { return }
+
+				const msg: RTCSessionDescriptionInit | null = JSON.parse(webwormhole.open(this.key, m.data));
+				if (!msg) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close(this.closeBadKey);
+					this.ws.close(WormholeErrorCodes.closeBadKey);
 					return;
 				}
 				if (msg.type !== "offer") {
@@ -221,6 +260,8 @@ class Wormhole {
 				// staring arriving straight after the offer is sent.
 				this.state = "wait_for_candidates";
 				this.promise2.then(async () => {
+					if (!this.key || !this.pc) { return }
+
 					await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
 					const answer = await this.pc.createAnswer();
 					console.log("created answer");
@@ -232,11 +273,13 @@ class Wormhole {
 			}
 
 			case "wait_for_webtc_answer": {
-				msg = JSON.parse(webwormhole.open(this.key, m.data));
-				if (msg == null) {
+				if (!this.key || !this.pc) { return }
+
+				const msg: RTCSessionDescriptionInit | null = JSON.parse(webwormhole.open(this.key, m.data));
+				if (!msg) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close(this.closeBadKey);
+					this.ws.close(WormholeErrorCodes.closeBadKey);
 					return;
 				}
 				if (msg.type !== "answer") {
@@ -252,15 +295,18 @@ class Wormhole {
 			}
 
 			case "wait_for_candidates": {
-				msg = JSON.parse(webwormhole.open(this.key, m.data));
-				if (msg == null) {
+				if (!this.key || !this.pc) { return }
+
+				const msg: {candidate: string} | null = JSON.parse(webwormhole.open(this.key, m.data));
+				if (!msg) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close(this.closeBadKey);
+					this.ws.close(WormholeErrorCodes.closeBadKey);
 					return;
 				}
 				console.log("got remote candidate", msg.candidate);
 				this.promise2.then(async () => {
+					if (!this.key || !this.pc) { return }
 					this.pc.addIceCandidate(new RTCIceCandidate(msg));
 				});
 				return;
@@ -278,7 +324,7 @@ class Wormhole {
 		}
 	}
 
-	newPeerConnection(iceServers) {
+	makePeerConnection(iceServers: GoICEServers) {
 		let normalisedICEServers = [];
 		for (let i = 0; i < iceServers.length; i++) {
 			normalisedICEServers.push({
@@ -290,10 +336,12 @@ class Wormhole {
 		this.pc = new RTCPeerConnection({
 			iceServers: normalisedICEServers,
 		});
-		this.pc.onicecandidate = (e) => {
+		this.pc.onicecandidate = (e: RTCPeerConnectionIceEvent) => {
 			if (e.candidate && e.candidate.candidate !== "") {
 				console.log("got local candidate", e.candidate.candidate);
-				this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
+				if (this.key) {
+					this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
+				}
 			}
 		};
 	}
@@ -302,12 +350,12 @@ class Wormhole {
 		console.log("websocket session established");
 	}
 
-	onerror(e) {
+	onerror(e: Event) {
 		console.log("websocket session error:", e);
 		this.fail("could not connect to signalling server");
 	}
 
-	onclose(e) {
+	onclose(e: CloseEvent) {
 		if (e.code === 4_000) {
 			this.fail("no such slot");
 		} else if (e.code === 4_001) {
@@ -329,28 +377,31 @@ class Wormhole {
 		}
 	}
 
-	fail(reason) {
+	fail(reason: string) {
 		this.reject1(reason);
 		this.reject3(reason);
 		this.state = "error";
 	}
 
 	// wsserver creates a WebSocket scheme (ws: or wss:) URL from an HTTP one.
-	static wsserver(url, slot) {
+	static wsserver(url: string, slot?: number) {
 		const u = new URL(url);
 		let protocol = "wss:";
 		if (u.protocol === "http:") {
 			protocol = "ws:";
 		}
-		let path = u.pathname + slot;
+		let path = u.pathname;
 		if (!path.startsWith("/")) {
 			path = `/${path}`;
+		}
+		if (slot) {
+			path = `${path}${slot}`;
 		}
 		return `${protocol}//${u.host}${path}`;
 	}
 
 	// WASM loads the WebAssembly part from url.
-	static async WASM(url) {
+	static async WASM(url: string) {
 		// Polyfill for Safari WASM streaming.
 		if (!WebAssembly.instantiateStreaming) {
 			WebAssembly.instantiateStreaming = async (resp, importObject) => {

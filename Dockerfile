@@ -3,7 +3,8 @@ RUN npm install -g rome typescript
 WORKDIR /src
 COPY ./web /src
 RUN rome check
-RUN tsc -t ES2018 --lib webworker,es2018 --strict sw.ts
+RUN tsc -t ES2018 --strict --lib es2018,webworker sw.ts
+RUN tsc -t ES2018 --strict --lib es2018,dom ww.ts
 
 FROM golang:alpine as gobuild
 WORKDIR /src

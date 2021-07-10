@@ -32,36 +32,41 @@ function signalMetadataReady(id, s) {
 sw.addEventListener("message", (e) => {
     const msg = e.data;
     const id = msg.id;
-    if (msg.type === "metadata") {
-        const s = new Stream(msg.name, msg.size, msg.filetype);
-        // Resolve promise if GET request arrived first.
-        signalMetadataReady(id, s);
-        streams.set(id, s);
-    }
-    else {
-        const streamInfo = streams.get(id);
-        if (msg.type === "data") {
-            if (msg.offset !== streamInfo.offset) {
+    switch (msg.type) {
+        case "metadata": {
+            const s = new Stream(msg.name, msg.size, msg.filetype);
+            // Resolve promise if GET request arrived first.
+            signalMetadataReady(id, s);
+            streams.set(id, s);
+            return;
+        }
+        case "data": {
+            const s = streams.get(id);
+            if (msg.offset !== s.offset) {
                 console.warn(`aborting ${id}: got data out of order`);
                 // TODO abort fetch response
                 streams.delete(id);
                 return;
             }
-            streamInfo.controller.enqueue(new Uint8Array(msg.data));
-            streamInfo.offset += msg.data.byteLength;
+            s.controller.enqueue(new Uint8Array(msg.data));
+            s.offset += msg.data.byteLength;
+            return;
         }
-        else if (msg.type === "end") {
-            streamInfo.controller.close();
+        case "end": {
+            const s = streams.get(id);
+            s.controller.close();
             // Synchronize with fetch handler to clean up properly.
-            if (streamInfo.requestHandled) {
+            if (s.requestHandled) {
                 streams.delete(id);
             }
             else {
-                streamInfo.streamHandled = true;
+                s.streamHandled = true;
             }
+            return;
         }
-        else if (msg.type === "error") {
-            streamInfo.controller.error(msg.error);
+        case "error": {
+            streams.get(id).controller.error(msg.error);
+            return;
         }
     }
 });
