@@ -16,7 +16,7 @@ function pick() {
 
 function drop(e) {
 	const files = e.dataTransfer.files;
-	const t = e.dataTransfer.getData("text")
+	const t = e.dataTransfer.getData("text");
 	if (files.length !== 0) {
 		for (let i = 0; i < files.length; i++) {
 			sendfile(files[i]);
@@ -36,7 +36,7 @@ function drop(e) {
 // Handle a paste event from cmd-v/ctl-v.
 function pasteEvent(e) {
 	const files = e.clipboardData.files;
-	const t = e.clipboardData.getData("text")
+	const t = e.clipboardData.getData("text");
 	if (files.length !== 0) {
 		for (let i = 0; i < files.length; i++) {
 			sendfile(files[i]);
@@ -47,16 +47,18 @@ function pasteEvent(e) {
 }
 
 // Read clipboard content using Clipboard API.
-async function pasteClipboard(e) {
-	if (hacks.noclipboardapi) return
+async function pasteClipboard() {
+	if (hacks.noclipboardapi) {
+		return;
+	}
 
 	let items = await navigator.clipboard.read();
 	// TODO toast a message if permission wasn't given.
 	for (let i = 0; i < items.length; i++) {
 		if (items[i].types.includes("image/png")) {
-			const blob = await items[i].getType(image/png);
+			const blob = await items[i].getType("image/png");
 			sendfile(blob);
-		} else  if (items[i].types.includes("text/plain")) {
+		} else if (items[i].types.includes("text/plain")) {
 			const blob = await items[i].getType("text/plain");
 			sendtext(await blob.text());
 		}
@@ -100,8 +102,8 @@ async function sendtext(m) {
 		f: {
 			name: m,
 			type: "application/webwormhole-text",
-		}
-	}
+		},
+	};
 	item.pre = document.createElement("pre");
 	item.pre.appendChild(document.createTextNode(`${item.f.name}`));
 	item.li = document.createElement("li");
@@ -154,7 +156,7 @@ async function send() {
 		),
 	);
 
-	if (sending.f.type == "application/webwormhole-text") {
+	if (sending.f.type === "application/webwormhole-text") {
 		sending.li.removeChild(sending.progress);
 		sending = null;
 		return send();
@@ -239,7 +241,7 @@ function receive(e) {
 			receiving.data = new Uint8Array(receiving.size);
 		}
 
-		if (receiving.type == "application/webwormhole-text") {
+		if (receiving.type === "application/webwormhole-text") {
 			receiving.pre = document.createElement("pre");
 			receiving.pre.appendChild(document.createTextNode(`${receiving.name}`));
 			receiving.li = document.createElement("li");
@@ -357,8 +359,12 @@ async function connect() {
 		};
 		dc.onmessage = receive;
 		dc.binaryType = "arraybuffer";
-		dc.onclose = () => { disconnected("datachannel closed"); };
-		dc.onerror = e => { disconnected("datachannel error:", e.error); };
+		dc.onclose = () => {
+			disconnected("datachannel closed");
+		};
+		dc.onerror = (e) => {
+			disconnected("datachannel error:", e.error);
+		};
 
 		if (code === "") {
 			waiting();
@@ -380,7 +386,7 @@ async function connect() {
 		document.getElementById("magiccode").title = encodedfp.substring(
 			encodedfp.indexOf("-") + 1,
 		);
-		document.body.style.backgroundColor = `var(--palette-${fingerprint[0]%8})`;
+		document.body.style.backgroundColor = `var(--palette-${fingerprint[0] % 8})`;
 	} catch (err) {
 		disconnected(err);
 	}
@@ -430,17 +436,14 @@ function disconnected(reason) {
 		document.getElementById("info").innerText = "Wormhole expired.";
 	} else if (reason === "could not connect to signalling server") {
 		document.getElementById("info").innerText = "Could not reach the signalling server. Refresh page and try again.";
-
 	} else if (reason === "webrtc connection closed") {
 		document.getElementById("info").innerText = "Disconnected.";
 	} else if (reason === "webrtc connection failed") {
 		document.getElementById("info").innerText = "Network error.";
-
 	} else if (reason === "datachannel closed") {
 		document.getElementById("info").innerText = "Disconnected.";
 	} else if (reason === "webrtc connection failed") {
 		document.getElementById("info").innerText = "Network error.";
-
 	} else {
 		document.getElementById("info").innerText = "Could not connect.";
 		console.log(reason);
@@ -494,11 +497,11 @@ function updateqr(url) {
 		document.getElementById("qr").src = "";
 		document.getElementById("qr").alt = "";
 		document.getElementById("qr").title = "";
-		return
+		return;
 	}
 	document.getElementById("qr").src = URL.createObjectURL(new Blob([qr]));
 	document.getElementById("qr").alt = url;
-	document.getElementById("qr").title = url +" - double click to copy";
+	document.getElementById("qr").title = `${url} - double click to copy`;
 }
 
 function hashchange() {
@@ -571,7 +574,10 @@ function browserhacks() {
 	}
 
 	// Safari cannot save files from service workers.
-	if (/Safari/.test(navigator.userAgent) && !(/Chrome/.test(navigator.userAgent) || /Chromium/.test(navigator.userAgent))) {
+	if (
+		/Safari/.test(navigator.userAgent) &&
+		!(/Chrome/.test(navigator.userAgent) || /Chromium/.test(navigator.userAgent))
+	) {
 		hacks.nosw = true;
 		console.log("quirks: serviceworkers disabled on safari");
 	}
@@ -599,7 +605,7 @@ function browserhacks() {
 	// You never saw this.
 	if (
 		/iPad|iPhone|iPod/.test(navigator.userAgent) &&
-		![320, 375, 414, 768, 1024].includes(window.innerWidth)
+		![320, 375, 414, 768, 1_024].includes(window.innerWidth)
 	) {
 		hacks.noautoconnect = true;
 		console.log("quirks: detected ios page preview");
@@ -655,11 +661,14 @@ async function swready() {
 		serviceworker = reg.active || reg.waiting || reg.installing;
 
 		// Add a stub listener for Share Target API requests forwarded from service worker.
-		navigator.serviceWorker.addEventListener("message", e => {
-			console.log("got shared message:", e.data)
-			// TODO start a new connection (only if we're not connected already)
-			// and queue the shared file.
-		});
+		navigator.serviceWorker.addEventListener(
+			"message",
+			(e) => {
+				console.log("got shared message:", e.data);
+				// TODO start a new connection (only if we're not connected already)
+				// and queue the shared file.
+			},
+		);
 
 		console.log("service worker registered:", serviceworker.state);
 	}
@@ -695,7 +704,10 @@ async function wasmready() {
 	window.addEventListener("hashchange", hashchange);
 	document.getElementById("magiccode").addEventListener("input", codechange);
 	document.getElementById("magiccode").addEventListener("keydown", autocomplete);
-	document.getElementById("magiccode").addEventListener("input", autocompletehint);
+	document.getElementById("magiccode").addEventListener(
+		"input",
+		autocompletehint,
+	);
 	document.getElementById("filepicker").addEventListener("change", pick);
 	document.getElementById("clipboard").addEventListener("click", pasteClipboard);
 	document.getElementById("main").addEventListener("submit", preventdefault);

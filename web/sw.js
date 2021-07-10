@@ -1,5 +1,4 @@
 "use strict";
-
 const PREFIX = "/_";
 
 // There can be multiple clients (pages) receiving files, so they generate an id
@@ -18,62 +17,68 @@ function signalMetadataReady(id, streamInfo) {
 	}
 }
 
-self.addEventListener("message", (e) => {
-	const message = e.data;
-	const id = message.id;
+self.addEventListener(
+	"message",
+	(e) => {
+		const message = e.data;
+		const id = message.id;
 
-	if (message.type === "metadata") {
-		const {name, size, filetype} = message;
+		if (message.type === "metadata") {
+			const {name, size, filetype} = message;
 
-		const streamInfo = {
-			name,
-			size,
-			filetype,
-			offset: 0
-		};
+			const streamInfo = {
+				name,
+				size,
+				filetype,
+				offset: 0,
+			};
 
-		streamInfo.stream = new ReadableStream({
-			start(controller) { streamInfo.controller = controller; },
-			cancel(reason) { console.warn("stream cancelled", cancelReason); },
-		});
+			streamInfo.stream = new ReadableStream({
+				start(controller) {
+					streamInfo.controller = controller;
+				},
+				cancel(reason) {
+					console.warn("stream cancelled", reason);
+				},
+			});
 
-		// Resolve promise if GET request arrived first.
-		signalMetadataReady(id, streamInfo);
+			// Resolve promise if GET request arrived first.
+			signalMetadataReady(id, streamInfo);
 
-		streams.set(id, streamInfo);
-	} else {
-		const streamInfo = streams.get(id);
+			streams.set(id, streamInfo);
+		} else {
+			const streamInfo = streams.get(id);
 
-		if (message.type === "data") {
-			if (message.offset !== streamInfo.offset) {
-				console.warn(`aborting ${id}: got data out of order`);
-				// TODO abort fetch response
-				streams.delete(id);
-				return;
+			if (message.type === "data") {
+				if (message.offset !== streamInfo.offset) {
+					console.warn(`aborting ${id}: got data out of order`);
+					// TODO abort fetch response
+					streams.delete(id);
+					return;
+				}
+				streamInfo.controller.enqueue(new Uint8Array(message.data));
+				streamInfo.offset += message.data.byteLength;
+			} else if (message.type === "end") {
+				streamInfo.controller.close();
+
+				// Synchronize with fetch handler to clean up properly.
+				if (streamInfo.requestHandled) {
+					streams.delete(id);
+				} else {
+					streamInfo.streamHandled = true;
+				}
+			} else if (message.type === "error") {
+				streamInfo.controller.error(message.error);
 			}
-			streamInfo.controller.enqueue(new Uint8Array(message.data));
-			streamInfo.offset += message.data.byteLength;
-		} else if (message.type === "end") {
-			streamInfo.controller.close();
-
-			// Synchronize with fetch handler to clean up properly.
-			if (streamInfo.requestHandled) {
-				streams.delete(id);
-			} else {
-				streamInfo.streamHandled = true;
-			}
-		} else if (message.type === "error") {
-			streamInfo.controller.error(message.error);
 		}
-	}
-});
+	},
+);
 
 function encodeFilename(filename) {
-	return encodeURIComponent(filename)
-		.replace(/'/g, "%27")
-		.replace(/\(/g, "%28")
-		.replace(/\(/g,"%29")
-		.replace(/\*/g, "%2A");
+	return encodeURIComponent(filename).replace(/'/g, "%27").replace(/\(/g, "%28").replace(
+		/\(/g,
+		"%29",
+	).replace(/\*/g, "%2A");
 }
 
 async function streamDownload(id) {
@@ -118,7 +123,7 @@ async function streamUpload(e) {
 	const contentLength = e.request.headers.get("content-length");
 	const contentType = e.request.headers.get("content-type");
 	const form = await e.request.formData();
-	const title = form.get('title')
+	const title = form.get("title");
 
 	if (!title) {
 		return new Response("no title", {"status": 500});
@@ -131,7 +136,7 @@ async function streamUpload(e) {
 			name: title,
 			size: contentLength,
 			type: contentType,
-			stream: e.request.body
+			stream: e.request.body,
 		},
 		[e.request.body],
 	);
@@ -141,22 +146,25 @@ async function streamUpload(e) {
 	return new Response("ok");
 }
 
-self.addEventListener("fetch", (e) => {
-	const url = new URL(e.request.url);
+self.addEventListener(
+	"fetch",
+	(e) => {
+		const url = new URL(e.request.url);
 
-	// Stream download from WebRTC DataChannel.
-	if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "GET") {
-		const id = url.pathname.substring(`${PREFIX}/`.length);
-		e.respondWith(streamDownload(id));
-		return;
-	}
+		// Stream download from WebRTC DataChannel.
+		if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "GET") {
+			const id = url.pathname.substring(`${PREFIX}/`.length);
+			e.respondWith(streamDownload(id));
+			return;
+		}
 
-	// Stream upload to WebRTC DataChannel, triggered by Share Target API.
-	if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "POST") {
-		e.respondWith(streamUpload(e));
-		return;
-	}
+		// Stream upload to WebRTC DataChannel, triggered by Share Target API.
+		if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "POST") {
+			e.respondWith(streamUpload(e));
+			return;
+		}
 
-	// Default to passthrough.
-	e.respondWith(fetch(e.request));
-});
+		// Default to passthrough.
+		e.respondWith(fetch(e.request));
+	},
+);

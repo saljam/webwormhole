@@ -1,24 +1,22 @@
 "use strict";
-
 class Wormhole {
 	constructor(signalserver, code) {
 		// Fields, let alone static fields, are not supported on older
 		// browsers (e.g. firefox 68 and safari 12).
-
 		// Signalling protocol version.
 		this.protocol = "4";
 
 		// Error codes from webwormhole/dial.go.
-		this.closeNoSuchSlot = 4000;
-		this.closeSlotTimedOut = 4001;
-		this.closeNoMoreSlots = 4002;
-		this.closeWrongProto = 4003;
-		this.closePeerHungUp = 4004;
-		this.closeBadKey = 4005;
-		this.closeWebRTCSuccess = 4006;
-		this.closeWebRTCSuccessDirect = 4007;
-		this.closeWebRTCSuccessRelay = 4008;
-		this.closeWebRTCFailed = 4009;
+		this.closeNoSuchSlot = 4_000;
+		this.closeSlotTimedOut = 4_001;
+		this.closeNoMoreSlots = 4_002;
+		this.closeWrongProto = 4_003;
+		this.closePeerHungUp = 4_004;
+		this.closeBadKey = 4_005;
+		this.closeWebRTCSuccess = 4_006;
+		this.closeWebRTCSuccessDirect = 4_007;
+		this.closeWebRTCSuccessRelay = 4_008;
+		this.closeWebRTCFailed = 4_009;
 
 		if (code !== "") {
 			[this.slot, this.pass] = webwormhole.decode(code);
@@ -54,7 +52,7 @@ class Wormhole {
 					this.reject2 = reject2;
 					this.resolve3 = resolve3;
 					this.reject3 = reject3;
-					this.dial(signalserver, code);
+					this.dial(signalserver);
 				});
 			});
 		});
@@ -72,9 +70,9 @@ class Wormhole {
 	async close() {
 		switch (this.pc.iceConnectionState) {
 			case "connected": {
-				const connType = await this.connType()
+				const connType = await this.connType();
 				// TODO UI to warn if relay is used.
-				console.log("webrtc connected:", connType)
+				console.log("webrtc connected:", connType);
 				switch (connType) {
 					case "host":
 					case "srflx":
@@ -104,11 +102,13 @@ class Wormhole {
 		let stats = await this.pc.getStats();
 		// s.selected gives more confidenece than s.state == "succeeded", but Chrome does
 		// not implement it.
-		let selected = [...stats.values()].find(s => s.type == "candidate-pair" && s.state == "succeeded");
-		return stats.get(selected.localCandidateId).candidateType
+		let selected = [...stats.values()].find((s) =>
+			s.type === "candidate-pair" && s.state === "succeeded"
+		);
+		return stats.get(selected.localCandidateId).candidateType;
 	}
 
-	dial(signalserver, code) {
+	dial(signalserver) {
 		this.ws = new WebSocket(
 			Wormhole.wsserver(signalserver, this.slot),
 			this.protocol,
@@ -208,7 +208,7 @@ class Wormhole {
 				if (msg == null) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close(closeBadKey);
+					this.ws.close(this.closeBadKey);
 					return;
 				}
 				if (msg.type !== "offer") {
@@ -236,7 +236,7 @@ class Wormhole {
 				if (msg == null) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close(closeBadKey);
+					this.ws.close(this.closeBadKey);
 					return;
 				}
 				if (msg.type !== "answer") {
@@ -256,7 +256,7 @@ class Wormhole {
 				if (msg == null) {
 					this.fail("bad key");
 					this.ws.send(webwormhole.seal(this.key, "bye"));
-					this.ws.close(closeBadKey);
+					this.ws.close(this.closeBadKey);
 					return;
 				}
 				console.log("got remote candidate", msg.candidate);
@@ -308,15 +308,15 @@ class Wormhole {
 	}
 
 	onclose(e) {
-		if (e.code === 4000) {
+		if (e.code === 4_000) {
 			this.fail("no such slot");
-		} else if (e.code === 4001) {
+		} else if (e.code === 4_001) {
 			this.fail("timed out");
-		} else if (e.code === 4002) {
+		} else if (e.code === 4_002) {
 			this.fail("could not get slot");
-		} else if (e.code === 4003) {
+		} else if (e.code === 4_003) {
 			this.fail("wrong protocol version, must update");
-		} else if (e.code === 4004 || e.code === 1001) {
+		} else if (e.code === 4_004 || e.code === 1_001) {
 			// Workaround for regression introduced in firefox around version ~78.
 			// Usually the websocket connection stays open for the duration of the session, since
 			// it doesn't hurt and it make candidate trickling easier. We only do this here out of
