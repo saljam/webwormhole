@@ -1,4 +1,7 @@
 "use strict";
+/// <reference no-default-lib="true"/>
+/// <reference lib="es2018" />
+/// <reference lib="webworker" />
 // Workaround to tell TypeScript about the correct type of a ServiceWorker.
 const sw = self;
 // There can be multiple clients (pages) receiving files, so they generate an id

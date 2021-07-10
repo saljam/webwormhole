@@ -1,4 +1,7 @@
-// Declare the WASM symbols.
+/// <reference lib="es2018" />
+/// <reference lib="dom" />
+
+// Declare WASM symbols.
 declare var webwormhole: {
 	decode(code: string): [number, Uint8Array];
 	encode(slot: number, pass: Uint8Array): string;
@@ -10,10 +13,15 @@ declare var webwormhole: {
 	fingerprint(key: Uint8Array): Uint8Array;
 }
 
+// Declare Go WASM loader symbols.
 declare class Go {
-	importObject: any;
+	importObject: WebAssembly.Imports;
 	run(instance: WebAssembly.Instance): void;
 }
+
+// The ICEServers JSON as exported from Pion capitalises field names, but
+// JS expects lowercase dictionary entries.
+type GoICEServers = [{ URLs:[string], Username: string, Credential: string }];
 
 // Error codes from webwormhole/dial.go.
 enum WormholeErrorCodes {
@@ -29,30 +37,32 @@ enum WormholeErrorCodes {
 	closeWebRTCFailed = 4009,
 }
 
-// The ICEServers JSON as exported from Pion capitalises field names, but
-// JS expects lowercase dictionary entries.
-type GoICEServers = [{ URLs:[string], Username: string, Credential: string }];
-
 class Wormhole {
 	// Signalling protocol version.
 	static readonly protocol = "4";
 
-	slot?: number;
 	pass: Uint8Array;
 	state: string; // TODO enum?
+	slot?: number;
 	pc?: RTCPeerConnection;
-	ws?: any;
+	ws?: WebSocket;
 	key?: Uint8Array;
 
-	promise1: any;
-	resolve1: any;
-	reject1: any;
-	promise2: any;
-	resolve2: any;
-	reject2: any;
-	promise3: any;
-	resolve3: any;
-	reject3: any;
+	// signalPromise is fullfilled when we've established a signalling channel
+	// and obtained a slot.
+	signalPromise: Promise<{ code?: string, pc: RTCPeerConnection }>
+	signalResolve?: (result: {code?: string, pc: RTCPeerConnection}) => void
+	signalReject?: (reason: string) => void
+
+	// signalPromise is fullfilled when the called is done configuring the
+	// PeerConnection object and we can attempt ICE.
+	finishPromise?: Promise<void>
+	finishResolve?: () => void
+
+	// donePromise is fullfilled when we're done with signalling.
+	donePromise?: Promise<Uint8Array>
+	doneResolve?: (fingerprint: Uint8Array) => void
+	doneReject?: (reason: string) => void
 
 	constructor(signalserver: string, code: string) {
 		if (code !== "") {
@@ -76,18 +86,18 @@ class Wormhole {
 		//   2. the caller is done configuring the PeerConnection.
 		//        We can now create the offer or answer and send it to the peer.
 		//   3. we've successfully authenticated the other peer.
-		//        Signalling is now done, apart from any trickling candidates. The caller
+		//        Signalling is now done, apart from trickling candidates. The caller
 		//        can display the key fingerprint.
 		//   4. caller tells us the webrtc handshake is done. We can close the websocket.
-		this.promise1 = new Promise((resolve1, reject1) => {
-			this.promise2 = new Promise((resolve2, reject2) => {
-				this.promise3 = new Promise((resolve3, reject3) => {
-					this.resolve1 = resolve1;
-					this.reject1 = reject1;
-					this.resolve2 = resolve2;
-					this.reject2 = reject2;
-					this.resolve3 = resolve3;
-					this.reject3 = reject3;
+
+		this.signalPromise = new Promise((signalResolve, signalReject) => {
+			this.finishPromise = new Promise((finishResolve, finishReject) => {
+				this.donePromise = new Promise((doneResolve, doneReject) => {
+					this.signalResolve = signalResolve;
+					this.signalReject = signalReject;
+					this.finishResolve = finishResolve;
+					this.doneResolve = doneResolve;
+					this.doneReject = doneReject;
 					this.dial(signalserver);
 				});
 			});
@@ -95,16 +105,17 @@ class Wormhole {
 	}
 
 	async signal() {
-		return this.promise1;
+		return this.signalPromise;
 	}
 
 	async finish() {
-		this.resolve2();
-		return this.promise3;
+		if (this.finishResolve) this.finishResolve();
+		return this.donePromise;
 	}
 
 	async close() {
-		if (!this.pc) { return }
+		if (!this.ws || !this.pc) { return }
+
 		switch (this.pc.iceConnectionState) {
 			case "connected": {
 				const connType = await this.connType();
@@ -137,14 +148,32 @@ class Wormhole {
 
 	async connType(): Promise<string> {
 		if (!this.pc) { return "" }
-		// Type any here because RTCStatsReport seems to be poorly defined?
-		let stats: any = await this.pc.getStats();
-		// s.selected gives more confidenece than s.state == "succeeded", but Chrome does
-		// not implement it.
-		let selected = [...stats.values()].find((s) =>
-			s.type === "candidate-pair" && s.state === "succeeded"
-		);
-		return stats.get(selected.localCandidateId).candidateType;
+
+		// RTCStatsReport.forEach is all that's defined in the TypeScript DOM defs, which
+		// makes this kind of awkward. Ah well.
+		const stats = await this.pc.getStats();
+
+		let id: string | undefined;
+		stats.forEach(s => {
+			// s.selected gives more confidenece than s.state == "succeeded", but Chrome does
+			// not implement it.
+			if (s.type === "candidate-pair" && (s as RTCIceCandidatePairStats).state === "succeeded") {
+				id = (s as RTCIceCandidatePairStats).localCandidateId
+			}
+		})
+
+		if (!id) {
+			return ""
+		}
+
+		let conntype: string = ""
+		stats.forEach(s => {
+			if (s.id === id) {
+				conntype = (s as {candidateType: string}).candidateType;
+			}
+		})
+
+		return conntype
 	}
 
 	dial(signalserver: string) {
@@ -161,6 +190,8 @@ class Wormhole {
 	}
 
 	onmessage(m: MessageEvent) {
+		if (!this.ws) { return }
+
 		// This all being so asynchronous makes it so the only way apparent to
 		// me to describe the PAKE and WebRTC message exchange state machine
 		// a big case statement. I'd welcome a clearer or more idiomatic approach
@@ -176,9 +207,9 @@ class Wormhole {
 					return;
 				}
 				this.makePeerConnection(msg.iceServers);
-				this.resolve1({
+				if (this.signalResolve) this.signalResolve({
 					code: webwormhole.encode(this.slot, this.pass),
-					pc: this.pc,
+					pc: this.pc as RTCPeerConnection,
 				});
 				this.state = "wait_for_pake_a";
 				return;
@@ -188,8 +219,8 @@ class Wormhole {
 				const msg: {iceServers: GoICEServers} = JSON.parse(m.data);
 
 				this.makePeerConnection(msg.iceServers);
-				this.resolve1({
-					pc: this.pc,
+				if (this.signalResolve) this.signalResolve({
+					pc: this.pc as RTCPeerConnection,
 				});
 				const msgA = webwormhole.start(this.pass);
 				if (msgA == null) {
@@ -216,8 +247,8 @@ class Wormhole {
 				console.log("generated key");
 				this.ws.send(msgB);
 				this.state = "wait_for_pc_initialize";
-				this.promise2.then(async () => {
-					if (!this.key || !this.pc) { return }
+				if (this.finishPromise) this.finishPromise.then(async () => {
+					if (!this.ws || !this.key || !this.pc) { return }
 
 					const offer = await this.pc.createOffer();
 					console.log("created offer");
@@ -259,14 +290,14 @@ class Wormhole {
 				// No intermediate state wait_for_pc_initialize because candidates can
 				// staring arriving straight after the offer is sent.
 				this.state = "wait_for_candidates";
-				this.promise2.then(async () => {
-					if (!this.key || !this.pc) { return }
+				if (this.finishPromise) this.finishPromise.then(async () => {
+					if (!this.ws || !this.key || !this.pc) { return }
 
 					await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
 					const answer = await this.pc.createAnswer();
 					console.log("created answer");
 					this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
-					this.resolve3(webwormhole.fingerprint(this.key));
+					if (this.doneResolve) this.doneResolve(webwormhole.fingerprint(this.key));
 					this.pc.setLocalDescription(answer);
 				});
 				return;
@@ -289,7 +320,7 @@ class Wormhole {
 				}
 				console.log("got answer");
 				this.pc.setRemoteDescription(new RTCSessionDescription(msg));
-				this.resolve3(webwormhole.fingerprint(this.key));
+				if (this.doneResolve) this.doneResolve(webwormhole.fingerprint(this.key));
 				this.state = "wait_for_candidates";
 				return;
 			}
@@ -305,7 +336,7 @@ class Wormhole {
 					return;
 				}
 				console.log("got remote candidate", msg.candidate);
-				this.promise2.then(async () => {
+				if (this.finishPromise) this.finishPromise.then(async () => {
 					if (!this.key || !this.pc) { return }
 					this.pc.addIceCandidate(new RTCIceCandidate(msg));
 				});
@@ -337,11 +368,11 @@ class Wormhole {
 			iceServers: normalisedICEServers,
 		});
 		this.pc.onicecandidate = (e: RTCPeerConnectionIceEvent) => {
+			if (!this.ws || !this.key || !this.pc) { return }
+
 			if (e.candidate && e.candidate.candidate !== "") {
 				console.log("got local candidate", e.candidate.candidate);
-				if (this.key) {
-					this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
-				}
+				this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
 			}
 		};
 	}
@@ -378,8 +409,8 @@ class Wormhole {
 	}
 
 	fail(reason: string) {
-		this.reject1(reason);
-		this.reject3(reason);
+		if (this.signalReject) this.signalReject(reason);
+		if (this.doneReject) this.doneReject(reason);
 		this.state = "error";
 	}
 
