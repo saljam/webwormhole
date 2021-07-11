@@ -18,18 +18,19 @@ var WormholeErrorCodes;
 class Wormhole {
     constructor(signalserver, code) {
         this.signalserver = signalserver;
+        this.callback = () => { };
         if (code !== "") {
             [this.slot, this.pass] = webwormhole.decode(code);
             if (this.pass.length === 0) {
                 throw "bad code";
             }
             console.log("dialling slot:", this.slot);
-            this.state = "b";
+            this.state = this.statePlayer2;
         }
         else {
             this.pass = crypto.getRandomValues(new Uint8Array(2));
             console.log("requesting slot");
-            this.state = "a";
+            this.state = this.statePlayer1;
         }
         // There are 3 events that we need to synchronise with the caller on:
         //   1. we got the first message from the signalling server.
@@ -45,6 +46,131 @@ class Wormhole {
             this.resolve = resolve;
             this.reject = reject;
         });
+    }
+    async statePlayer1(data) {
+        const msg = JSON.parse(data);
+        console.log("assigned slot:", msg.slot);
+        this.slot = parseInt(msg.slot, 10);
+        if (!Number.isSafeInteger(this.slot)) {
+            return this.fail("invalid slot");
+        }
+        this.pc = this.makePeerConnection(msg.iceServers);
+        this.callback(this.pc, webwormhole.encode(this.slot, this.pass));
+        return this.stateWaitForPAKEA;
+    }
+    async statePlayer2(data) {
+        if (!this.ws) {
+            return this.fail("panic");
+        }
+        const msg = JSON.parse(data);
+        this.pc = this.makePeerConnection(msg.iceServers);
+        this.callback(this.pc);
+        const msgA = webwormhole.start(this.pass);
+        if (!msgA) {
+            return this.fail("could nnt generate A's PAKE message");
+        }
+        console.log("message a:", msgA);
+        this.ws.send(msgA);
+        return this.stateWaitForPAKEB;
+    }
+    async stateWaitForPAKEA(data) {
+        if (!this.ws || !this.pc) {
+            return this.fail("panic");
+        }
+        console.log("got pake message a:", data);
+        let msgB;
+        [this.key, msgB] = webwormhole.exchange(this.pass, data);
+        console.log("message b:", msgB);
+        if (!this.key) {
+            return this.fail("could not generate key");
+        }
+        if (!msgB) {
+            return this.fail("could not generate B's PAKE message");
+        }
+        console.log("generated key");
+        this.ws.send(msgB);
+        this.state = this.stateWaitForLocalOffer;
+        const offer = await this.pc.createOffer();
+        console.log("created offer");
+        this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)));
+        this.pc.setLocalDescription(offer);
+        return this.stateWaitForRemoteAnswer;
+    }
+    async stateWaitForPAKEB(data) {
+        console.log("got pake message b:", data);
+        this.key = webwormhole.finish(data);
+        if (!this.key) {
+            return this.fail("could not generate key");
+        }
+        console.log("generated key");
+        return this.stateWaitForRemoteOffer;
+    }
+    async stateWaitForRemoteOffer(data) {
+        if (!this.ws || !this.key || !this.pc || !this.resolve) {
+            return this.fail("panic");
+        }
+        const msg = JSON.parse(webwormhole.open(this.key, data));
+        if (!msg) {
+            this.ws.send(webwormhole.seal(this.key, "bye"));
+            this.ws.close(WormholeErrorCodes.closeBadKey);
+            return this.fail("bad key");
+        }
+        if (msg.type !== "offer") {
+            return this.fail("unexpected message: ${msg}");
+        }
+        console.log("got offer");
+        this.state = this.stateWaitForLocalAnswer;
+        await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
+        const answer = await this.pc.createAnswer();
+        console.log("created answer");
+        this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
+        this.resolve(webwormhole.fingerprint(this.key));
+        this.pc.setLocalDescription(answer);
+        return this.stateWaitForCandidates;
+    }
+    async stateWaitForRemoteAnswer(data) {
+        if (!this.ws || !this.key || !this.pc || !this.resolve) {
+            return this.fail("panic");
+        }
+        const msg = JSON.parse(webwormhole.open(this.key, data));
+        if (!msg) {
+            this.ws.send(webwormhole.seal(this.key, "bye"));
+            this.ws.close(WormholeErrorCodes.closeBadKey);
+            return this.fail("bad key");
+        }
+        if (msg.type !== "answer") {
+            return this.fail("unexpected message: ${msg}");
+        }
+        console.log("got answer");
+        this.pc.setRemoteDescription(new RTCSessionDescription(msg));
+        this.resolve(webwormhole.fingerprint(this.key));
+        return this.stateWaitForCandidates;
+    }
+    async stateWaitForCandidates(data) {
+        if (!this.key || !this.pc) {
+            return this.fail("panic");
+        }
+        this.processCandidate(data);
+        return this.stateWaitForCandidates;
+    }
+    async stateWaitForLocalOffer(data) {
+        return this.fail(`unexpected message: ${data}`);
+    }
+    async stateWaitForLocalAnswer(data) {
+        // In this state we already got an offer and the WebRTC API is busy
+        // making an answer. It's possible to get remote candidates from eager
+        // peers now, but it's not safe to add them to this.pc on all browsers
+        // just yet.
+        // Delay processing the candidate until the handshake is done.
+        // This "state" is special. It doesn't progress the state machine. The
+        // WaitForRemoteOffer state moves us into and out of this state. (My
+        // brain is just not wired for async/await...)
+        await this.done;
+        this.processCandidate(data);
+        return this.state;
+    }
+    async stateError(data) {
+        return this.stateError;
     }
     async close() {
         if (!this.ws || !this.pc) {
@@ -79,196 +205,6 @@ class Wormhole {
             }
         }
     }
-    async connType() {
-        if (!this.pc) {
-            return "";
-        }
-        // RTCStatsReport.forEach is all that's defined in the TypeScript DOM defs, which
-        // makes this kind of awkward. Ah well.
-        const stats = await this.pc.getStats();
-        let id;
-        stats.forEach(s => {
-            // s.selected gives more confidenece than s.state == "succeeded", but Chrome does
-            // not implement it.
-            if (s.type === "candidate-pair" && s.state === "succeeded") {
-                id = s.localCandidateId;
-            }
-        });
-        if (!id) {
-            return "";
-        }
-        let conntype = "";
-        stats.forEach(s => {
-            console.log(s);
-            if (s.id === id) {
-                conntype = s.candidateType;
-            }
-        });
-        return conntype;
-    }
-    async dial() {
-        this.ws = new WebSocket(Wormhole.wsserver(this.signalserver, this.slot), Wormhole.protocol);
-        // Use lambdas so that 'this' in the respective bodies refers to the Wormhole
-        // instance, and not the WebSocket one.
-        this.ws.onopen = () => this.onopen();
-        this.ws.onerror = (e) => this.onerror(e);
-        this.ws.onclose = (e) => this.onclose(e);
-        this.ws.onmessage = (e) => this.onmessage(e);
-        return this.done;
-    }
-    async onmessage(m) {
-        if (!this.ws) {
-            return;
-        }
-        // This all being so asynchronous makes it so the only way apparent to
-        // me to describe the PAKE and WebRTC message exchange state machine
-        // a big case statement. I'd welcome a clearer or more idiomatic approach
-        // in JS if someone were to suggest one.
-        switch (this.state) {
-            case "a": {
-                const msg = JSON.parse(m.data);
-                console.log("assigned slot:", msg.slot);
-                this.slot = parseInt(msg.slot, 10);
-                if (!Number.isSafeInteger(this.slot)) {
-                    this.fail("invalid slot");
-                    return;
-                }
-                this.makePeerConnection(msg.iceServers);
-                if (this.callback && this.pc) {
-                    this.callback(this.pc, webwormhole.encode(this.slot, this.pass));
-                }
-                this.state = "wait_for_pake_a";
-                return;
-            }
-            case "b": {
-                const msg = JSON.parse(m.data);
-                this.makePeerConnection(msg.iceServers);
-                if (this.callback && this.pc) {
-                    this.callback(this.pc);
-                }
-                const msgA = webwormhole.start(this.pass);
-                if (!msgA) {
-                    this.fail("couldn't generate A's PAKE message");
-                    return;
-                }
-                console.log("message a:", msgA);
-                this.ws.send(msgA);
-                this.state = "wait_for_pake_b";
-                return;
-            }
-            case "wait_for_pake_a": {
-                if (!this.pc) {
-                    return;
-                }
-                console.log("got pake message a:", m.data);
-                let msgB;
-                [this.key, msgB] = webwormhole.exchange(this.pass, m.data);
-                console.log("message b:", msgB);
-                if (!this.key) {
-                    this.fail("could not generate key");
-                    return;
-                }
-                if (!msgB) {
-                    this.fail("couldn't generate B's PAKE message");
-                    return;
-                }
-                console.log("generated key");
-                this.ws.send(msgB);
-                this.state = "wait_for_local_offer";
-                const offer = await this.pc.createOffer();
-                console.log("created offer");
-                this.ws.send(webwormhole.seal(this.key, JSON.stringify(offer)));
-                this.state = "wait_for_webtc_answer";
-                this.pc.setLocalDescription(offer);
-                return;
-            }
-            case "wait_for_pake_b": {
-                console.log("got pake message b:", m.data);
-                this.key = webwormhole.finish(m.data);
-                if (!this.key) {
-                    this.fail("could not generate key");
-                    return;
-                }
-                console.log("generated key");
-                this.state = "wait_for_webtc_offer";
-                return;
-            }
-            case "wait_for_webtc_offer": {
-                if (!this.key || !this.pc || !this.resolve) {
-                    return;
-                }
-                const msg = JSON.parse(webwormhole.open(this.key, m.data));
-                if (!msg) {
-                    this.fail("bad key");
-                    this.ws.send(webwormhole.seal(this.key, "bye"));
-                    this.ws.close(WormholeErrorCodes.closeBadKey);
-                    return;
-                }
-                if (msg.type !== "offer") {
-                    console.log("unexpected message", msg);
-                    this.fail("unexpected message");
-                    return;
-                }
-                console.log("got offer");
-                this.state = "wait_for_local_answer";
-                await this.pc.setRemoteDescription(new RTCSessionDescription(msg));
-                const answer = await this.pc.createAnswer();
-                console.log("created answer");
-                this.ws.send(webwormhole.seal(this.key, JSON.stringify(answer)));
-                this.resolve(webwormhole.fingerprint(this.key));
-                this.pc.setLocalDescription(answer);
-                this.state = "wait_for_candidates";
-                return;
-            }
-            case "wait_for_webtc_answer": {
-                if (!this.key || !this.pc || !this.resolve) {
-                    return;
-                }
-                const msg = JSON.parse(webwormhole.open(this.key, m.data));
-                if (!msg) {
-                    this.fail("bad key");
-                    this.ws.send(webwormhole.seal(this.key, "bye"));
-                    this.ws.close(WormholeErrorCodes.closeBadKey);
-                    return;
-                }
-                if (msg.type !== "answer") {
-                    console.log("unexpected message", msg);
-                    this.fail("unexpected message");
-                    return;
-                }
-                console.log("got answer");
-                this.pc.setRemoteDescription(new RTCSessionDescription(msg));
-                this.resolve(webwormhole.fingerprint(this.key));
-                this.state = "wait_for_candidates";
-                return;
-            }
-            case "wait_for_candidates": {
-                if (!this.key || !this.pc) {
-                    return;
-                }
-                this.processCandidate(m.data);
-                return;
-            }
-            case "wait_for_local_offer": {
-                this.fail(`unexpected message: ${m.data}`);
-                return;
-            }
-            case "wait_for_local_answer": {
-                // In this state we already got an offer and the WebRTC API is busy
-                // making an answer. It's possible to get remote candidates from eager
-                // peers now, but it's not safe to add them to this.pc on all browsers
-                // just yet.
-                // Delay processing the candidate until the handshake is done.
-                // This "state" is special. It doesn't progress the state machine. The
-                // wait_for_webtc_offer state moves us into and out of this state. (My
-                // brain is just not wired for async/await...)
-                await this.done;
-                this.processCandidate(m.data);
-                return;
-            }
-            case "error": return;
-        }
-    }
     processCandidate(data) {
         if (!this.ws || !this.key || !this.pc) {
             return;
@@ -293,10 +229,10 @@ class Wormhole {
                 credential: iceServers[i].Credential,
             });
         }
-        this.pc = new RTCPeerConnection({
+        const pc = new RTCPeerConnection({
             iceServers: normalisedICEServers,
         });
-        this.pc.onicecandidate = (e) => {
+        pc.onicecandidate = (e) => {
             if (!this.ws || !this.key || !this.pc) {
                 return;
             }
@@ -305,6 +241,51 @@ class Wormhole {
                 this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
             }
         };
+        return pc;
+    }
+    async connType() {
+        if (!this.pc) {
+            return "";
+        }
+        // RTCStatsReport.forEach is all that's defined in the TypeScript DOM defs, which
+        // makes this kind of awkward. Ah well.
+        const stats = await this.pc.getStats();
+        let id;
+        stats.forEach((s) => {
+            // s.selected gives more confidenece than s.state == "succeeded", but Chrome does
+            // not implement it.
+            if (s.type === "candidate-pair" &&
+                s.state === "succeeded") {
+                id = s.localCandidateId;
+            }
+        });
+        if (!id) {
+            return "";
+        }
+        let conntype = "";
+        stats.forEach((s) => {
+            if (s.id === id) {
+                conntype = s.candidateType;
+            }
+        });
+        return conntype;
+    }
+    async dial() {
+        this.ws = new WebSocket(Wormhole.wsserver(this.signalserver, this.slot), Wormhole.protocol);
+        // Use lambdas so that 'this' in the respective bodies refers to the Wormhole
+        // instance, and not the WebSocket one.
+        this.ws.onopen = () => this.onopen();
+        this.ws.onerror = (e) => this.onerror(e);
+        this.ws.onclose = (e) => this.onclose(e);
+        this.ws.onmessage = (e) => this.onmessage(e);
+        return this.done;
+    }
+    async onmessage(m) {
+        if (!this.ws) {
+            return;
+        }
+        // Feed the state machine a new message.
+        this.state = await this.state(m.data);
     }
     onopen() {
         console.log("websocket session established");
@@ -342,7 +323,7 @@ class Wormhole {
     fail(reason) {
         if (this.reject)
             this.reject(reason);
-        this.state = "error";
+        return this.stateError;
     }
     // wsserver creates a WebSocket scheme (ws: or wss:) URL from an HTTP one.
     static wsserver(url, slot) {
