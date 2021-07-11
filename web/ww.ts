@@ -58,7 +58,7 @@ class Wormhole {
 
 	constructor(signalserver: string, code: string) {
 		this.signalserver = signalserver;
-		this.callback = ()=>{};
+		this.callback = () => {};
 		if (code !== "") {
 			[this.slot, this.pass] = webwormhole.decode(code);
 			if (this.pass.length === 0) {
@@ -228,11 +228,11 @@ class Wormhole {
 		// stateWaitForRemoteOffer body moves us into and out of this state.
 		await this.done;
 		this.processCandidate(data);
-		return this.state
+		return this.state;
 	}
 
 	async stateError(data: string): Promise<State> {
-		return this.stateError
+		return this.stateError;
 	}
 
 	async close() {
@@ -311,7 +311,7 @@ class Wormhole {
 				this.ws.send(webwormhole.seal(this.key, JSON.stringify(e.candidate)));
 			}
 		};
-		return pc
+		return pc;
 	}
 
 	async connType(): Promise<string> {

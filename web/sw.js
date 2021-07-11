@@ -74,7 +74,11 @@ sw.addEventListener("message", (e) => {
     }
 });
 function encodeFilename(filename) {
-    return encodeURIComponent(filename).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\(/g, "%29").replace(/\*/g, "%2A");
+    return encodeURIComponent(filename)
+        .replace(/'/g, "%27")
+        .replace(/\(/g, "%28")
+        .replace(/\(/g, "%29")
+        .replace(/\*/g, "%2A");
 }
 async function streamDownload(id) {
     // Request may arrive before metadata.
@@ -98,25 +102,25 @@ async function streamDownload(id) {
 }
 async function streamUpload(e) {
     if (!e.clientId) {
-        return new Response("no client id", { "status": 500 });
+        return new Response("no client id", { status: 500 });
     }
     const client = await sw.clients.get(e.clientId);
     if (!client) {
-        return new Response("no client", { "status": 500 });
+        return new Response("no client", { status: 500 });
     }
     const contentLength = e.request.headers.get("content-length");
     const contentType = e.request.headers.get("content-type");
     const form = await e.request.formData();
     const title = form.get("title");
     if (!title) {
-        return new Response("no title", { "status": 500 });
+        return new Response("no title", { status: 500 });
     }
     let body;
     if (e.request.body) {
         body = e.request.body;
     }
     else {
-        return new Response("no body", { "status": 500 });
+        return new Response("no body", { status: 500 });
     }
     console.log(`uploading ${title}`);
     // ReadableStream is transferable on Chrome at the time of writing. Since Share

@@ -3,7 +3,7 @@
 /// <reference lib="webworker" />
 
 // Workaround to tell TypeScript about the correct type of a ServiceWorker.
-const sw = (self as ServiceWorkerGlobalScope & typeof globalThis);
+const sw = self as ServiceWorkerGlobalScope & typeof globalThis;
 
 // There can be multiple clients (pages) receiving files, so they generate an id
 // and here we store info assosiated with each transfer.
@@ -35,7 +35,7 @@ class Stream {
 
 function waitForMetadata(id: string) {
 	return new Promise((resolve, reject) => {
-		streams.set(id, {resolve, reject});
+		streams.set(id, { resolve, reject });
 	});
 }
 
@@ -70,7 +70,7 @@ sw.addEventListener("message", (e) => {
 			}
 			s.controller.enqueue(new Uint8Array(msg.data));
 			s.offset += msg.data.byteLength;
-		
+
 			return;
 		}
 		case "end": {
@@ -84,7 +84,7 @@ sw.addEventListener("message", (e) => {
 			} else {
 				s.streamHandled = true;
 			}
-		
+
 			return;
 		}
 		case "error": {
@@ -95,7 +95,11 @@ sw.addEventListener("message", (e) => {
 });
 
 function encodeFilename(filename: string) {
-	return encodeURIComponent(filename).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\(/g, "%29").replace(/\*/g, "%2A");
+	return encodeURIComponent(filename)
+		.replace(/'/g, "%27")
+		.replace(/\(/g, "%28")
+		.replace(/\(/g, "%29")
+		.replace(/\*/g, "%2A");
 }
 
 async function streamDownload(id: string) {
@@ -109,32 +113,29 @@ async function streamDownload(id: string) {
 		s.requestHandled = true;
 	}
 
-	const {size, name, filetype, stream} = s;
+	const { size, name, filetype, stream } = s;
 
 	console.log(`downloading ${name} (${id})`);
 
-	return new Response(
-		stream,
-		{
-			headers: {
-				"Content-Type": filetype,
-				"Content-Length": size,
-				"Content-Disposition": `attachment; filename*=UTF-8''${encodeFilename(
-					name,
-				)}`,
-			},
+	return new Response(stream, {
+		headers: {
+			"Content-Type": filetype,
+			"Content-Length": size,
+			"Content-Disposition": `attachment; filename*=UTF-8''${encodeFilename(
+				name
+			)}`,
 		},
-	);
+	});
 }
 
 async function streamUpload(e: FetchEvent) {
 	if (!e.clientId) {
-		return new Response("no client id", {"status": 500});
+		return new Response("no client id", { status: 500 });
 	}
 	const client = await sw.clients.get(e.clientId);
 
 	if (!client) {
-		return new Response("no client", {"status": 500});
+		return new Response("no client", { status: 500 });
 	}
 
 	const contentLength = e.request.headers.get("content-length");
@@ -143,14 +144,14 @@ async function streamUpload(e: FetchEvent) {
 	const title = form.get("title");
 
 	if (!title) {
-		return new Response("no title", {"status": 500});
+		return new Response("no title", { status: 500 });
 	}
 
 	let body: ReadableStream<Uint8Array>;
 	if (e.request.body) {
 		body = e.request.body;
 	} else {
-		return new Response("no body", {"status": 500});
+		return new Response("no body", { status: 500 });
 	}
 
 	console.log(`uploading ${title}`);
@@ -168,7 +169,7 @@ async function streamUpload(e: FetchEvent) {
 			type: contentType,
 			stream: body,
 		},
-		[(body as any)],
+		[body as any]
 	);
 
 	// TODO wait for confirmation that file was successfully sent before

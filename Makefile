@@ -13,3 +13,13 @@ webwormhole-src.zip:
 
 .PHONY: all
 all: webwormhole-ext.zip
+
+.PHONY: fmt
+fmt:
+	prettier -w --use-tabs web/*.ts
+	go fmt ./...
+
+.PHONY: js
+js:
+	tsc -T ES2018 --strict web/ww.ts
+	tsc -T ES2018 --strict web/sw.ts

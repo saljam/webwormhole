@@ -1,9 +1,6 @@
 FROM node:slim as jsbuild
-RUN npm install -g typescript
+RUN npm install -g typescript prettier
 WORKDIR /src
-COPY ./web /src
-RUN tsc -T ES2018 --strict ww.ts
-RUN tsc -T ES2018 --strict sw.ts
 
 FROM golang:alpine as gobuild
 WORKDIR /src
