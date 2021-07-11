@@ -21,7 +21,7 @@ declare class Go {
 
 // The ICEServers JSON as exported from Pion capitalises field names, but
 // JS expects lowercase dictionary entries.
-type GoICEServers = [{ URLs: [string]; Username: string; Credential: string }];
+type GoICEServers = [{ URLs: string[]; Username: string; Credential: string }];
 
 // Error codes from webwormhole/dial.go.
 enum WormholeErrorCodes {

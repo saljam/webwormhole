@@ -163,8 +163,7 @@ class Wormhole {
         // just yet.
         // Delay processing the candidate until the handshake is done.
         // This "state" is special. It doesn't progress the state machine. The
-        // WaitForRemoteOffer state moves us into and out of this state. (My
-        // brain is just not wired for async/await...)
+        // stateWaitForRemoteOffer body moves us into and out of this state.
         await this.done;
         this.processCandidate(data);
         return this.state;
