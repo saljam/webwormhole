@@ -1,4 +1,3 @@
-"use strict";
 /// <reference lib="es2018" />
 /// <reference lib="dom" />
 // Error codes from webwormhole/dial.go.
@@ -294,29 +293,33 @@ class Wormhole {
         this.fail("could not connect to signalling server");
     }
     onclose(e) {
-        if (e.code === 4000) {
-            this.fail("no such slot");
-        }
-        else if (e.code === 4001) {
-            this.fail("timed out");
-        }
-        else if (e.code === 4002) {
-            this.fail("could not get slot");
-        }
-        else if (e.code === 4003) {
-            this.fail("wrong protocol version, must update");
-        }
-        else if (e.code === 4004 || e.code === 1001) {
-            // Workaround for regression introduced in firefox around version ~78.
-            // Usually the websocket connection stays open for the duration of the session, since
-            // it doesn't hurt and it make candidate trickling easier. We only do this here out of
-            // laziness. The go code has more disciplined websocket lifecycle management.
-            // Recent versions of Firefox introduced a bug where websocket connections are killed
-            // when a download begins. This would happen after the WebRTC connection is set up
-            // so it's not really an error we need to react to.
-        }
-        else {
-            this.fail(`websocket session closed: ${e.reason} (${e.code})`);
+        switch (e.code) {
+            case WormholeErrorCodes.closePeerHungUp:
+            case 1000:
+            case 1001: {
+                // Normal closure of WebSocket.
+                return;
+            }
+            case WormholeErrorCodes.closeNoSuchSlot: {
+                this.fail("no such slot");
+                return;
+            }
+            case WormholeErrorCodes.closeSlotTimedOut: {
+                this.fail("timed out");
+                return;
+            }
+            case WormholeErrorCodes.closeNoMoreSlots: {
+                this.fail("could not get slot");
+                return;
+            }
+            case WormholeErrorCodes.closeWrongProto: {
+                this.fail("wrong protocol version: must update");
+                return;
+            }
+            default: {
+                this.fail(`websocket session closed: ${e.reason} (${e.code})`);
+                return;
+            }
         }
     }
     fail(reason) {
