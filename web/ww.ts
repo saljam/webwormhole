@@ -324,7 +324,7 @@ class Wormhole {
 		const stats = await this.pc.getStats();
 
 		let id: string | undefined;
-		stats.forEach((s) => {
+		stats.forEach((s: RTCIceCandidatePairStats) => {
 			// s.selected gives more confidenece than s.state == "succeeded", but Chrome does
 			// not implement it.
 			if (
@@ -340,7 +340,7 @@ class Wormhole {
 		}
 
 		let conntype: string = "";
-		stats.forEach((s) => {
+		stats.forEach((s: RTCIceCandidatePairStats) 
 			if (s.id === id) {
 				conntype = (s as { candidateType: string }).candidateType;
 			}
