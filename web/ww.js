@@ -1,3 +1,4 @@
+"use strict";
 /// <reference lib="es2018" />
 /// <reference lib="dom" />
 // Error codes from webwormhole/dial.go.

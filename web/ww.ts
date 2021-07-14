@@ -11,6 +11,9 @@ declare var webwormhole: {
 	open(key: Uint8Array, msg: string): string;
 	seal(key: Uint8Array, msg: string): string;
 	fingerprint(key: Uint8Array): Uint8Array;
+
+	match(prefix: string): string;
+	qrencode(url: string): Uint8Array;
 };
 
 // Declare Go WASM loader symbols.
@@ -387,27 +390,27 @@ class Wormhole {
 			case 1000:
 			case 1001: {
 				// Normal closure of WebSocket.
-				return
+				return;
 			}
 			case WormholeErrorCodes.closeNoSuchSlot: {
 				this.fail("no such slot");
-				return
+				return;
 			}
 			case WormholeErrorCodes.closeSlotTimedOut: {
 				this.fail("timed out");
-				return
+				return;
 			}
 			case WormholeErrorCodes.closeNoMoreSlots: {
 				this.fail("could not get slot");
-				return
+				return;
 			}
 			case WormholeErrorCodes.closeWrongProto: {
 				this.fail("wrong protocol version: must update");
-				return
+				return;
 			}
 			default: {
 				this.fail(`websocket session closed: ${e.reason} (${e.code})`);
-				return
+				return;
 			}
 		}
 	}
