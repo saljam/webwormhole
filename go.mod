@@ -1,4 +1,4 @@
-module github.com/SpiderOak/webwormhole
+module webwormhole.io
 
 go 1.13
 
