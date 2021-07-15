@@ -26,10 +26,13 @@ const hacks: Record<string, boolean> = {};
 let receiving: Receiver | undefined;
 
 // sending is the object currently being sent.
-let sending: Sender | undefined;
+let sending: Upload | undefined;
 
 // sendqueue is the queue of objects waiting to be sent.
-let sendqueue: Sender[] = [];
+let sendqueue: Upload[] = [];
+
+// state is the top-level connection state.
+let state: "disconnected" | "dialling" | "connected" = "disconnected";
 
 // datachannel is the active datachannel, if we're connected.
 let datachannel: RTCDataChannel | null;
@@ -54,100 +57,22 @@ let transfersList: HTMLElement;
 let infoBox: HTMLElement;
 let autocompleteBox: HTMLElement;
 
-interface Receiver {
-	id: string;
+// The structure of the header message sent on the wire before a
+// file's data.
+interface FileHeader {
 	name: string;
 	type: string;
 	size: number;
-	offset: number;
-	data?: Uint8Array;
+}
+
+interface Receiver {
+	receive(e: MessageEvent): void;
+	done(): boolean;
+	cancel(): void;
 
 	li: HTMLElement;
 	a: HTMLAnchorElement;
 	progress: HTMLProgressElement;
-}
-
-interface Sender {
-	f: {
-		name: string;
-		type: string;
-		size: number;
-
-		stream?(): ReadableStream;
-		slice?(start: number, end: number): Blob;
-	};
-
-	offset: number;
-
-	li: HTMLElement;
-	progress: HTMLProgressElement;
-}
-
-function pick() {
-	if (!filepicker.files) {
-		return;
-	}
-	for (let i = 0; i < filepicker.files.length; i++) {
-		sendfile(filepicker.files[i]);
-	}
-}
-
-function drop(e: DragEvent) {
-	if (!e.dataTransfer) {
-		return;
-	}
-	const files = e.dataTransfer.files;
-	const t = e.dataTransfer.getData("text");
-	if (files.length !== 0) {
-		for (let i = 0; i < files.length; i++) {
-			sendfile(files[i]);
-		}
-	} else if (t.length !== 0) {
-		sendtext(t);
-	}
-
-	// A shortcut to save users a click. If we're disconnected and they drag
-	// a file in treat it as a click on the new/join wormhole button.
-	// TODO use global connection state.
-	if (!dialButton.disabled) {
-		connect();
-	}
-}
-
-// Handle a paste event from cmd-v/ctl-v.
-function pasteEvent(e: ClipboardEvent) {
-	if (!e.clipboardData) {
-		return;
-	}
-	const files = e.clipboardData.files;
-	const t = e.clipboardData.getData("text");
-	if (files.length !== 0) {
-		for (let i = 0; i < files.length; i++) {
-			sendfile(files[i]);
-		}
-	} else if (t.length !== 0) {
-		sendtext(t);
-	}
-}
-
-// Read clipboard content using Clipboard API.
-async function pasteClipboard() {
-	if (hacks.noclipboardapi) {
-		return;
-	}
-
-	let items = await navigator.clipboard.read();
-
-	// TODO toast a message if permission wasn't given.
-	for (let i = 0; i < items.length; i++) {
-		if (items[i].types.includes("image/png")) {
-			const blob = await items[i].getType("image/png");
-			sendfile(new File([blob], "image.png"));
-		} else if (items[i].types.includes("text/plain")) {
-			const blob = await items[i].getType("text/plain");
-			sendtext(await blob.text());
-		}
-	}
 }
 
 class DataChannelWriter {
@@ -189,272 +114,376 @@ class DataChannelWriter {
 	}
 }
 
-async function sendtext(m: string) {
-	const item: Sender = {
-		f: {
-			name: m,
-			type: "application/webwormhole-text",
-			size: 0,
-		},
-		offset: 0,
-		li: document.createElement("li"),
-		progress: document.createElement("progress"),
-	};
-	item.li.classList.add("pending");
-	item.li.appendChild(
-		document
-			.createElement("pre")
-			.appendChild(document.createTextNode(`${item.f.name}`))
-	);
-	transfersList.appendChild(item.li);
-	sendqueue.push(item);
-	send();
-}
+class Upload {
+	header: FileHeader;
+	blob?: Blob;
+	stream?: ReadableStream;
+	offset = 0;
 
-async function sendfile(f: File) {
-	const item: Sender = {
-		f,
-		offset: 0,
-		li: document.createElement("li"),
-		progress: document.createElement("progress"),
-	};
-	item.li.classList.add("pending");
-	item.li.innerText = `${f.name}`;
-	transfersList.appendChild(item.li);
-	sendqueue.push(item);
-	send();
-}
+	li: HTMLElement = document.createElement("li");
+	progress: HTMLProgressElement = document.createElement("progress");
 
-async function send() {
-	if (!datachannel) {
-		console.log("not connected yet");
-		return;
-	}
-	if (sending) {
-		console.log("haven't finished sending", sending.f.name);
-		return;
-	}
-	if (sendqueue.length < 1) {
-		console.log("send queue is empty");
-		return;
-	}
-
-	sending = sendqueue.shift();
-
-	// type assersion
-	if (!sending) {
-		return;
-	}
-
-	console.log("sending", sending.f.name, sending.f.type);
-	sending.li.classList.remove("pending");
-	sending.li.classList.add("upload");
-	sending.li.appendChild(document.createElement("progress"));
-	sending.progress = sending.li.getElementsByTagName("progress")[0];
-
-	datachannel.send(
-		new TextEncoder().encode(
-			JSON.stringify({
-				name: sending.f.name,
-				size: sending.f.size,
-				type: sending.f.type,
-			})
-		)
-	);
-
-	if (sending.f.type === "application/webwormhole-text") {
-		sending.li.removeChild(sending.progress);
-		sending = undefined;
-		send(); // TODO avoid tail call. loop over queue from an outer function.
-		return;
-	}
-
-	const writer = new DataChannelWriter(datachannel);
-	if (sending.f.stream) {
-		const reader = sending.f.stream().getReader();
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) {
-				break;
+	constructor(header: FileHeader, data: Blob | ReadableStream) {
+		this.header = header;
+		if (data instanceof ReadableStream) {
+			this.stream = data;
+		} else {
+			this.blob = data;
+			if (data.stream) {
+				this.stream = data.stream();
 			}
-			await writer.write(value);
-			sending.offset += value.length;
-			sending.progress.value = sending.offset / sending.f.size;
 		}
-	} else if (sending.f.slice) {
-		// Backwards compatability with browsers that don't have sending.f.stream.
-		// TODO which ones are these? can we delete this yet?
-		function read(b: Blob): Promise<Uint8Array> {
-			return new Promise((resolve) => {
-				const fr = new FileReader();
-				fr.onload = () => {
-					resolve(new Uint8Array(fr.result as ArrayBuffer));
-				};
-				fr.readAsArrayBuffer(b);
-			});
-		}
-		const chunksize = 64 << 10;
-		while (sending.offset < sending.f.size) {
-			let end = sending.offset + chunksize;
-			if (end > sending.f.size) {
-				end = sending.f.size;
-			}
-			await writer.write(await read(sending.f.slice(sending.offset, end)));
-			sending.offset = end;
-			sending.progress.value = sending.offset / sending.f.size;
-		}
-	} else {
-		// type assersion
-		console.log("panic: cannot get data out of file");
 	}
-	sending.li.removeChild(sending.progress);
-	sending = undefined;
-	send(); // TODO avoid tail call. loop over queue from an outer function.
-	return;
+
+	async send(dc: RTCDataChannel) {
+		console.log("sending", this.header.name, this.header.type);
+		this.li.classList.remove("pending");
+		this.li.classList.add("upload");
+		this.li.appendChild(document.createElement("progress"));
+		this.progress = this.li.getElementsByTagName("progress")[0];
+
+		dc.send(new TextEncoder().encode(JSON.stringify(this.header)));
+
+		const writer = new DataChannelWriter(dc);
+		if (this.stream) {
+			const reader = this.stream.getReader();
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) {
+					break;
+				}
+				await writer.write(value);
+				this.offset += value.length;
+				this.progress.value = this.offset / this.header.size;
+			}
+			this.li.removeChild(this.progress);
+			return;
+		}
+
+		if (this.blob) {
+			// Backwards compatability with browsers that don't have Blob.stream. (Safari pre-14.1)
+			function read(b: Blob): Promise<Uint8Array> {
+				return new Promise((resolve) => {
+					const fr = new FileReader();
+					fr.onload = () => {
+						resolve(new Uint8Array(fr.result as ArrayBuffer));
+					};
+					fr.readAsArrayBuffer(b);
+				});
+			}
+			const chunksize = 64 << 10;
+			while (this.offset < this.header.size) {
+				let end = this.offset + chunksize;
+				if (end > this.blob.size) {
+					end = this.blob.size;
+				}
+				await writer.write(await read(this.blob.slice(this.offset, end)));
+				this.offset = end;
+				this.progress.value = this.offset / this.blob.size;
+			}
+			this.li.removeChild(this.progress);
+			return;
+		}
+	}
 }
 
-function triggerDownload() {
-	if (!receiving) {
-		return;
-	} // type assertion
-	if (serviceworker) {
+class ServiceWorkerDownload {
+	header: FileHeader;
+	id: string;
+	sw: ServiceWorker;
+	offset = 0;
+
+	li: HTMLElement = document.createElement("li");
+	a: HTMLAnchorElement = document.createElement("a");
+	progress: HTMLProgressElement = document.createElement("progress");
+
+	constructor(sw: ServiceWorker, header: FileHeader) {
+		this.sw = sw;
+		this.header = header;
+		(this.id = `${Math.random().toString(16).substring(2)}-${encodeURIComponent(
+			header.name
+		)}`),
+			this.a.appendChild(document.createTextNode(`${header.name}`));
+		this.li.appendChild(this.a);
+		this.li.appendChild(this.progress);
+		this.li.classList.add("download");
+		transfersList.appendChild(this.li);
+
+		sw.postMessage({
+			id: this.id,
+			type: "metadata", // TODO rename this to not clash with header.type
+			name: header.name,
+			size: header.size,
+			filetype: header.type,
+		});
+
+		this.triggerDownload();
+	}
+
+	receive(e: MessageEvent) {
+		const chunkSize = e.data.byteLength;
+
+		if (this.offset + chunkSize > this.header.size) {
+			const error = "received more bytes than expected";
+			this.sw.postMessage({ id: this.id, type: "error", error });
+			throw error;
+		}
+
+		this.sw.postMessage(
+			{
+				id: this.id,
+				type: "data",
+				data: e.data,
+				offset: this.offset,
+			},
+			[e.data]
+		);
+
+		this.offset += chunkSize;
+		this.progress.value = this.offset / this.header.size;
+
+		if (this.done()) {
+			this.sw.postMessage({ id: this.id, type: "end" });
+			this.li.removeChild(this.progress);
+		}
+	}
+
+	done() {
+		return this.offset === this.header.size;
+	}
+
+	cancel() {
+		this.sw.postMessage({
+			id: this.id,
+			type: "error",
+			error: "rtc disconnected",
+		});
+	}
+
+	triggerDownload() {
 		// `<a download=...>` doesn't work with service workers on Chrome yet.
 		// See https://bugs.chromium.org/p/chromium/issues/detail?id=468227
 		//
 		// Possible solutions:
 		//
 		// - `window.open` is blocked as a popup.
-		// window.open(`${SW_PREFIX}/${receiving.id}`);
+		// window.open(`${SW_PREFIX}/${this.id}`);
 		//
 		// - And this is quite scary but `Content-Disposition` to the rescue!
 		//   It will navigate to 404 page if there is no service worker for some reason...
 		//   But if `postMessage` didn't throw we should be safe.
-		window.location.assign(`/_/${receiving.id}`);
+		window.location.assign(`/_/${this.id}`);
+	}
+}
+
+class ArrayBufferDownload {
+	header: FileHeader;
+	data: Uint8Array;
+	offset = 0;
+
+	li: HTMLElement = document.createElement("li");
+	a: HTMLAnchorElement = document.createElement("a");
+	progress: HTMLProgressElement = document.createElement("progress");
+
+	constructor(header: FileHeader) {
+		this.header = header;
+		this.data = new Uint8Array(header.size);
+		this.a.appendChild(document.createTextNode(`${header.name}`));
+		this.li.appendChild(this.a);
+		this.li.appendChild(this.progress);
+		this.li.classList.add("download");
+		transfersList.appendChild(this.li);
+	}
+
+	receive(e: MessageEvent) {
+		const chunkSize = e.data.byteLength;
+
+		if (this.offset + chunkSize > this.header.size) {
+			const error = "received more bytes than expected";
+			throw error;
+		}
+
+		this.data.set(new Uint8Array(e.data), this.offset);
+		this.offset += chunkSize;
+		this.progress.value = this.offset / this.header.size;
+
+		if (this.done()) {
+			this.triggerDownload();
+			this.li.removeChild(this.progress);
+		}
+	}
+
+	done() {
+		return this.offset === this.header.size;
+	}
+
+	cancel() {}
+
+	triggerDownload() {
+		if (hacks.noblob) {
+			const blob = new Blob([this.data], { type: this.header.type });
+			const fr = new FileReader();
+			fr.onloadend = () => {
+				this.a.href = fr.result as string;
+				this.a.download = this.header.name;
+			};
+			fr.readAsDataURL(blob);
+			return;
+		}
+
+		const blob = new Blob([this.data], { type: this.header.type });
+		this.a.href = URL.createObjectURL(blob);
+		this.a.download = this.header.name;
+		this.a.click();
+	}
+}
+
+function pick() {
+	if (!filepicker.files) {
+		return;
+	}
+	for (let i = 0; i < filepicker.files.length; i++) {
+		sendfile(filepicker.files[i]);
+	}
+}
+
+function drop(e: DragEvent) {
+	if (!e.dataTransfer) {
+		return;
+	}
+	const files = e.dataTransfer.files;
+	const t = e.dataTransfer.getData("text");
+	if (files.length !== 0) {
+		for (let i = 0; i < files.length; i++) {
+			sendfile(files[i]);
+		}
+	} else if (t.length !== 0) {
+		sendtext(t);
+	}
+
+	// A shortcut to save users a click. If we're disconnected and they drag
+	// a file in treat it as a click on the new/join wormhole button.
+	if (state === "disconnected") {
+		connect();
+	}
+}
+
+// Handle a paste event from cmd-v/ctl-v.
+function pasteEvent(e: ClipboardEvent) {
+	if (!e.clipboardData) {
+		return;
+	}
+	const files = e.clipboardData.files;
+	const t = e.clipboardData.getData("text");
+	if (files.length !== 0) {
+		for (let i = 0; i < files.length; i++) {
+			sendfile(files[i]);
+		}
+	} else if (t.length !== 0) {
+		sendtext(t);
+	}
+}
+
+// Read clipboard content using Clipboard API.
+async function pasteClipboard() {
+	if (hacks.noclipboardapi) {
 		return;
 	}
 
-	if (!receiving.data) {
-		return;
-	} // type assertion
+	let items = await navigator.clipboard.read();
 
-	if (hacks.noblob) {
-		const blob = new Blob([receiving.data], { type: receiving.type });
-		const fr = new FileReader();
-		fr.onloadend = () => {
-			if (!receiving || !receiving.data) {
-				return;
-			} // type assertion
-			receiving.a.href = fr.result as string;
-			receiving.a.download = receiving.name;
-		};
-		fr.readAsDataURL(blob);
+	// TODO toast a message if permission wasn't given.
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].types.includes("image/png")) {
+			const blob = await items[i].getType("image/png");
+			sendfile(new File([blob], "image.png"));
+		} else if (items[i].types.includes("text/plain")) {
+			const blob = await items[i].getType("text/plain");
+			sendtext(await blob.text());
+		}
+	}
+}
+
+async function sendtext(msg: string) {
+	const item = new Upload(
+		{
+			name: msg,
+			type: "application/webwormhole-text",
+			size: 0,
+		},
+		new Blob([])
+	);
+	item.li.classList.add("pending");
+	item.li.appendChild(
+		document.createElement("pre").appendChild(document.createTextNode(`${msg}`))
+	);
+	transfersList.appendChild(item.li);
+	send(item);
+}
+
+async function sendfile(f: File) {
+	const item = new Upload(
+		{
+			name: f.name,
+			type: f.type,
+			size: f.size,
+		},
+		f
+	);
+	item.li.classList.add("pending");
+	item.li.innerText = `${f.name}`;
+	transfersList.appendChild(item.li);
+	send(item);
+}
+
+async function send(item?: Upload) {
+	if (item) {
+		sendqueue.push(item);
+	}
+	if (!datachannel) {
+		console.log("adding to queue: not connected");
 		return;
 	}
-
-	const blob = new Blob([receiving.data], { type: receiving.type });
-	receiving.a.href = URL.createObjectURL(blob);
-	receiving.a.download = receiving.name;
-	receiving.a.click();
+	if (sending) {
+		console.log("adding to queue: haven't finished sending current file");
+		return;
+	}
+	while ((sending = sendqueue.shift())) {
+		await sending.send(datachannel);
+		sending = undefined;
+	}
 }
 
 function receive(e: MessageEvent) {
-	if (!receiving) {
-		const header = JSON.parse(new TextDecoder("utf8").decode(e.data)) as {
-			name: string;
-			type: string;
-			size: number;
-		};
-
-		receiving = {
-			name: header.name,
-			type: header.type,
-			size: header.size,
-			offset: 0,
-			id: `${Math.random().toString(16).substring(2)}-${encodeURIComponent(
-				header.name
-			)}`,
-
-			li: document.createElement("li"),
-			a: document.createElement("a"),
-			progress: document.createElement("progress"),
-		};
-		receiving.li.classList.add("download");
-
-		// Special case raw text that's been received.
-		if (receiving.type === "application/webwormhole-text") {
-			receiving.li.appendChild(
-				document
-					.createElement("pre")
-					.appendChild(document.createTextNode(`${receiving.name}`))
-			);
-			transfersList.appendChild(receiving.li);
+	if (receiving) {
+		receiving.receive(e);
+		if (receiving.done()) {
 			receiving = undefined;
-			return;
 		}
-
-		receiving.a.appendChild(document.createTextNode(`${receiving.name}`));
-		receiving.li.appendChild(receiving.a);
-		receiving.li.appendChild(receiving.progress);
-		transfersList.appendChild(receiving.li);
-
-		if (serviceworker) {
-			serviceworker.postMessage({
-				id: receiving.id,
-				type: "metadata",
-				name: receiving.name,
-				size: receiving.size,
-				filetype: receiving.type,
-			});
-			triggerDownload();
-		} else {
-			receiving.data = new Uint8Array(receiving.size);
-		}
-
 		return;
 	}
 
-	const chunkSize = e.data.byteLength;
+	const header = JSON.parse(
+		new TextDecoder("utf8").decode(e.data)
+	) as FileHeader;
 
-	if (receiving.offset + chunkSize > receiving.size) {
-		const error = "received more bytes than expected";
-		if (serviceworker) {
-			serviceworker.postMessage({ id: receiving.id, type: "error", error });
-		}
-		throw error;
+	// Special case raw text that's been received.
+	if (header.type === "application/webwormhole-text") {
+		const li = document.createElement("li");
+		li.appendChild(
+			document
+				.createElement("pre")
+				.appendChild(document.createTextNode(`${header.name}`))
+		);
+		li.classList.add("download");
+		transfersList.appendChild(li);
+		return;
 	}
 
 	if (serviceworker) {
-		serviceworker.postMessage(
-			{
-				id: receiving.id,
-				type: "data",
-				data: e.data,
-				offset: receiving.offset,
-			},
-			[e.data]
-		);
+		receiving = new ServiceWorkerDownload(serviceworker, header);
 	} else {
-		if (!receiving.data) {
-			return;
-		} // panic
-		receiving.data.set(new Uint8Array(e.data), receiving.offset);
-	}
-
-	receiving.offset += chunkSize;
-	receiving.progress.value = receiving.offset / receiving.size;
-
-	if (receiving.offset === receiving.size) {
-		if (serviceworker) {
-			serviceworker.postMessage({ id: receiving.id, type: "end" });
-		} else {
-			triggerDownload();
-		}
-
-		if (receiving.li && receiving.progress) {
-			// type assertion
-			receiving.li.removeChild(receiving.progress);
-		}
-		receiving = undefined;
+		receiving = new ArrayBufferDownload(header);
 	}
 }
 
@@ -509,7 +538,7 @@ async function connect() {
 			dc.onopen = () => {
 				connected();
 				datachannel = dc;
-				// Send anything we have in the send queue.
+				// Send anything we have waiting in the send queue.
 				send();
 			};
 			dc.onmessage = receive;
@@ -546,6 +575,7 @@ function waiting() {
 }
 
 function dialling() {
+	state = "dialling";
 	infoBox.innerText = "Connecting...";
 
 	document.body.classList.add("dialling");
@@ -560,6 +590,7 @@ function dialling() {
 }
 
 function connected() {
+	state = "connected";
 	infoBox.innerText = "";
 
 	document.body.classList.remove("dialling");
@@ -570,6 +601,7 @@ function connected() {
 }
 
 function disconnected(reason: string) {
+	state = "disconnected";
 	datachannel = null;
 	sendqueue = [];
 	document.body.style.backgroundColor = "";
@@ -614,14 +646,9 @@ function disconnected(reason: string) {
 
 	location.hash = "";
 
-	if (serviceworker && receiving) {
-		serviceworker.postMessage({
-			id: receiving.id,
-			type: "error",
-			error: "rtc disconnected",
-		});
+	if (receiving) {
+		receiving.cancel();
 		receiving = undefined;
-		// TODO better cancellation of receiving?
 	}
 }
 
@@ -649,11 +676,11 @@ function updateqr(url: string) {
 		qrImg.src = "";
 		qrImg.alt = "";
 		qrImg.title = "";
-		return;
+	} else {
+		qrImg.src = URL.createObjectURL(new Blob([qr]));
+		qrImg.alt = url;
+		qrImg.title = `${url} - double click to copy`;
 	}
-	qrImg.src = URL.createObjectURL(new Blob([qr]));
-	qrImg.alt = url;
-	qrImg.title = `${url} - double click to copy`;
 }
 
 function hashchange() {
