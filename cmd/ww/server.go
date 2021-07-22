@@ -340,6 +340,7 @@ func server(args ...string) {
 	key := set.String("key", "", "https certificate key")
 	html := set.String("ui", "./web", "path to the web interface files")
 	stunservers := set.String("stun", "stun:relay.webwormhole.io", "list of STUN server addresses to tell clients to use")
+	publicdomain := set.String("domain", "webwormhole.io", "public domain to access the site")
 	set.StringVar(&turnServer, "turn", "", "TURN server to use for relaying")
 	set.StringVar(&turnSecret, "turn-secret", "", "secret for HMAC-based authentication in TURN server")
 	set.Parse(args[1:])
@@ -375,7 +376,7 @@ func server(args ...string) {
 		// https://github.com/WebAssembly/content-security-policy/issues/7
 		// connect-src is required for safari :(
 		// https://bugs.webkit.org/show_bug.cgi?id=201591
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://tip.webwormhole.io/ wss://webwormhole.io/")
+		w.Header().Set("Content-Security-Policy", fmt.Sprintf("default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://%v", *publicdomain))
 
 		// Set a small max age for cache. We might want to switch to a content-addressed
 		// resource naming scheme and change this to immutable, but until then disable caching.
