@@ -129,32 +129,33 @@ async function streamDownload(id: string) {
 }
 
 async function streamUpload(e: FetchEvent) {
-	if (!e.clientId) {
-		return new Response("no client id", { status: 500 });
-	}
-	const client = await sw.clients.get(e.clientId);
-
-	if (!client) {
-		return new Response("no client", { status: 500 });
-	}
-
 	const contentLength = e.request.headers.get("content-length");
 	const contentType = e.request.headers.get("content-type");
 	const form = await e.request.formData();
 	const title = form.get("title");
 
 	if (!title) {
-		return new Response("no title", { status: 500 });
+		e.respondWith(new Response("no title", { status: 500 }));
+		return
 	}
 
 	let body: ReadableStream<Uint8Array>;
 	if (e.request.body) {
 		body = e.request.body;
 	} else {
-		return new Response("no body", { status: 500 });
+		e.respondWith(new Response("no body", { status: 500 }));
+		return
 	}
 
 	console.log(`uploading ${title}`);
+
+	e.respondWith(Response.redirect("/", 303)); // get index.html?
+
+	const client = await sw.clients.get(e.clientId || e.resultingClientId);
+	if (!client) {
+		e.respondWith(new Response("no client", { status: 500 }));
+		return
+	}
 
 	// ReadableStream is transferable on Chrome at the time of writing. Since Share
 	// Target also only works on Chome, we can use this and avoid the complexity of
@@ -171,10 +172,6 @@ async function streamUpload(e: FetchEvent) {
 		},
 		[body as any]
 	);
-
-	// TODO wait for confirmation that file was successfully sent before
-	// responding?
-	return new Response("ok");
 }
 
 sw.addEventListener("fetch", (e) => {
@@ -190,7 +187,7 @@ sw.addEventListener("fetch", (e) => {
 
 	// Stream upload to WebRTC DataChannel, triggered by Share Target API.
 	if (url.pathname.startsWith(`${PREFIX}/`) && e.request.method === "POST") {
-		e.respondWith(streamUpload(e));
+		streamUpload(e);
 		return;
 	}
 

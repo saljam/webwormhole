@@ -667,11 +667,23 @@ async function swready() {
         // PWA installability criteria.
         const reg = await navigator.serviceWorker.register("sw.js", { scope: "/" });
         serviceworker = reg.active || reg.waiting || reg.installing;
-        // Add a stub listener for Share Target API requests forwarded from service worker.
+        // Add a listener for Share Target API requests forwarded from service worker.
+        // This doesn't seem to actually work, and it's quite difficult to debug. We
+        // might remove it soon.
         navigator.serviceWorker.addEventListener("message", (e) => {
-            console.log("got shared message:", e.data);
-            // TODO start a new connection (only if we're not connected already)
-            // and queue the shared file.
+            const msg = e.data;
+            const item = new Upload({
+                name: msg.name,
+                type: msg.type,
+                size: msg.size,
+            }, msg.stream);
+            item.li.classList.add("pending");
+            item.li.innerText = `${msg.name}`;
+            transfersList.appendChild(item.li);
+            send(item);
+            if (state === "disconnected") {
+                connect();
+            }
         });
         if (serviceworker) {
             console.log("service worker registered:", serviceworker.state);

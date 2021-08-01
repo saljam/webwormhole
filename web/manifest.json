@@ -16,9 +16,7 @@
 		"default_icon": "icon196.png"
 	},
 	"background": {
-		"scripts": [
-			"background.js"
-		]
+		"scripts": ["background.js"]
 	},
 	"web_accessible_resources": [
 		"main.js",
