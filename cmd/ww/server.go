@@ -334,7 +334,7 @@ func server(args ...string) {
 	httpaddr := set.String("http", ":http", "http listen address")
 	httpsaddr := set.String("https", ":https", "https listen address")
 	debugaddr := set.String("debug", "", "debug and metrics listen address")
-	acmehosts := set.String("hosts", "", "comma separated list of hosts for which to request let's encrypt certs")
+	hosts := set.String("hosts", "", "comma separated list of hosts by which site is accessible")
 	secretpath := set.String("secrets", os.Getenv("HOME")+"/keys", "path to put let's encrypt cache")
 	cert := set.String("cert", "", "https certificate (leave empty to use letsencrypt)")
 	key := set.String("key", "", "https certificate key")
@@ -375,7 +375,11 @@ func server(args ...string) {
 		// https://github.com/WebAssembly/content-security-policy/issues/7
 		// connect-src is required for safari :(
 		// https://bugs.webkit.org/show_bug.cgi?id=201591
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/ wss://tip.webwormhole.io/ wss://webwormhole.io/")
+		csp := "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' blob:; connect-src 'self' ws://localhost/"
+		for _, host := range strings.Split(*hosts, ",") {
+			csp += fmt.Sprintf(" wss://%v", host)
+		}
+		w.Header().Set("Content-Security-Policy", csp)
 
 		// Set a small max age for cache. We might want to switch to a content-addressed
 		// resource naming scheme and change this to immutable, but until then disable caching.
@@ -406,7 +410,7 @@ func server(args ...string) {
 	m := &autocert.Manager{
 		Cache:      autocert.DirCache(*secretpath),
 		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(strings.Split(*acmehosts, ",")...),
+		HostPolicy: autocert.HostWhitelist(strings.Split(*hosts, ",")...),
 	}
 
 	ssrv := &http.Server{
