@@ -22,10 +22,6 @@ declare class Go {
 	run(instance: WebAssembly.Instance): void;
 }
 
-// The ICEServers JSON as exported from Pion capitalises field names, but
-// JS expects lowercase dictionary entries.
-type GoICEServers = [{ URLs: string[]; Username: string; Credential: string }];
-
 // Error codes from webwormhole/dial.go.
 enum WormholeErrorCodes {
 	closeNoSuchSlot = 4000,
@@ -93,7 +89,7 @@ class Wormhole {
 	}
 
 	async statePlayer1(data: string): Promise<State> {
-		const msg: { slot: string; iceServers: GoICEServers } = JSON.parse(data);
+		const msg: { slot: string; iceServers: RTCIceServer[] } = JSON.parse(data);
 
 		console.log("assigned slot:", msg.slot);
 		this.slot = parseInt(msg.slot, 10);
@@ -110,7 +106,7 @@ class Wormhole {
 			return this.fail("panic");
 		}
 
-		const msg: { iceServers: GoICEServers } = JSON.parse(data);
+		const msg: { iceServers: RTCIceServer[] } = JSON.parse(data);
 
 		this.pc = this.makePeerConnection(msg.iceServers);
 		this.callback(this.pc);
@@ -292,18 +288,8 @@ class Wormhole {
 		return;
 	}
 
-	makePeerConnection(iceServers: GoICEServers): RTCPeerConnection {
-		let normalisedICEServers = [];
-		for (let i = 0; i < iceServers.length; i++) {
-			normalisedICEServers.push({
-				urls: iceServers[i].URLs,
-				username: iceServers[i].Username,
-				credential: iceServers[i].Credential,
-			});
-		}
-		const pc = new RTCPeerConnection({
-			iceServers: normalisedICEServers,
-		});
+	makePeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
+		const pc = new RTCPeerConnection({ iceServers: iceServers });
 		pc.onicecandidate = (e: RTCPeerConnectionIceEvent) => {
 			if (!this.ws || !this.key || !this.pc) {
 				return;
