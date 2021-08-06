@@ -220,17 +220,7 @@ class Wormhole {
         return;
     }
     makePeerConnection(iceServers) {
-        let normalisedICEServers = [];
-        for (let i = 0; i < iceServers.length; i++) {
-            normalisedICEServers.push({
-                urls: iceServers[i].URLs,
-                username: iceServers[i].Username,
-                credential: iceServers[i].Credential,
-            });
-        }
-        const pc = new RTCPeerConnection({
-            iceServers: normalisedICEServers,
-        });
+        const pc = new RTCPeerConnection({ iceServers: iceServers });
         pc.onicecandidate = (e) => {
             if (!this.ws || !this.key || !this.pc) {
                 return;
