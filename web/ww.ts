@@ -24,7 +24,7 @@ declare class Go {
 
 // The ICEServers JSON as exported from Pion capitalises field names, but
 // JS expects lowercase dictionary entries.
-type GoICEServers = [{ URLs: string[]; Username: string; Credential: string }];
+type GoICEServers = [{ urls: string[]; username: string; credential: string }];
 
 // Error codes from webwormhole/dial.go.
 enum WormholeErrorCodes {
@@ -296,9 +296,9 @@ class Wormhole {
 		let normalisedICEServers = [];
 		for (let i = 0; i < iceServers.length; i++) {
 			normalisedICEServers.push({
-				urls: iceServers[i].URLs,
-				username: iceServers[i].Username,
-				credential: iceServers[i].Credential,
+				urls: iceServers[i].urls,
+				username: iceServers[i].username,
+				credential: iceServers[i].credential,
 			});
 		}
 		const pc = new RTCPeerConnection({
