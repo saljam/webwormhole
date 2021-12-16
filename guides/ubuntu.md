@@ -23,9 +23,10 @@ Please verify go is installed properly by opening a new terminal window and typi
 3. Log into the webwormhole user: `sudo -iu webwormhole`
 4. Type: `git clone https://github.com/saljam/webwormhole.git`
 5. Type: `cd webwormhole`
-6. Type: `go build -o ww ./cmd/ww/`
-7. Type: `./ww server -help` for details on the binary you just created
-8. Quit terminal: `exit` and `exit` again
+6. Type: `make wasm`
+7. Type: `go build -o ww ./cmd/ww/`
+8. Type: `./ww server -help` for details on the binary you just created
+9. Quit terminal: `exit` and `exit` again
 
 ## Create systemd service unit
 1. Open a new terminal window: Ctrl + Alt + T
