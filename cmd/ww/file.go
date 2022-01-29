@@ -21,6 +21,28 @@ type header struct {
 	Type string `json:"type",omitempty`
 }
 
+// find a suitable filename to receive a file. if the path already exist, append a suffix or increment the existing suffix
+func getUniquePath(path string) string {
+	newpath := path
+	suffixpattern := regexp.MustCompile(`\.(\d+)$`)
+	// see if the file already exists
+	if _, err := os.Stat(path); err == nil { //nil error means file exists
+		// see if the file alreay has a .1, .2, etc. suffix
+		if matches := suffixpattern.FindAllStringSubmatch(path, 1); len(matches) > 0 {
+			// if so, increment the suffix
+			currentSuffix, _ := strconv.Atoi(matches[0][1])
+			newpath = suffixpattern.ReplaceAllString(path, fmt.Sprintf(".%d", currentSuffix+1))
+		} else {
+			// if not, add .1 to the name
+			newpath += ".1"
+		}
+	} else {
+		return newpath
+	}
+	// if we're not returning in the above else case, we don't know the new path exists or not. hence, recurse
+	return getUniquePath(newpath)
+}
+
 func receive(args ...string) {
 	set := flag.NewFlagSet(args[0], flag.ExitOnError)
 	set.Usage = func() {
@@ -57,7 +79,7 @@ func receive(args ...string) {
 			fatalf("could not decode file header: %v", err)
 		}
 
-		f, err := os.Create(filepath.Join(*directory, filepath.Clean(h.Name)))
+		f, err := os.Create(getUniquePath(filepath.Join(*directory, filepath.Clean(h.Name))))
 		if err != nil {
 			fatalf("could not create output file %s: %v", h.Name, err)
 		}
