@@ -14,7 +14,7 @@ Please verify go is installed properly by opening a new terminal window and typi
 
 ## Create a new user
 1. Open a new terminal window: Ctrl + Alt + T
-2. Type: `sudo useradd -m -d /var/www/webwormhole -s /bin/bash -p webwormhole webwormhole
+2. Type: `sudo useradd -m -d /var/www/webwormhole -s /bin/bash -p webwormhole webwormhole`
 3. Add a password (optional): `sudo passwd webwormhole`
 
 ## Download and build _webwormhole_
