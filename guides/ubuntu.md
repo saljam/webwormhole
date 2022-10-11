@@ -5,12 +5,12 @@ A quick guide on how to install, run, and configure _webwormhole_ on Ubuntu.
 ## Install [golang](https://go.dev/dl/)
 1. Open a new terminal window: Ctrl + Alt + T
 2. Type: `cd /usr/local`
-3. Type: `sudo wget https://go.dev/dl/go1.17.5.linux-amd64.tar.gz`
-4. Type: `sudo tar xzf go1.17.5.linux-amd64.tar.gz`
+3. Type: `sudo wget https://go.dev/dl/go1.19.2.linux-amd64.tar.gz`
+4. Type: `sudo tar xzf go1.19.2.linux-amd64.tar.gz`
 5. Type: `sudo nano /etc/profile` and add `export PATH=$PATH:/usr/local/go/bin` to last line.
 6. Close terminal by typing `exit`
 
-Please verify go is installed properly by opening a new terminal window and typing: `go version` in which if everything is good to go, should show something similar to: `go version go1.17.5 linux/amd64`
+Please verify go is installed properly by opening a new terminal window and typing: `go version` in which if everything is good to go, should show something similar to: `go version go1.19.2 linux/amd64`
 
 ## Create a new user
 1. Open a new terminal window: Ctrl + Alt + T
