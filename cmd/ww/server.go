@@ -165,7 +165,13 @@ func relay(w http.ResponseWriter, r *http.Request) {
 		// change any user state on the server, aka CSRF. We don't have any
 		// user state other than this ephemeral connection. So it's fine.
 		InsecureSkipVerify: true,
-		Subprotocols:       []string{wormhole.Protocol},
+
+		// Safari has broken compression.
+		// https://github.com/nhooyr/websocket/issues/218
+		CompressionMode: websocket.CompressionDisabled,
+
+		// Protocol version negotiation.
+		Subprotocols: []string{wormhole.Protocol},
 	})
 	if err != nil {
 		log.Println(err)
