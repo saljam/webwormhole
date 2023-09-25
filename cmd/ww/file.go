@@ -57,7 +57,7 @@ func receive(args ...string) {
 			fatalf("could not decode file header: %v", err)
 		}
 
-		f, err := os.Create(filepath.Join(*directory, filepath.Clean(h.Name)))
+		f, err := os.Create(filepath.Join(*directory, filepath.Clean("/"+h.Name)))
 		if err != nil {
 			fatalf("could not create output file %s: %v", h.Name, err)
 		}
