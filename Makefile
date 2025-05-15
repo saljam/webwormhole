@@ -1,7 +1,7 @@
 .PHONY: wasm
 wasm:
 	GOOS=js GOARCH=wasm go build -o ./web/webwormhole.wasm ./web
-	cp $(shell go env GOROOT)/misc/wasm/wasm_exec.js ./web/wasm_exec.js
+	cp $(shell go env GOROOT)/lib/wasm/wasm_exec.js ./web/wasm_exec.js
 
 .PHONY: webwormhole-ext.zip
 webwormhole-ext.zip: wasm
