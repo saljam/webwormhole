@@ -1,7 +1,8 @@
 // Command ww moves files and other data over WebRTC.
 //
 // Install using:
-//	go get -u webwormhole.io/cmd/ww
+//
+//	go install webwormhole.io/cmd/ww@latest
 package main
 
 import (
