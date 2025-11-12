@@ -5,7 +5,7 @@
 // Workaround to tell TypeScript about the correct type of a ServiceWorker.
 const sw = self;
 // There can be multiple clients (pages) receiving files, so they generate an id
-// and here we store info assosiated with each transfer.
+// and here we store info associated with each transfer.
 const streams = new Map();
 class Stream {
     constructor(name, size, filetype) {
