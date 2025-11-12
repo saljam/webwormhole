@@ -29,7 +29,7 @@ import (
 	"webwormhole.io/wormhole"
 )
 
-// slotTimeout is the the maximum amount of time a client is allowed to
+// slotTimeout is the maximum amount of time a client is allowed to
 // hold a slot.
 const slotTimeout = 12 * time.Hour
 

@@ -99,7 +99,7 @@ var (
 	// version of the signalling protocol.
 	ErrBadVersion = errors.New("bad version")
 
-	// ErrBadVersion is returned when the the peer on the same slot uses a different
+	// ErrBadVersion is returned when the peer on the same slot uses a different
 	// password.
 	ErrBadKey = errors.New("bad key")
 
