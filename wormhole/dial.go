@@ -255,7 +255,7 @@ func writeBase64(ws *websocket.Conn, p []byte) error {
 }
 
 // readInitMsg reads the first message the signalling server sends over
-// the WebSocket connection, which has metadata includign assigned slot
+// the WebSocket connection, which has metadata including assigned slot
 // and ICE servers to use.
 func readInitMsg(ws *websocket.Conn) (slot string, iceServers []webrtc.ICEServer, err error) {
 	msg := struct {
