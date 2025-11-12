@@ -327,7 +327,7 @@ func (c *Wormhole) newPeerConnection(ice []webrtc.ICEServer) error {
 	return nil
 }
 
-// IsRelay returns whether this connection is over a TURN relay or not.
+// IsRelay returns whether or not this connection is over a TURN relay.
 func (c *Wormhole) IsRelay() bool {
 	stats := c.pc.GetStats()
 	for _, s := range stats {
