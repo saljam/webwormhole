@@ -8,7 +8,7 @@
 // (https://tools.ietf.org/html/rfc5763).
 //
 // This package removes the signalling server from the trust model by using a
-// PAKE to estabish the authenticity of the WebRTC metadata. In other words,
+// PAKE to establish the authenticity of the WebRTC metadata. In other words,
 // it's a clone of Magic Wormhole made to use WebRTC as the transport.
 //
 // The protocol requires a signalling server that facilitates exchanging
