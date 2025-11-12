@@ -71,7 +71,7 @@ func (octalEncoding) Encode(slot int, pass []byte) string {
 }
 
 func (octalEncoding) Decode(code string) (slot int, pass []byte) {
-	// White space and - are interchangable.
+	// White space and - are interchangeable.
 	code = strings.ReplaceAll(code, "-", " ")
 	// Space can turn into + in URLs.
 	code = strings.ReplaceAll(code, "+", " ")
@@ -124,7 +124,7 @@ func (list varintEncoding) Encode(slot int, pass []byte) string {
 }
 
 func (list varintEncoding) Decode(code string) (slot int, pass []byte) {
-	// White space and - are interchangable.
+	// White space and - are interchangeable.
 	code = strings.ReplaceAll(code, "-", " ")
 	// Space can turn into + in URLs.
 	code = strings.ReplaceAll(code, "+", " ")
@@ -169,7 +169,7 @@ func (list magicWormholeEncoding) Encode(slot int, pass []byte) string {
 }
 
 func (list magicWormholeEncoding) Decode(code string) (slot int, pass []byte) {
-	// White space and - are interchangable.
+	// White space and - are interchangeable.
 	code = strings.ReplaceAll(code, "-", " ")
 	// Space can turn into + in URLs.
 	code = strings.ReplaceAll(code, "+", " ")
