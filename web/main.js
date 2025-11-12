@@ -708,7 +708,7 @@ async function init() {
     transfersList = document.getElementById("transfers");
     infoBox = document.getElementById("info");
     autocompleteBox = document.getElementById("autocomplete");
-    // Friendly error message and bail out if things are clearely not going to work.
+    // Friendly error message and bail out if things are clearly not going to work.
     if (hacks.browserunsupported) {
         infoBox.innerText =
             "Browser missing required feature. This application needs support for WebSockets, WebRTC, and WebAssembly.";
