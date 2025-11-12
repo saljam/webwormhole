@@ -619,7 +619,7 @@ function browserhacks() {
     if (/^Mozilla\/5.0 \(iPhone; CPU iPhone OS 12_[0-9]_[0-9] like Mac OS X\)/.test(navigator.userAgent)) {
         hacks.noblob = true;
         hacks.nosw = true;
-        console.log("quirks: using ios12 dataurl hack");
+        console.log("quirks: using ios12 data-url hack");
     }
     // Work around iOS trying to connect when the link is previewed.
     // You never saw this.

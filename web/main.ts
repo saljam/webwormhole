@@ -771,7 +771,7 @@ function browserhacks() {
 	) {
 		hacks.noblob = true;
 		hacks.nosw = true;
-		console.log("quirks: using ios12 dataurl hack");
+		console.log("quirks: using ios12 data-url hack");
 	}
 
 	// Work around iOS trying to connect when the link is previewed.
