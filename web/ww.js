@@ -67,7 +67,7 @@ class Wormhole {
         this.callback(this.pc);
         const msgA = webwormhole.start(this.pass);
         if (!msgA) {
-            return this.fail("could nnt generate A's PAKE message");
+            return this.fail("could not generate A's PAKE message");
         }
         console.log("message a:", msgA);
         this.ws.send(msgA);
