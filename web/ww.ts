@@ -71,7 +71,7 @@ class Wormhole {
 			this.state = this.statePlayer1;
 		}
 
-		// There are 3 events that we need to synchronise with the caller on:
+		// There are three events that we need to synchronise with the caller on:
 		//   1. we got the first message from the signalling server.
 		//        We now have the slot number and the ICE server details, so we can
 		//        create the wormhole code and PeerConnection object, and pass them back

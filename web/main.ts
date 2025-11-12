@@ -547,7 +547,7 @@ async function connect() {
 		// MITM password guess, we can compare a fingerprint derived from the PAKE
 		// key. The seven words visible on the tooltip of the input box should match on
 		// both side.
-		// We also use the first 3 bits of it to choose the background colour, so
+		// We also use the first three bits of it to choose the background colour, so
 		// that should match on both sides as well.
 		const encodedfp = webwormhole.encode(0, fingerprint.subarray(1));
 		phraseInput.title = encodedfp.substring(encodedfp.indexOf("-") + 1);
