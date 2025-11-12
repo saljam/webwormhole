@@ -47,7 +47,7 @@ func TestMatch(t *testing.T) {
 		{"zo", "zone"},
 		{"acre-b", ""},
 		{"zz", ""},
-		{"snaps", "snapshot"}, // fallback to gpg words
+		{"snaps", "snapshot"}, // fall back to gpg words
 	}
 	for i, c := range cases {
 		if hint := Match(c.prefix); hint != c.word {
