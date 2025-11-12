@@ -1,4 +1,4 @@
-// Package wordlist provides a encoders and a decoder for WebWormhole codes.
+// Package wordlist provides encoders and a decoder for WebWormhole codes.
 package wordlist
 
 import (
