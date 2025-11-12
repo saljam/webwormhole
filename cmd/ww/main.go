@@ -81,7 +81,7 @@ func newConn(code string, length int) *wormhole.Wormhole {
 		if err == wormhole.ErrBadVersion {
 			fatalf(
 				"%s%s%s",
-				"the signalling server is running an incompatable version.\n",
+				"the signalling server is running an incompatible version.\n",
 				"try upgrading the client:\n\n",
 				"    go install webwormhole.io/cmd/ww@latest\n",
 			)
@@ -114,7 +114,7 @@ func newConn(code string, length int) *wormhole.Wormhole {
 	if err == wormhole.ErrBadVersion {
 		fatalf(
 			"%s%s%s",
-			"the signalling server is running an incompatable version.\n",
+			"the signalling server is running an incompatible version.\n",
 			"try upgrading the client:\n\n",
 			"    go install webwormhole.io/cmd/ww@latest\n",
 		)
