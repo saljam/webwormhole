@@ -25,7 +25,7 @@ func pipe(args ...string) {
 	c := newConn(set.Arg(0), *length)
 
 	done := make(chan struct{})
-	// The recieve end of the pipe.
+	// The receive end of the pipe.
 	go func() {
 		_, err := io.CopyBuffer(os.Stdout, c, make([]byte, msgChunkSize))
 		if err != nil {
