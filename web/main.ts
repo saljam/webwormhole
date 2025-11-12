@@ -545,7 +545,7 @@ async function connect() {
 
 		// To make it more likely to spot the one in 2^16 chance of a successful
 		// MITM password guess, we can compare a fingerprint derived from the PAKE
-		// key. The 7 words visible on the tooltip of the input box should match on
+		// key. The seven words visible on the tooltip of the input box should match on
 		// both side.
 		// We also use the first 3 bits of it to choose the background colour, so
 		// that should match on both sides as well.
