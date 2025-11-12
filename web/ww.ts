@@ -314,7 +314,7 @@ class Wormhole {
 
 		let id: string | undefined;
 		stats.forEach((s) => {
-			// s.selected gives more confidenece than s.state == "succeeded", but Chrome does
+			// s.selected gives more confidence than s.state == "succeeded", but Chrome does
 			// not implement it.
 			if (
 				s.type === "candidate-pair" &&
