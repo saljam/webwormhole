@@ -155,7 +155,7 @@ sw.addEventListener("fetch", (e) => {
     e.respondWith(fetch(e.request));
 });
 
-if (chrome && chrome.runtime) {
+if (typeof chrome !== "undefined" && chrome.runtime) {
     chrome.action.onClicked.addListener(() => {
         chrome.windows.create({
             type: "panel",

@@ -41,11 +41,17 @@ let filepicker: HTMLInputElement;
 let dialButton: HTMLInputElement;
 let phraseInput: HTMLInputElement;
 let clipboardInput: HTMLInputElement;
+let textInput: HTMLTextAreaElement;
+let sendTextButton: HTMLButtonElement;
 let mainForm: HTMLFormElement;
 let qrImg: HTMLImageElement;
+let qrWrap: HTMLElement;
 let transfersList: HTMLElement;
 let infoBox: HTMLElement;
 let autocompleteBox: HTMLElement;
+let copyButton: HTMLButtonElement;
+let toastBox: HTMLElement;
+let toastTimer: number | undefined;
 
 // The structure of the header message sent on the wire before a
 // file's data.
@@ -360,6 +366,10 @@ function drop(e: DragEvent) {
 
 // Handle a paste event from cmd-v/ctl-v.
 function pasteEvent(e: ClipboardEvent) {
+	// Let the compose box handle its own paste; user hits Send text after.
+	if (e.target === textInput) {
+		return;
+	}
 	if (!e.clipboardData) {
 		return;
 	}
@@ -371,26 +381,88 @@ function pasteEvent(e: ClipboardEvent) {
 		}
 	} else if (t.length !== 0) {
 		sendtext(t);
+		toast("Text sent");
 	}
 }
 
 // Read clipboard content using Clipboard API.
 async function pasteClipboard() {
-	if (hacks.noclipboardapi) {
+	if (hacks.noclipboardapi || !navigator.clipboard?.read) {
+		textInput.focus();
+		toast("Paste into the box, then Send text");
 		return;
 	}
 
-	let items = await navigator.clipboard.read();
-
-	// TODO toast a message if permission wasn't given.
-	for (let i = 0; i < items.length; i++) {
-		if (items[i].types.includes("image/png")) {
-			const blob = await items[i].getType("image/png");
-			sendfile(new File([blob], "image.png"));
-		} else if (items[i].types.includes("text/plain")) {
-			const blob = await items[i].getType("text/plain");
-			sendtext(await blob.text());
+	try {
+		const items = await navigator.clipboard.read();
+		let sent = 0;
+		for (let i = 0; i < items.length; i++) {
+			if (items[i].types.includes("image/png")) {
+				const blob = await items[i].getType("image/png");
+				sendfile(new File([blob], "image.png"));
+				sent++;
+			} else if (items[i].types.includes("text/plain")) {
+				const blob = await items[i].getType("text/plain");
+				const text = await blob.text();
+				if (text.trim() !== "") {
+					sendtext(text);
+					sent++;
+				}
+			}
 		}
+		if (sent === 0) {
+			toast("Clipboard is empty");
+		} else {
+			toast(sent === 1 ? "Pasted" : `Pasted ${sent} items`);
+		}
+	} catch (err) {
+		console.log("clipboard read failed:", err);
+		textInput.focus();
+		toast("Paste into the box, then Send text");
+	}
+}
+
+function appendTextTransfer(msg: string, direction: "upload" | "download" | "pending") {
+	const li = document.createElement("li");
+	li.classList.add(direction, "text-item");
+
+	const body = document.createElement("pre");
+	body.className = "text-body";
+	body.textContent = msg;
+	li.appendChild(body);
+
+	const copyBtn = document.createElement("button");
+	copyBtn.type = "button";
+	copyBtn.className = "button button-secondary copy-text";
+	copyBtn.textContent = "Copy";
+	copyBtn.title = "Copy text";
+	copyBtn.addEventListener("click", async () => {
+		const ok = await writeClipboard(msg);
+		toast(ok ? "Text copied" : "Copy failed");
+	});
+	li.appendChild(copyBtn);
+
+	transfersList.appendChild(li);
+	return li;
+}
+
+async function sendTypedText() {
+	const msg = textInput.value;
+	if (msg.trim() === "") {
+		toast("Type some text first");
+		textInput.focus();
+		return;
+	}
+	sendtext(msg);
+	textInput.value = "";
+	textInput.focus();
+	toast("Text sent");
+}
+
+function textInputKeydown(e: KeyboardEvent) {
+	if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+		e.preventDefault();
+		sendTypedText();
 	}
 }
 
@@ -403,11 +475,7 @@ async function sendtext(msg: string) {
 		},
 		new Blob([])
 	);
-	item.li.classList.add("pending");
-	item.li.appendChild(
-		document.createElement("pre").appendChild(document.createTextNode(`${msg}`))
-	);
-	transfersList.appendChild(item.li);
+	item.li = appendTextTransfer(msg, "pending");
 	send(item);
 }
 
@@ -459,14 +527,7 @@ function receive(e: MessageEvent) {
 
 	// Special case raw text that's been received.
 	if (header.type === "application/webwormhole-text") {
-		const li = document.createElement("li");
-		li.appendChild(
-			document
-				.createElement("pre")
-				.appendChild(document.createTextNode(`${header.name}`))
-		);
-		li.classList.add("download");
-		transfersList.appendChild(li);
+		appendTextTransfer(header.name, "download");
 		return;
 	}
 
@@ -577,9 +638,12 @@ function dialling() {
 	document.body.classList.remove("disconnected");
 
 	filepicker.disabled = false;
-	clipboardInput.disabled = false || hacks.noclipboardapi;
+	clipboardInput.disabled = false;
+	textInput.disabled = false;
+	sendTextButton.disabled = false;
 	dialButton.disabled = true;
 	phraseInput.readOnly = true;
+	syncCopyButton();
 	document.body.addEventListener("paste", pasteEvent);
 }
 
@@ -631,12 +695,16 @@ function disconnected(reason: string) {
 
 	filepicker.disabled = true;
 	clipboardInput.disabled = true;
+	textInput.disabled = true;
+	sendTextButton.disabled = true;
+	textInput.value = "";
 	document.body.removeEventListener("paste", pasteEvent);
 	dialButton.disabled = false;
 	phraseInput.readOnly = false;
 	phraseInput.value = "";
 	codechange();
 	updateqr("");
+	syncCopyButton();
 
 	location.hash = "";
 
@@ -659,9 +727,79 @@ function preventdefault(e: Event) {
 	e.stopPropagation();
 }
 
+function toast(msg: string) {
+	toastBox.textContent = msg;
+	toastBox.classList.add("visible");
+	if (toastTimer !== undefined) {
+		window.clearTimeout(toastTimer);
+	}
+	toastTimer = window.setTimeout(() => {
+		toastBox.classList.remove("visible");
+		toastTimer = undefined;
+	}, 2000);
+}
+
+function syncCopyButton() {
+	const phrase = phraseInput.value.trim();
+	const canCopy =
+		state === "dialling"
+			? signalserver.href !== ""
+			: phrase !== "";
+	copyButton.disabled = !canCopy;
+	copyButton.title =
+		state === "dialling"
+			? "Copy share link"
+			: "Copy wormhole phrase";
+}
+
+// Fallback for http:// LAN hosts where navigator.clipboard is blocked.
+function fallbackCopy(text: string): boolean {
+	const ta = document.createElement("textarea");
+	ta.value = text;
+	ta.setAttribute("readonly", "");
+	ta.style.position = "fixed";
+	ta.style.left = "-9999px";
+	document.body.appendChild(ta);
+	ta.select();
+	let ok = false;
+	try {
+		ok = document.execCommand("copy");
+	} finally {
+		document.body.removeChild(ta);
+	}
+	return ok;
+}
+
+async function writeClipboard(text: string): Promise<boolean> {
+	if (navigator.clipboard && window.isSecureContext) {
+		try {
+			await navigator.clipboard.writeText(text);
+			return true;
+		} catch {
+			// fall through
+		}
+	}
+	return fallbackCopy(text);
+}
+
+async function copyShare() {
+	const text =
+		state === "dialling"
+			? signalserver.href
+			: phraseInput.value.trim();
+	if (text === "") {
+		return;
+	}
+	const ok = await writeClipboard(text);
+	if (!ok) {
+		toast("Copy failed");
+		return;
+	}
+	toast(state === "dialling" ? "Link copied" : "Phrase copied");
+}
+
 async function copyurl() {
-	await navigator.clipboard.writeText(signalserver.href);
-	// TODO toast message on success.
+	await copyShare();
 }
 
 function updateqr(url: string) {
@@ -670,11 +808,14 @@ function updateqr(url: string) {
 		qrImg.src = "";
 		qrImg.alt = "";
 		qrImg.title = "";
+		qrWrap.classList.remove("visible");
 	} else {
 		qrImg.src = URL.createObjectURL(new Blob([qr]));
 		qrImg.alt = url;
 		qrImg.title = `${url} - double click to copy`;
+		qrWrap.classList.add("visible");
 	}
+	syncCopyButton();
 }
 
 function hashchange() {
@@ -693,6 +834,7 @@ function codechange() {
 	} else {
 		dialButton.value = "JOIN WORMHOLE";
 	}
+	syncCopyButton();
 }
 
 function autocompletehint() {
@@ -877,11 +1019,16 @@ async function init() {
 	dialButton = document.getElementById("dial") as HTMLInputElement;
 	phraseInput = document.getElementById("magiccode") as HTMLInputElement;
 	clipboardInput = document.getElementById("clipboard") as HTMLInputElement;
+	textInput = document.getElementById("textinput") as HTMLTextAreaElement;
+	sendTextButton = document.getElementById("sendtext") as HTMLButtonElement;
 	mainForm = document.getElementById("main") as HTMLFormElement;
 	qrImg = document.getElementById("qr") as HTMLImageElement;
+	qrWrap = document.getElementById("qr-wrap") as HTMLElement;
 	transfersList = document.getElementById("transfers") as HTMLElement;
 	infoBox = document.getElementById("info") as HTMLElement;
 	autocompleteBox = document.getElementById("autocomplete") as HTMLElement;
+	copyButton = document.getElementById("copy") as HTMLButtonElement;
+	toastBox = document.getElementById("toast") as HTMLElement;
 
 	// Friendly error message and bail out if things are clearely not going to work.
 	if (hacks.browserunsupported) {
@@ -900,8 +1047,11 @@ async function init() {
 	phraseInput.addEventListener("input", autocompletehint);
 	filepicker.addEventListener("change", pick);
 	clipboardInput.addEventListener("click", pasteClipboard);
+	sendTextButton.addEventListener("click", sendTypedText);
+	textInput.addEventListener("keydown", textInputKeydown);
 	mainForm.addEventListener("submit", preventdefault);
 	mainForm.addEventListener("submit", connect);
+	copyButton.addEventListener("click", copyShare);
 	qrImg.addEventListener("dblclick", copyurl);
 	document.body.addEventListener("drop", preventdefault);
 	document.body.addEventListener("dragenter", preventdefault);
