@@ -18,15 +18,29 @@
 <form id="main" role="main">
 <p id="info">WebWormhole lets you send files from one computer to another.</p>
 <div id="top">
-Drag and drop, <label id="filepicker-wrap" class="button">OPEN<input type="file" id="filepicker" disabled /></label>, or <input type="button" id="clipboard" class="button" value="PASTE" disabled /> files and text to send.
+<p id="top-help">Send files with OPEN / drag-and-drop, or type text below and send it.</p>
+<div id="top-actions">
+<label id="filepicker-wrap" class="button">OPEN<input type="file" id="filepicker" disabled /></label>
+<input type="button" id="clipboard" class="button button-secondary" value="PASTE" disabled />
+</div>
+<div id="text-send">
+<textarea id="textinput" rows="3" placeholder="Type or paste text to send…" disabled></textarea>
+<button type="button" id="sendtext" class="button" disabled>Send text</button>
+</div>
 </div>
 <ul id="transfers"></ul>
 <div id="prompt">
-<p>Type a wormhole's phrase to join it, or leave empty to create a new one.</p>
-<img id="qr" />
+<p id="help">Type a wormhole's phrase to join it, or leave empty to create a new one.</p>
+<div id="phrase-row">
 <input type="text" id="magiccode" autocomplete="off" autofocus title="wormhole phrase" placeholder="wormhole phrase" />
+<button type="button" id="copy" class="button button-secondary" disabled title="Copy share link or phrase">Copy</button>
+</div>
+<span id="autocomplete" aria-live="polite"></span>
 <input type="submit" id="dial" class="button" value="LOADING..." disabled />
-<span id="autocomplete"></span>
+<figure id="qr-wrap">
+<img id="qr" alt="" />
+<figcaption id="qr-caption">Scan or copy link</figcaption>
+</figure>
 </div>
 <div id="footer">
 <ul>
@@ -35,6 +49,7 @@ Drag and drop, <label id="filepicker-wrap" class="button">OPEN<input type="file"
 <li>install: <a href="https://addons.mozilla.org/firefox/addon/webwormhole/">firefox</a> <a href="https://chrome.google.com/webstore/detail/webwormhole/jhombkhjanncdalcbcahinpjoacaiidn">chrome</a> <a href="https://pkg.go.dev/webwormhole.io/cmd/ww">command line</a></li>
 </ul>
 </div>
+<div id="toast" role="status" aria-live="polite"></div>
 </form>
 </body>
 </html>

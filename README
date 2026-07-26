@@ -25,13 +25,35 @@ To install the command line tool:
 
 	$ go install webwormhole.io/cmd/ww@latest
 
-This requires Go 1.13 or newer.
+This requires Go 1.24 or newer.
 
-To run the signalling server you need to compile the WebAssembly
-files first.
+To run locally from this repository, build the CLI and the
+WebAssembly client, then start the signalling server:
 
+	$ go build -o ww ./cmd/ww
 	$ make wasm
-	$ ww server -https= -http=localhost:8000
+	$ ./ww server -https= -http=localhost:8000
+
+Open http://localhost:8000 in a browser.
+
+On Windows (PowerShell), without make:
+
+	> go build -o ww.exe ./cmd/ww
+	> $env:GOOS="js"; $env:GOARCH="wasm"; go build -o .\web\webwormhole.wasm .\web
+	> Copy-Item "$(go env GOROOT)\lib\wasm\wasm_exec.js" .\web\wasm_exec.js
+	> .\ww.exe server -https= -http=localhost:8000
+
+To allow other devices on the same network, listen on all
+interfaces and open the page with this machine's LAN address:
+
+	$ ./ww server -https= -http=:8000
+
+	http://<your-lan-ip>:8000
+
+Point the CLI at a local server with -signal:
+
+	$ ./ww -signal http://localhost:8000 send hello.txt
+	$ ./ww -signal http://localhost:8000 receive <phrase>
 
 To package the browser extension for Firefox or Chrome:
 
